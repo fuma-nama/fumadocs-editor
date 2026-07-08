@@ -1,0 +1,5 @@
+packages:
+  - packages/*
+  - apps/*
+minimumReleaseAgeExclude:
+  - tsdown@0.22.4

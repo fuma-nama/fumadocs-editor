@@ -1,0 +1,53 @@
+---
+title: Kitchen Sink
+description: Exercises every construct the editor models
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+# Heading *one*
+
+Some **bold**, _italic_, ~~strike~~, `inline code`, and a [link](https://fumadocs.dev "Docs").
+
+A JSX expression: {new Date().getFullYear()} and inline <span className="text-red-500">JSX</span> too.
+
+<Callout type="info" title="Note">
+  Callouts are **JSX flow elements** with markdown children.
+</Callout>
+
+## Lists
+
+- one
+- two
+  - nested
+
+1. first
+2. second
+
+- [x] done
+- [ ] todo
+
+## Code
+
+```ts twoslash title="example.ts"
+const x: number = 1;
+```
+
+> A quote with `code`.
+
+| Feature | Status |
+| ------- | :----: |
+| Tables  |  yes   |
+
+---
+
+<Tabs items={['a', 'b']}>
+  <Tab value="a">Content A</Tab>
+  <Tab value="b">Content B</Tab>
+</Tabs>
+
+<include>./shared/setup.mdx</include>
+
+{/* a comment */}
+
+Final paragraph with an image ![alt text](/img.png "Title").

@@ -1,0 +1,49 @@
+{
+  "name": "@fumadocs-editor/core",
+  "version": "0.0.0",
+  "description": "Headless MDX editor engine for Fumadocs: TipTap schema + lossless MDX round-trip",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.27.3",
+    "@tiptap/extension-code-block": "^3.27.3",
+    "@tiptap/extension-image": "^3.27.3",
+    "@tiptap/extension-link": "^3.27.3",
+    "@tiptap/extension-list": "^3.27.3",
+    "@tiptap/extension-table": "^3.27.3",
+    "@tiptap/pm": "^3.27.3",
+    "@tiptap/starter-kit": "^3.27.3",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-frontmatter": "^2.0.1",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-mdx": "^3.0.0",
+    "mdast-util-mdx-jsx": "^3.2.0",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-extension-frontmatter": "^2.0.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "micromark-extension-mdxjs": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^24.13.2",
+    "tsdown": "^0.22.4",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
