@@ -1,0 +1,11 @@
+{
+  "name": "fumadocs-editor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' build",
+    "dev": "pnpm --filter playground dev",
+    "test": "pnpm -r test"
+  },
+  "packageManager": "pnpm@11.5.3"
+}
