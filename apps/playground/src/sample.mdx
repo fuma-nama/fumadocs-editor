@@ -1,53 +1,24 @@
 ---
-title: Kitchen Sink
-description: Exercises every construct the editor models
+title: Component Editing
+description: MDX components rendered as real components with editable regions
 ---
 
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+# Editing MDX components
 
-# Heading *one*
+Registered components render as the **real component** — each editable area
+is a proper region, not a generic code block.
 
-Some **bold**, _italic_, ~~strike~~, `inline code`, and a [link](https://fumadocs.dev "Docs").
-
-A JSX expression: {new Date().getFullYear()} and inline <span className="text-red-500">JSX</span> too.
-
-<Callout type="info" title="Note">
-  Callouts are **JSX flow elements** with markdown children.
+<Callout type="warn" title="Heads up">
+  This callout's title and body are both editable. Try changing the **type**
+  from the toolbar that appears on hover.
 </Callout>
 
-## Lists
+Cards decompose into structured, editable items:
 
-- one
-- two
-  - nested
+<Cards>
+  <Card title="Getting Started" href="/docs">Set up your first project.</Card>
+  <Card title="Components" href="/docs/components">Browse the component library.</Card>
+</Cards>
 
-1. first
-2. second
-
-- [x] done
-- [ ] todo
-
-## Code
-
-```ts twoslash title="example.ts"
-const x: number = 1;
-```
-
-> A quote with `code`.
-
-| Feature | Status |
-| ------- | :----: |
-| Tables  |  yes   |
-
----
-
-<Tabs items={['a', 'b']}>
-  <Tab value="a">Content A</Tab>
-  <Tab value="b">Content B</Tab>
-</Tabs>
-
-<include>./shared/setup.mdx</include>
-
-{/* a comment */}
-
-Final paragraph with an image ![alt text](/img.png "Title").
+Everything else stays plain markdown, and unedited blocks round-trip
+byte-for-byte.

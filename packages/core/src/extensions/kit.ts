@@ -6,6 +6,7 @@ import { Image } from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { mdxNodes } from './mdx-nodes';
+import { mdxComponentNodes } from '../components/nodes';
 
 /** code fences keep their info string (` ```ts tab="cli" `) */
 export const CodeBlockMdx = CodeBlock.extend({
@@ -37,7 +38,16 @@ export const TableMdx = Table.extend({
   },
 });
 
-export function editorExtensions(): Extensions {
+export interface EditorExtensionsOptions {
+  /**
+   * Include the base (view-less) component nodes. Set `false` when the UI layer
+   * supplies its own node-view-backed versions to avoid duplicate schema names.
+   * @defaultValue true
+   */
+  componentNodes?: boolean;
+}
+
+export function editorExtensions({ componentNodes = true }: EditorExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false,
@@ -54,5 +64,6 @@ export function editorExtensions(): Extensions {
     TableHeader,
     TableCell,
     ...mdxNodes,
+    ...(componentNodes ? mdxComponentNodes : []),
   ];
 }

@@ -9,11 +9,18 @@ import type {
   RootContent,
   Table,
 } from 'mdast';
-import type { MdxJsxAttribute as MdastJsxAttribute, MdxJsxExpressionAttribute as MdastJsxExpressionAttribute } from 'mdast-util-mdx-jsx';
+import type {
+  MdxJsxAttribute as MdastJsxAttribute,
+  MdxJsxExpressionAttribute as MdastJsxExpressionAttribute,
+  MdxJsxFlowElement,
+  MdxJsxTextElement,
+} from 'mdast-util-mdx-jsx';
 import type { MdxAttribute } from '../extensions/mdx-nodes';
+import type { ComponentRegistry, ComponentSpec } from '../components/spec';
 
 export interface FromMdastContext {
   source: string;
+  registry: ComponentRegistry;
 }
 
 interface PMMark {
@@ -244,12 +251,15 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       return { type: 'horizontalRule' };
     case 'table':
       return tableToNode(node, ctx);
-    case 'mdxJsxFlowElement':
+    case 'mdxJsxFlowElement': {
+      const spec = node.name ? ctx.registry.get(node.name) : undefined;
+      if (spec) return componentToNode(node, spec, ctx);
       return {
         type: 'mdxJsxFlowElement',
         attrs: { name: node.name ?? null, attributes: cleanAttributes(node.attributes) },
         content: mixedChildrenToBlocks(node.children, ctx),
       };
+    }
     case 'mdxFlowExpression':
       return { type: 'mdxFlowExpression', attrs: { value: node.value } };
     case 'mdxjsEsm':
@@ -260,4 +270,65 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       // definition, footnoteDefinition, html, ...
       return { type: 'verbatim', attrs: { value: sliceSource(node, ctx) } };
   }
+}
+
+type JsxElement = MdxJsxFlowElement | MdxJsxTextElement;
+
+/**
+ * Collect child JSX elements (flow or inline) matching `name`, looking inside
+ * paragraphs — MDX wraps adjacent inline elements (e.g. `<Card>` on separate
+ * lines) into a paragraph of `mdxJsxTextElement`s.
+ */
+function collectChildElements(children: JsxElement['children'], name: string): JsxElement[] {
+  const out: JsxElement[] = [];
+  for (const child of children) {
+    if (
+      (child.type === 'mdxJsxFlowElement' || child.type === 'mdxJsxTextElement') &&
+      child.name === name
+    ) {
+      out.push(child);
+    } else if (child.type === 'paragraph') {
+      out.push(...collectChildElements(child.children as JsxElement['children'], name));
+    }
+  }
+  return out;
+}
+
+/** Convert a registered component's JSX element into structured region nodes. */
+function componentToNode(node: JsxElement, spec: ComponentSpec, ctx: FromMdastContext): JSONContent {
+  const regions: JSONContent[] = [];
+
+  for (const { attribute, region } of spec.attributeRegions ?? []) {
+    const attr = node.attributes.find(
+      (candidate) => candidate.type === 'mdxJsxAttribute' && candidate.name === attribute,
+    );
+    const text = attr && typeof attr.value === 'string' ? attr.value : '';
+    regions.push({
+      type: 'mdxInlineRegion',
+      attrs: { region },
+      content: text ? [{ type: 'text', text }] : undefined,
+    });
+  }
+
+  if (spec.childComponent) {
+    const childSpec = ctx.registry.get(spec.childComponent);
+    if (childSpec) {
+      for (const child of collectChildElements(node.children, spec.childComponent)) {
+        regions.push(componentToNode(child, childSpec, ctx));
+      }
+    }
+  } else if (spec.childrenRegion) {
+    const content = mixedChildrenToBlocks(node.children, ctx);
+    regions.push({
+      type: 'mdxBlockRegion',
+      attrs: { region: spec.childrenRegion.region },
+      content: content.length > 0 ? content : undefined,
+    });
+  }
+
+  return {
+    type: 'mdxComponent',
+    attrs: { name: spec.name, attributes: cleanAttributes(node.attributes) },
+    content: regions.length > 0 ? regions : undefined,
+  };
 }

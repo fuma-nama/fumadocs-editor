@@ -3,6 +3,9 @@ import { parseMdx } from './mdast/parse';
 import { blockToNode } from './mdast/from-mdast';
 import { nodeToMdastBlock } from './mdast/to-mdast';
 import { stringifyBlock } from './mdast/stringify';
+import { createRegistry, type ComponentRegistry } from './components/spec';
+
+const EMPTY_REGISTRY = createRegistry();
 
 export interface SnapshotBlock {
   /** exact source text of the block */
@@ -39,9 +42,12 @@ export interface ParsedDoc {
  * Parse MDX source into a TipTap-compatible document.
  * Throws on MDX syntax errors (invalid JSX / expressions).
  */
-export function parseMdxToDoc(source: string): ParsedDoc {
+export function parseMdxToDoc(
+  source: string,
+  registry: ComponentRegistry = EMPTY_REGISTRY,
+): ParsedDoc {
   const root = parseMdx(source);
-  const ctx = { source };
+  const ctx = { source, registry };
 
   const content: JSONContent[] = [];
   const blocks: SnapshotBlock[] = [];
@@ -59,7 +65,7 @@ export function parseMdxToDoc(source: string): ParsedDoc {
 
     let normalized: string;
     try {
-      normalized = stringifyBlock(nodeToMdastBlock(pmNode));
+      normalized = stringifyBlock(nodeToMdastBlock(pmNode, registry));
     } catch {
       normalized = blockSource;
     }
@@ -93,7 +99,11 @@ export function parseMdxToDoc(source: string): ParsedDoc {
  * `parseMdxToDoc`, unedited blocks are emitted from their original source;
  * without one, the whole document is normalized.
  */
-export function serializeDocToMdx(doc: JSONContent, snapshot?: DocSnapshot): string {
+export function serializeDocToMdx(
+  doc: JSONContent,
+  snapshot?: DocSnapshot,
+  registry: ComponentRegistry = EMPTY_REGISTRY,
+): string {
   const nodes = doc.content ?? [];
 
   const byNormalized = new Map<string, number[]>();
@@ -110,7 +120,7 @@ export function serializeDocToMdx(doc: JSONContent, snapshot?: DocSnapshot): str
   for (const node of nodes) {
     let normalized: string;
     try {
-      normalized = stringifyBlock(nodeToMdastBlock(node));
+      normalized = stringifyBlock(nodeToMdastBlock(node, registry));
     } catch {
       normalized = '';
     }

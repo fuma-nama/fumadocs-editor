@@ -375,6 +375,213 @@
   outline-offset: 1px;
 }
 
+/* ---- registered components ---- */
+
+.fde-component {
+  position: relative;
+  margin: 1em 0;
+}
+
+.fde-component-content {
+  display: flow-root;
+}
+
+.fde-component-generic {
+  border: 1px dashed var(--fde-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* props panel, revealed on hover/selection */
+.fde-component-toolbar {
+  position: absolute;
+  top: -12px;
+  inset-inline-end: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 1px solid var(--fde-border);
+  border-radius: 7px;
+  background: var(--fde-bg);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+  opacity: 0;
+  transition: opacity 0.12s;
+  user-select: none;
+}
+
+.fde-component:hover > .fde-component-toolbar,
+.fde-component[data-selected] > .fde-component-toolbar,
+.fde-component:focus-within > .fde-component-toolbar {
+  opacity: 1;
+}
+
+.fde-component-tag {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fde-primary);
+}
+
+.fde-prop-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--fde-border);
+  border-radius: 5px;
+  background: var(--fde-accent);
+  color: var(--fde-fg);
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.fde-prop-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--fde-muted);
+}
+
+.fde-prop-input {
+  width: 130px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--fde-border);
+  border-radius: 5px;
+  background: var(--fde-accent);
+  color: var(--fde-fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.fde-prop-input:focus {
+  border-color: var(--fde-primary);
+}
+
+/* Callout — mirrors fumadocs-ui structure */
+.fde-callout {
+  --callout-color: var(--fde-primary);
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--fde-border);
+  border-left: 3px solid var(--callout-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--callout-color) 5%, var(--fde-bg));
+}
+
+.fde-callout[data-type='info'] {
+  --callout-color: #3b82f6;
+}
+.fde-callout[data-type='warn'],
+.fde-callout[data-type='warning'] {
+  --callout-color: #f59e0b;
+}
+.fde-callout[data-type='error'] {
+  --callout-color: #ef4444;
+}
+.fde-callout[data-type='success'] {
+  --callout-color: #22c55e;
+}
+.fde-callout[data-type='idea'] {
+  --callout-color: #a855f7;
+}
+
+.fde-callout-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--callout-color);
+}
+
+.fde-callout-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Card / Cards */
+.fde-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* the NodeViewContent wrappers must dissolve so cards become grid items */
+.fde-cards > .fde-component-content,
+.fde-cards > .fde-component-content > [data-node-view-content-react] {
+  display: contents;
+}
+
+@media (max-width: 560px) {
+  .fde-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fde-card {
+  border: 1px solid var(--fde-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--fde-bg);
+  transition: border-color 0.12s;
+}
+
+.fde-card[data-has-href] {
+  border-style: solid;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.fde-cards .fde-component {
+  margin: 0;
+}
+
+/* editable regions */
+.fde-region {
+  position: relative;
+  outline: none;
+}
+
+.fde-region[data-empty][data-placeholder]:not([data-placeholder=''])::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  color: var(--fde-muted);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.fde-region-inline[data-region='title'] {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fde-callout .fde-region-inline[data-region='title'] {
+  margin-bottom: 2px;
+}
+
+.fde-card .fde-region-inline[data-region='title'] {
+  font-size: 0.95em;
+}
+
+.fde-region-inline[data-region='description'] {
+  font-size: 0.9em;
+  color: var(--fde-muted);
+}
+
+.fde-region-block[data-region='body'] > * + * {
+  margin-top: 0.5em;
+}
+
+.fde-card .fde-region-block[data-region='body'] {
+  font-size: 0.9em;
+  color: var(--fde-muted);
+}
+
 .fde-content .ProseMirror-gapcursor:after {
   border-top: 1px solid var(--fde-fg);
 }

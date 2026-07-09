@@ -1,0 +1,58 @@
+import type { JSONContent } from '@tiptap/core';
+
+/**
+ * A non-region attribute, edited through the component's props panel rather
+ * than as an inline editable region.
+ */
+export interface PropField {
+  name: string;
+  label?: string;
+  type: 'string' | 'enum' | 'boolean' | 'number';
+  /** for `type: 'enum'` */
+  options?: string[];
+  default?: string | number | boolean;
+}
+
+/** A JSX string attribute surfaced as an inline (plain-text) editable region. */
+export interface AttributeRegion {
+  attribute: string;
+  region: string;
+  placeholder?: string;
+  label?: string;
+}
+
+/**
+ * Structural description of an MDX component: how its attributes and children
+ * map to editable regions and editable props. This is the *content-layer*
+ * concern — no rendering. The UI layer extends this with a node renderer.
+ */
+export interface ComponentSpec {
+  /** JSX tag name, e.g. "Callout" */
+  name: string;
+  /** human label for menus */
+  title?: string;
+  /** string attributes shown as inline editable regions (e.g. Callout title) */
+  attributeRegions?: AttributeRegion[];
+  /** element children become a single block editable region */
+  childrenRegion?: { region: string; placeholder?: string; label?: string };
+  /**
+   * Repeated child elements of this tag name become nested component instances
+   * (e.g. Cards → Card). Mutually exclusive with `childrenRegion`.
+   */
+  childComponent?: string;
+  /** non-region attributes, edited via the props panel */
+  props?: PropField[];
+  /** default document fragment inserted by the slash menu */
+  insert?: () => JSONContent;
+}
+
+export type ComponentRegistry = Map<string, ComponentSpec>;
+
+export function createRegistry(specs: ComponentSpec[] = []): ComponentRegistry {
+  return new Map(specs.map((spec) => [spec.name, spec]));
+}
+
+/** The three shared node type names produced for registered components. */
+export const COMPONENT_NODE = 'mdxComponent';
+export const INLINE_REGION_NODE = 'mdxInlineRegion';
+export const BLOCK_REGION_NODE = 'mdxBlockRegion';
