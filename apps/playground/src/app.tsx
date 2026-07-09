@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MdxEditor } from '@fumadocs-editor/ui';
+import { MdxEditor, fumadocsUiComponents } from '@fumadocs-editor/ui';
 import sample from './sample.mdx?raw';
 
 export function App() {
@@ -14,7 +14,11 @@ export function App() {
           {identical ? 'round-trip: byte-identical' : 'modified'}
         </span>
       </header>
-      <MdxEditor defaultValue={sample} onMarkdownChange={setMarkdown} />
+      <MdxEditor
+        defaultValue={sample}
+        components={fumadocsUiComponents}
+        onMarkdownChange={setMarkdown}
+      />
       <details className="output">
         <summary>Serialized MDX output</summary>
         <pre>{markdown}</pre>

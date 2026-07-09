@@ -8,9 +8,17 @@ import type {
   RootContent,
   TableRow,
 } from 'mdast';
-import type { MdxJsxAttribute as MdastJsxAttribute, MdxJsxExpressionAttribute as MdastJsxExpressionAttribute } from 'mdast-util-mdx-jsx';
+import type {
+  MdxJsxAttribute as MdastJsxAttribute,
+  MdxJsxExpressionAttribute as MdastJsxExpressionAttribute,
+  MdxJsxFlowElement,
+} from 'mdast-util-mdx-jsx';
 import type { MdxAttribute } from '../extensions/mdx-nodes';
+import type { ComponentRegistry, ComponentSpec } from '../components/spec';
+import { createRegistry } from '../components/spec';
 import type { RawNode } from './stringify';
+
+const EMPTY_REGISTRY = createRegistry();
 
 interface PMMark {
   type: string;
@@ -153,13 +161,17 @@ export function inlineToPhrasing(nodes: JSONContent[] = []): PhrasingContent[] {
   return convertRun(nodes.map((node) => ({ node, marks: [...(node.marks ?? [])] as PMMark[] })));
 }
 
-function listItemsToMdast(node: JSONContent, task: boolean): ListItem[] {
+function listItemsToMdast(
+  node: JSONContent,
+  task: boolean,
+  registry: ComponentRegistry,
+): ListItem[] {
   return (node.content ?? []).map((item) => ({
     type: 'listItem',
     spread: false,
     checked: task ? item.attrs?.checked === true : null,
     children: (item.content ?? []).map(
-      (child) => nodeToMdastBlock(child) as BlockContent | DefinitionContent,
+      (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
     ),
   }));
 }
@@ -185,7 +197,10 @@ function tableToMdast(node: JSONContent): RootContent {
   };
 }
 
-export function nodeToMdastBlock(node: JSONContent): RootContent {
+export function nodeToMdastBlock(
+  node: JSONContent,
+  registry: ComponentRegistry = EMPTY_REGISTRY,
+): RootContent {
   switch (node.type) {
     case 'paragraph':
       return { type: 'paragraph', children: inlineToPhrasing(node.content) };
@@ -199,21 +214,21 @@ export function nodeToMdastBlock(node: JSONContent): RootContent {
       return {
         type: 'blockquote',
         children: (node.content ?? []).map(
-          (child) => nodeToMdastBlock(child) as BlockContent | DefinitionContent,
+          (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
         ),
       };
     case 'bulletList':
-      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, false) };
+      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, false, registry) };
     case 'orderedList':
       return {
         type: 'list',
         ordered: true,
         start: Number(node.attrs?.start ?? 1),
         spread: false,
-        children: listItemsToMdast(node, false),
+        children: listItemsToMdast(node, false, registry),
       };
     case 'taskList':
-      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, true) };
+      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, true, registry) };
     case 'codeBlock':
       return {
         type: 'code',
@@ -231,9 +246,11 @@ export function nodeToMdastBlock(node: JSONContent): RootContent {
         name: (node.attrs?.name as string | null) ?? null,
         attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
         children: (node.content ?? []).map(
-          (child) => nodeToMdastBlock(child) as BlockContent | DefinitionContent,
+          (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
         ),
       };
+    case 'mdxComponent':
+      return componentToMdast(node, registry);
     case 'mdxFlowExpression':
       return { type: 'mdxFlowExpression', value: String(node.attrs?.value ?? '') };
     case 'mdxjsEsm':
@@ -247,11 +264,60 @@ export function nodeToMdastBlock(node: JSONContent): RootContent {
   }
 }
 
-export function docToMdast(doc: JSONContent): Root {
+function regionText(node: JSONContent | undefined): string {
+  if (!node) return '';
+  return (node.content ?? []).map(textOf).join('');
+}
+
+function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJsxFlowElement {
+  const name = (node.attrs?.name as string | null) ?? null;
+  const spec = name ? registry.get(name) : undefined;
+  const attributes = attributesToMdast(node.attrs?.attributes as MdxAttribute[]);
+  const children = (node.content ?? []) as JSONContent[];
+
+  if (!spec) {
+    return {
+      type: 'mdxJsxFlowElement',
+      name,
+      attributes,
+      children: children.map(
+        (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
+      ),
+    };
+  }
+
+  // write inline-region text back into its backing attribute
+  for (const { attribute, region } of spec.attributeRegions ?? []) {
+    const value = regionText(children.find((c) => c.type === 'mdxInlineRegion' && c.attrs?.region === region));
+    const existing = attributes.find(
+      (attr): attr is MdastJsxAttribute => attr.type === 'mdxJsxAttribute' && attr.name === attribute,
+    );
+    if (existing) existing.value = value;
+    else if (value) attributes.push({ type: 'mdxJsxAttribute', name: attribute, value });
+  }
+
+  let mdChildren: (BlockContent | DefinitionContent)[] = [];
+  if (spec.childComponent) {
+    mdChildren = children
+      .filter((c) => c.type === 'mdxComponent')
+      .map((c) => componentToMdast(c, registry) as BlockContent);
+  } else if (spec.childrenRegion) {
+    const body = children.find(
+      (c) => c.type === 'mdxBlockRegion' && c.attrs?.region === spec.childrenRegion!.region,
+    );
+    mdChildren = (body?.content ?? []).map(
+      (c) => nodeToMdastBlock(c, registry) as BlockContent | DefinitionContent,
+    );
+  }
+
+  return { type: 'mdxJsxFlowElement', name, attributes, children: mdChildren };
+}
+
+export function docToMdast(doc: JSONContent, registry: ComponentRegistry = EMPTY_REGISTRY): Root {
   return {
     type: 'root',
-    children: (doc.content ?? []).map(nodeToMdastBlock),
+    children: (doc.content ?? []).map((node) => nodeToMdastBlock(node, registry)),
   };
 }
 
-export type { RawNode };
+export type { RawNode, ComponentSpec };
