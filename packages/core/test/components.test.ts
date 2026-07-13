@@ -16,11 +16,9 @@ const calloutSpec: ComponentSpec = {
 
 const cardSpec: ComponentSpec = {
   name: 'Card',
-  attributeRegions: [
-    { attribute: 'title', region: 'title' },
-    { attribute: 'description', region: 'description' },
-  ],
-  childrenRegion: { region: 'body' },
+  attributeRegions: [{ attribute: 'title', region: 'title' }],
+  // `description` renders into the same slot as children, so it folds into body
+  childrenRegion: { region: 'body', fromAttribute: 'description' },
 };
 
 const cardsSpec: ComponentSpec = { name: 'Cards', childComponent: 'Card' };
@@ -77,6 +75,38 @@ describe('component regions', () => {
     expect(find(cardNodes[0], 'mdxInlineRegion', 'title')?.content?.[0].text).toBe('A');
 
     expect(serializeDocToMdx(doc, snapshot, registry)).toBe(source);
+  });
+
+  test('Card description folds into the editable body region', () => {
+    const source = '<Card title="Themes" description="Add themes to your site" />\n';
+    const { doc } = parseMdxToDoc(source, registry);
+
+    const card = find(doc, 'mdxComponent')!;
+    // description is edited as body text, not kept as a separate attribute
+    const body = find(card, 'mdxBlockRegion', 'body')!;
+    expect(find(body, 'paragraph')?.content?.[0].text).toBe('Add themes to your site');
+    const attrNames = (card.attrs?.attributes as { name?: string }[]).map((a) => a.name);
+    expect(attrNames).not.toContain('description');
+    expect(attrNames).toContain('title');
+  });
+
+  test('unedited description Card round-trips byte-for-byte', () => {
+    const source = '<Card title="Themes" description="Add themes to your site" />\n';
+    const { doc, snapshot } = parseMdxToDoc(source, registry);
+    expect(serializeDocToMdx(doc, snapshot, registry)).toBe(source);
+  });
+
+  test('editing a folded-description body re-emits it as children', () => {
+    const source = '<Card title="Themes" description="Old copy" />\n';
+    const { doc, snapshot } = parseMdxToDoc(source, registry);
+
+    const body = find(doc, 'mdxBlockRegion', 'body')!;
+    body.content = [{ type: 'paragraph', content: [{ type: 'text', text: 'New copy' }] }];
+
+    const out = serializeDocToMdx(doc, snapshot, registry);
+    expect(out).toContain('New copy');
+    expect(out).not.toContain('description=');
+    expect(out).toContain('title="Themes"');
   });
 
   test('normalized serialization is idempotent for components', () => {

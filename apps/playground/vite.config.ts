@@ -10,6 +10,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { port: 5199 },
   resolve: {
+    // workspace sources are aliased in from outside the app root, which can make
+    // vite hand them a second React instance (breaking hooks in node-view
+    // renderers like Accordion). Force a single copy.
+    dedupe: ['react', 'react-dom'],
     // consume workspace package sources directly so `pnpm dev` needs no build step
     alias: [
       {

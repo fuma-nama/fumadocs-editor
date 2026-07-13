@@ -24,6 +24,7 @@
     "@tiptap/core": "^3.27.3",
     "@tiptap/extension-code-block-lowlight": "^3.27.3",
     "@tiptap/extension-list": "^3.27.3",
+    "@tiptap/pm": "^3.27.3",
     "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
     "cnfast": "^0.0.8",

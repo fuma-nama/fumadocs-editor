@@ -10,6 +10,7 @@ import {
   Info,
   Lightbulb,
   LayoutGrid,
+  Link as LinkIcon,
   ListOrdered,
   Rows3,
   SquareStack,
@@ -19,7 +20,7 @@ import {
 import { Select } from '@base-ui/react/select';
 import type { CSSProperties } from 'react';
 import { cn } from '../utils/cn';
-import { itemCls, popupCls } from './styles';
+import { focusRing, itemCls, popupCls } from './styles';
 import type { ComponentRenderProps, UiComponentSpec } from './spec';
 
 /*
@@ -112,7 +113,8 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
     >
       <div role="none" className="w-0.5 self-stretch rounded-sm bg-(--callout-color)/50" />
       <CalloutTypeSelect value={type} onChange={(value) => setProp('type', value)} />
-      <div className="min-w-0 flex-1" contentEditable suppressContentEditableWarning>
+      {/* nested editable island; without outline-none it gets the UA focus ring */}
+      <div className="min-w-0 flex-1 outline-none" contentEditable suppressContentEditableWarning>
         {children}
       </div>
     </div>
@@ -163,11 +165,8 @@ function Files({ children }: ComponentRenderProps) {
 
 function File({ children }: ComponentRenderProps) {
   return (
-    <div className="fde-file relative">
-      <span
-        className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 text-fd-muted-foreground"
-        contentEditable={false}
-      >
+    <div className="fde-file flex items-center gap-2">
+      <span className="shrink-0 text-fd-muted-foreground" contentEditable={false}>
         <FileIcon size={15} />
       </span>
       {children}
@@ -179,7 +178,7 @@ function Folder({ children }: ComponentRenderProps) {
   return (
     <div className="fde-folder relative">
       <span
-        className="pointer-events-none absolute start-2 top-[0.45rem] text-fd-muted-foreground"
+        className="pointer-events-none absolute start-2 top-[0.5rem] text-fd-muted-foreground"
         contentEditable={false}
       >
         <FolderIcon size={15} />
@@ -189,15 +188,39 @@ function Folder({ children }: ComponentRenderProps) {
   );
 }
 
-function Accordion({ children }: ComponentRenderProps) {
+function Accordion({ props, children }: ComponentRenderProps) {
+  // Editor renders every item open so its body stays editable; the chevron is a
+  // real collapse toggle (mirrors the component) rather than the whole header,
+  // so clicking the title still places the caret. Open state is a DOM attribute
+  // toggled imperatively — node-view renderers can't hold React hook state
+  // reliably, and "reopens on edit" is the right default for an editor anyway.
+  const anchor = props.id;
   return (
-    <div className="fde-accordion">
-      <span
-        className="pointer-events-none absolute end-4 top-3.5 text-fd-muted-foreground"
+    <div className="fde-accordion" data-open="">
+      <button
+        type="button"
+        aria-label="Toggle"
         contentEditable={false}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          const item = event.currentTarget.closest('.fde-accordion');
+          if (item?.hasAttribute('data-open')) item.removeAttribute('data-open');
+          else item?.setAttribute('data-open', '');
+        }}
+        className={`fde-accordion-chevron ${focusRing}`}
       >
-        <ChevronRight size={15} />
-      </span>
+        <ChevronRight size={16} />
+      </button>
+      {anchor ? (
+        <span
+          className="fde-accordion-anchor"
+          contentEditable={false}
+          title={`#${anchor}`}
+          aria-hidden
+        >
+          <LinkIcon size={13} />
+        </span>
+      ) : null}
       {children}
     </div>
   );
@@ -231,20 +254,30 @@ export const calloutSpec: UiComponentSpec = {
   }),
 };
 
+const cardInsert = () => ({
+  type: 'mdxComponent',
+  attrs: { name: 'Card', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
+  content: [
+    { type: 'mdxInlineRegion', attrs: { region: 'title' } },
+    { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+  ],
+});
+
 export const cardSpec: UiComponentSpec = {
   name: 'Card',
   title: 'Card',
   icon: <SquareStack size={13} />,
-  attributeRegions: [
-    { attribute: 'title', region: 'title', placeholder: 'Card title…' },
-    { attribute: 'description', region: 'description', placeholder: 'Description…' },
-  ],
-  childrenRegion: { region: 'body', placeholder: 'Body…' },
+  // title is edited inline; the multi-line body is the block region below it.
+  // `description` and children render into the same slot in fumadocs-ui, so a
+  // `description` attribute is folded into the body rather than shown separately.
+  attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Card title…' }],
+  childrenRegion: { region: 'body', placeholder: 'Write the card…', fromAttribute: 'description' },
   props: [
     { name: 'href', label: 'Link', type: 'string', placeholder: '/docs/…' },
     { name: 'external', label: 'Open in new tab', type: 'boolean' },
   ],
   render: Card,
+  insert: cardInsert,
 };
 
 export const cardsSpec: UiComponentSpec = {
@@ -256,17 +289,7 @@ export const cardsSpec: UiComponentSpec = {
   insert: () => ({
     type: 'mdxComponent',
     attrs: { name: 'Cards', attributes: [] },
-    content: [
-      {
-        type: 'mdxComponent',
-        attrs: { name: 'Card', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
-        content: [
-          { type: 'mdxInlineRegion', attrs: { region: 'title' } },
-          { type: 'mdxInlineRegion', attrs: { region: 'description' } },
-          { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
-        ],
-      },
-    ],
+    content: [cardInsert()],
   }),
 };
 
@@ -275,6 +298,11 @@ export const stepSpec: UiComponentSpec = {
   title: 'Step',
   childrenRegion: { region: 'body', placeholder: 'Describe this step…' },
   render: Step,
+  insert: () => ({
+    type: 'mdxComponent',
+    attrs: { name: 'Step', attributes: [] },
+    content: [{ type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] }],
+  }),
 };
 
 export const stepsSpec: UiComponentSpec = {
@@ -302,12 +330,26 @@ export const stepsSpec: UiComponentSpec = {
   }),
 };
 
+const accordionInsert = () => ({
+  type: 'mdxComponent',
+  attrs: { name: 'Accordion', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
+  content: [
+    { type: 'mdxInlineRegion', attrs: { region: 'title' } },
+    { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+  ],
+});
+
 export const accordionSpec: UiComponentSpec = {
   name: 'Accordion',
   title: 'Accordion',
   attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Question…' }],
   childrenRegion: { region: 'body', placeholder: 'Answer…' },
+  props: [
+    // the `id` attribute is the accordion's anchor (deep-link target)
+    { name: 'id', label: 'Anchor (id)', type: 'string', placeholder: 'section-id' },
+  ],
   render: Accordion,
+  insert: accordionInsert,
 };
 
 export const accordionsSpec: UiComponentSpec = {
@@ -315,22 +357,28 @@ export const accordionsSpec: UiComponentSpec = {
   title: 'Accordions',
   icon: <Rows3 size={13} />,
   childComponent: 'Accordion',
+  props: [
+    {
+      name: 'type',
+      label: 'Selection',
+      type: 'enum',
+      options: ['single', 'multiple'],
+      default: 'single',
+    },
+  ],
   render: Accordions,
   insert: () => ({
     type: 'mdxComponent',
     attrs: { name: 'Accordions', attributes: [] },
-    content: [
-      {
-        type: 'mdxComponent',
-        attrs: { name: 'Accordion', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
-        content: [
-          { type: 'mdxInlineRegion', attrs: { region: 'title' } },
-          { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
-        ],
-      },
-    ],
+    content: [accordionInsert()],
   }),
 };
+
+const fileInsert = () => ({
+  type: 'mdxComponent',
+  attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: '' }] },
+  content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' } }],
+});
 
 export const fileSpec: UiComponentSpec = {
   name: 'File',
@@ -338,6 +386,7 @@ export const fileSpec: UiComponentSpec = {
   icon: <FileIcon size={13} />,
   attributeRegions: [{ attribute: 'name', region: 'file-name', placeholder: 'file name…' }],
   render: File,
+  insert: fileInsert,
 };
 
 export const folderSpec: UiComponentSpec = {
@@ -347,7 +396,13 @@ export const folderSpec: UiComponentSpec = {
   attributeRegions: [{ attribute: 'name', region: 'folder-name', placeholder: 'folder name…' }],
   // a folder holds files and further folders — needs the array child form
   childComponent: ['File', 'Folder'],
+  listLike: true,
   render: Folder,
+  insert: () => ({
+    type: 'mdxComponent',
+    attrs: { name: 'Folder', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: '' }] },
+    content: [{ type: 'mdxInlineRegion', attrs: { region: 'folder-name' } }],
+  }),
 };
 
 export const filesSpec: UiComponentSpec = {
@@ -355,6 +410,7 @@ export const filesSpec: UiComponentSpec = {
   title: 'Files',
   icon: <FolderTree size={13} />,
   childComponent: ['File', 'Folder'],
+  listLike: true,
   render: Files,
   insert: () => ({
     type: 'mdxComponent',

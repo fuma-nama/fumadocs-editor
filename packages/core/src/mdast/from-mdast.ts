@@ -311,6 +311,11 @@ function componentToNode(node: JsxElement, spec: ComponentSpec, ctx: FromMdastCo
     });
   }
 
+  // an attribute folded into the body region (Card `description`) is edited as
+  // body text, so it's dropped from the stored attributes and re-emitted as
+  // children on save
+  let folded: string | undefined;
+
   if (spec.childComponent) {
     const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
     for (const child of collectChildElements(node.children, names)) {
@@ -319,6 +324,17 @@ function componentToNode(node: JsxElement, spec: ComponentSpec, ctx: FromMdastCo
     }
   } else if (spec.childrenRegion) {
     const content = mixedChildrenToBlocks(node.children, ctx);
+    const fold = spec.childrenRegion.fromAttribute;
+    if (fold) {
+      const attr = node.attributes.find(
+        (candidate) => candidate.type === 'mdxJsxAttribute' && candidate.name === fold,
+      );
+      const text = attr && typeof attr.value === 'string' ? attr.value : '';
+      if (text) {
+        folded = fold;
+        content.unshift({ type: 'paragraph', content: [{ type: 'text', text }] });
+      }
+    }
     regions.push({
       type: 'mdxBlockRegion',
       attrs: { region: spec.childrenRegion.region },
@@ -326,9 +342,15 @@ function componentToNode(node: JsxElement, spec: ComponentSpec, ctx: FromMdastCo
     });
   }
 
+  const attributes = cleanAttributes(node.attributes);
   return {
     type: 'mdxComponent',
-    attrs: { name: spec.name, attributes: cleanAttributes(node.attributes) },
+    attrs: {
+      name: spec.name,
+      attributes: folded
+        ? attributes.filter((a) => !(a.type === 'mdxJsxAttribute' && a.name === folded))
+        : attributes,
+    },
     content: regions.length > 0 ? regions : undefined,
   };
 }
