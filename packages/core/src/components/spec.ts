@@ -41,14 +41,27 @@ export interface ComponentSpec {
   title?: string;
   /** string attributes shown as inline editable regions (e.g. Callout title) */
   attributeRegions?: AttributeRegion[];
-  /** element children become a single block editable region */
-  childrenRegion?: { region: string; placeholder?: string; label?: string };
+  /**
+   * Element children become a single block editable region. `fromAttribute`
+   * folds a string attribute that renders into the same visual slot as the
+   * children (e.g. fumadocs `Card`'s `description`, shown right above the body)
+   * into this region so it's edited as body text instead of a separate field;
+   * on save the region serializes back as children.
+   */
+  childrenRegion?: { region: string; placeholder?: string; label?: string; fromAttribute?: string };
   /**
    * Repeated child elements become nested component instances (e.g. Cards →
    * Card). Pass an array to accept more than one child tag — e.g. Files accepts
    * both `File` and `Folder`. Mutually exclusive with `childrenRegion`.
    */
   childComponent?: string | string[];
+  /**
+   * Treat the children as an editable list: pressing Enter in a child's name
+   * inserts a fresh sibling and Backspace in an empty child removes it (a file
+   * tree). Off by default — grid/step containers (Cards, Steps, Accordions)
+   * keep plain editing, where Enter moves between a component's own regions.
+   */
+  listLike?: boolean;
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
   /** default document fragment inserted by the slash menu */

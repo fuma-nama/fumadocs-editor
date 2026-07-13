@@ -27,10 +27,15 @@ export const MdxComponent = Node.create({
   },
 });
 
-/** An inline, plain-text editable region backed by a JSX attribute. */
+/**
+ * An inline, plain-text editable region backed by a JSX attribute. The backing
+ * attribute is a plain string, so the region admits no marks, hard breaks or
+ * inline atoms — that also keeps names/titles single-line by construction.
+ */
 export const MdxInlineRegion = Node.create({
   name: 'mdxInlineRegion',
-  content: 'inline*',
+  content: 'text*',
+  marks: '',
   selectable: false,
   defining: true,
   addAttributes: () => ({ region: { default: null as string | null } }),
