@@ -45,16 +45,26 @@ export interface EditorExtensionsOptions {
    * @defaultValue true
    */
   componentNodes?: boolean;
+  /**
+   * Include the base {@link CodeBlockMdx} node. Set `false` when the UI layer
+   * supplies its own (e.g. a syntax-highlighted, node-view-backed version) to
+   * avoid duplicate schema names.
+   * @defaultValue true
+   */
+  codeBlock?: boolean;
 }
 
-export function editorExtensions({ componentNodes = true }: EditorExtensionsOptions = {}): Extensions {
+export function editorExtensions({
+  componentNodes = true,
+  codeBlock = true,
+}: EditorExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false,
       codeBlock: false,
       link: false,
     }),
-    CodeBlockMdx,
+    ...(codeBlock ? [CodeBlockMdx] : []),
     LinkMdx.configure({ openOnClick: false }),
     Image.configure({ inline: true }),
     TaskList,

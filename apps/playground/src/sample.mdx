@@ -13,12 +13,60 @@ is a proper region, not a generic code block.
   from the toolbar that appears on hover.
 </Callout>
 
-Cards decompose into structured, editable items:
+Code fences highlight as you type, and the language is one click away:
+
+```ts title="editor.ts"
+import { MdxEditor } from '@fumadocs-editor/ui';
+
+export function render(value: string) {
+  const editor = new MdxEditor({ defaultValue: value });
+  return editor.getMarkdown();
+}
+```
+
+Cards decompose into structured, editable items. Open the **Attributes**
+popover on a card to edit its link and other props:
 
 <Cards>
   <Card title="Getting Started" href="/docs">Set up your first project.</Card>
   <Card title="Components" href="/docs/components">Browse the component library.</Card>
 </Cards>
+
+Multi-part components port 1:1 too — Steps keep their numbered rail:
+
+<Steps>
+  <Step>
+    ### Install the package
+
+    Add `@fumadocs-editor/ui` to your project.
+  </Step>
+  <Step>
+    ### Mount the editor
+
+    Drop `<MdxEditor />` into any client component.
+  </Step>
+</Steps>
+
+File trees nest folders and files, each name editable in place:
+
+<Files>
+  <Folder name="app">
+    <File name="layout.tsx" />
+    <File name="page.tsx" />
+  </Folder>
+  <File name="package.json" />
+</Files>
+
+And Accordions render every panel open, so the answers stay editable:
+
+<Accordions>
+  <Accordion title="Does it round-trip losslessly?">
+    Yes — unedited blocks serialize back byte-for-byte.
+  </Accordion>
+  <Accordion title="Can I add my own components?">
+    Register a spec and a renderer, and it becomes a first-class node.
+  </Accordion>
+</Accordions>
 
 Everything else stays plain markdown, and unedited blocks round-trip
 byte-for-byte.

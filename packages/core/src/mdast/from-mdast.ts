@@ -275,20 +275,21 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
 type JsxElement = MdxJsxFlowElement | MdxJsxTextElement;
 
 /**
- * Collect child JSX elements (flow or inline) matching `name`, looking inside
- * paragraphs — MDX wraps adjacent inline elements (e.g. `<Card>` on separate
- * lines) into a paragraph of `mdxJsxTextElement`s.
+ * Collect child JSX elements (flow or inline) whose tag matches one of `names`,
+ * looking inside paragraphs — MDX wraps adjacent inline elements (e.g. `<Card>`
+ * on separate lines) into a paragraph of `mdxJsxTextElement`s.
  */
-function collectChildElements(children: JsxElement['children'], name: string): JsxElement[] {
+function collectChildElements(children: JsxElement['children'], names: string[]): JsxElement[] {
   const out: JsxElement[] = [];
   for (const child of children) {
     if (
       (child.type === 'mdxJsxFlowElement' || child.type === 'mdxJsxTextElement') &&
-      child.name === name
+      child.name != null &&
+      names.includes(child.name)
     ) {
       out.push(child);
     } else if (child.type === 'paragraph') {
-      out.push(...collectChildElements(child.children as JsxElement['children'], name));
+      out.push(...collectChildElements(child.children as JsxElement['children'], names));
     }
   }
   return out;
@@ -311,11 +312,10 @@ function componentToNode(node: JsxElement, spec: ComponentSpec, ctx: FromMdastCo
   }
 
   if (spec.childComponent) {
-    const childSpec = ctx.registry.get(spec.childComponent);
-    if (childSpec) {
-      for (const child of collectChildElements(node.children, spec.childComponent)) {
-        regions.push(componentToNode(child, childSpec, ctx));
-      }
+    const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+    for (const child of collectChildElements(node.children, names)) {
+      const childSpec = child.name != null ? ctx.registry.get(child.name) : undefined;
+      if (childSpec) regions.push(componentToNode(child, childSpec, ctx));
     }
   } else if (spec.childrenRegion) {
     const content = mixedChildrenToBlocks(node.children, ctx);

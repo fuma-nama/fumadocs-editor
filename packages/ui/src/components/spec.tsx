@@ -6,6 +6,8 @@ export interface ComponentRenderProps {
   props: Record<string, string>;
   /** the editable regions — render this where content should appear */
   children: ReactNode;
+  /** update a string attribute in place (for controls the renderer owns) */
+  setProp: (name: string, value: string) => void;
   selected: boolean;
 }
 
@@ -16,5 +18,6 @@ export interface ComponentRenderProps {
  */
 export interface UiComponentSpec extends ComponentSpec {
   render: FC<ComponentRenderProps>;
+  /** small glyph shown in menus and the component's control bar */
   icon?: ReactNode;
 }
