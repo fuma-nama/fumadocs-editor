@@ -1,90 +1,13 @@
-* {
-  box-sizing: border-box;
-}
+@import 'tailwindcss';
+@import '@fumadocs-editor/ui/css/preset.css';
+
+/* consume workspace source directly, so component class names are discovered */
+@source '../../../packages/ui/src/**/*.{ts,tsx}';
 
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  background: #fafafa;
-  color: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #111111;
-    color: #ededed;
-  }
-}
-
-.page {
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 32px 20px 80px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.page-header h1 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.badge {
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
-}
-
-.badge-ok {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.badge-dirty {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-@media (prefers-color-scheme: dark) {
-  .badge-ok {
-    background: #14532d;
-    color: #bbf7d0;
-  }
-
-  .badge-dirty {
-    background: #78350f;
-    color: #fde68a;
-  }
-}
-
-.output {
-  margin-top: 20px;
-  font-size: 13px;
-}
-
-.output summary {
-  cursor: pointer;
-  color: #737373;
-}
-
-.output pre {
-  background: #f6f6f7;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 12px;
-  overflow-x: auto;
-  font-size: 12.5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .output pre {
-    background: #161618;
-    border-color: #262626;
-  }
+  background: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  -webkit-font-smoothing: antialiased;
 }

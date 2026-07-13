@@ -1,0 +1,613 @@
+/*
+ * @fumadocs-editor/ui — Tailwind v4 preset.
+ *
+ * Registers the fumadocs `--color-fd-*` design tokens (so the `fd-*` utilities
+ * used across the editor components are generated) and styles the ProseMirror
+ * content layer, whose DOM is produced by TipTap and therefore can't carry
+ * utility classes. Import it after `@import 'tailwindcss'`:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@fumadocs-editor/ui/css/preset.css';
+ *
+ * The default values reproduce the fumadocs `neutral` theme; when the editor is
+ * mounted inside a real fumadocs site its own theme overrides them.
+ */
+
+@theme {
+  --color-fd-background: hsl(0 0% 96%);
+  --color-fd-foreground: hsl(0 0% 3.9%);
+  --color-fd-muted: hsl(0 0% 96.1%);
+  --color-fd-muted-foreground: hsl(0 0% 45.1%);
+  --color-fd-popover: hsl(0 0% 98%);
+  --color-fd-popover-foreground: hsl(0 0% 15.1%);
+  --color-fd-card: hsl(0 0% 94.7%);
+  --color-fd-card-foreground: hsl(0 0% 3.9%);
+  --color-fd-border: hsla(0 0% 80% / 0.5);
+  --color-fd-primary: hsl(0 0% 9%);
+  --color-fd-primary-foreground: hsl(0 0% 98%);
+  --color-fd-secondary: hsl(0 0% 93.1%);
+  --color-fd-secondary-foreground: hsl(0 0% 9%);
+  --color-fd-accent: hsla(0 0% 82% / 0.5);
+  --color-fd-accent-foreground: hsl(0 0% 9%);
+  --color-fd-ring: hsl(0 0% 63.9%);
+}
+
+/* callout / semantic colours never change with the theme */
+@theme static {
+  --color-fd-info: oklch(62.3% 0.214 259.815);
+  --color-fd-warning: oklch(76.9% 0.188 70.08);
+  --color-fd-error: oklch(63.7% 0.237 25.331);
+  --color-fd-success: oklch(72.3% 0.219 149.579);
+  --color-fd-idea: oklch(70.5% 0.209 60.849);
+}
+
+/* Explicit light scope. `@theme` already sets these at `:root`, but a nested
+ * `.light` (from the theme provider or `<MdxEditor theme="light">`) must be able
+ * to override an ancestor `.dark` — or the OS override below — so it re-declares
+ * the light values authoritatively. */
+.light {
+  --color-fd-background: hsl(0 0% 96%);
+  --color-fd-foreground: hsl(0 0% 3.9%);
+  --color-fd-muted: hsl(0 0% 96.1%);
+  --color-fd-muted-foreground: hsl(0 0% 45.1%);
+  --color-fd-popover: hsl(0 0% 98%);
+  --color-fd-popover-foreground: hsl(0 0% 15.1%);
+  --color-fd-card: hsl(0 0% 94.7%);
+  --color-fd-card-foreground: hsl(0 0% 3.9%);
+  --color-fd-border: hsla(0 0% 80% / 0.5);
+  --color-fd-primary: hsl(0 0% 9%);
+  --color-fd-primary-foreground: hsl(0 0% 98%);
+  --color-fd-secondary: hsl(0 0% 93.1%);
+  --color-fd-secondary-foreground: hsl(0 0% 9%);
+  --color-fd-accent: hsla(0 0% 82% / 0.5);
+  --color-fd-accent-foreground: hsl(0 0% 9%);
+  --color-fd-ring: hsl(0 0% 63.9%);
+}
+
+/* Dark theme — via a `.dark` class (fumadocs / next-themes) … */
+.dark {
+  --color-fd-background: hsl(0 0% 7.04%);
+  --color-fd-foreground: hsl(0 0% 92%);
+  --color-fd-muted: hsl(0 0% 12.9%);
+  --color-fd-muted-foreground: hsla(0 0% 70% / 0.8);
+  --color-fd-popover: hsl(0 0% 11.6%);
+  --color-fd-popover-foreground: hsl(0 0% 86.9%);
+  --color-fd-card: hsl(0 0% 9.8%);
+  --color-fd-card-foreground: hsl(0 0% 98%);
+  --color-fd-border: hsla(0 0% 40% / 0.2);
+  --color-fd-primary: hsl(0 0% 98%);
+  --color-fd-primary-foreground: hsl(0 0% 9%);
+  --color-fd-secondary: hsl(0 0% 12.9%);
+  --color-fd-secondary-foreground: hsl(0 0% 92%);
+  --color-fd-accent: hsla(0 0% 40.9% / 0.3);
+  --color-fd-accent-foreground: hsl(0 0% 90%);
+  --color-fd-ring: hsl(0 0% 54.9%);
+}
+
+/* … or the OS preference when no explicit theme class is set (standalone). */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) {
+    --color-fd-background: hsl(0 0% 7.04%);
+    --color-fd-foreground: hsl(0 0% 92%);
+    --color-fd-muted: hsl(0 0% 12.9%);
+    --color-fd-muted-foreground: hsla(0 0% 70% / 0.8);
+    --color-fd-popover: hsl(0 0% 11.6%);
+    --color-fd-popover-foreground: hsl(0 0% 86.9%);
+    --color-fd-card: hsl(0 0% 9.8%);
+    --color-fd-card-foreground: hsl(0 0% 98%);
+    --color-fd-border: hsla(0 0% 40% / 0.2);
+    --color-fd-primary: hsl(0 0% 98%);
+    --color-fd-primary-foreground: hsl(0 0% 9%);
+    --color-fd-secondary: hsl(0 0% 12.9%);
+    --color-fd-secondary-foreground: hsl(0 0% 92%);
+    --color-fd-accent: hsla(0 0% 40.9% / 0.3);
+    --color-fd-accent-foreground: hsl(0 0% 90%);
+    --color-fd-ring: hsl(0 0% 54.9%);
+  }
+}
+
+/* =========================================================================
+ * Editor content — the ProseMirror document. TipTap owns this DOM, so it is
+ * styled here rather than with utility classes.
+ * ====================================================================== */
+
+.fde-content .ProseMirror {
+  outline: none;
+  padding: 20px 24px 56px;
+  min-height: 420px;
+}
+
+.fde-content .ProseMirror > * + * {
+  margin-top: 0.8em;
+}
+
+.fde-content h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin-top: 1em;
+}
+
+.fde-content h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-top: 1.4em;
+}
+
+.fde-content h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin-top: 1.3em;
+}
+
+.fde-content h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 1.2em;
+}
+
+.fde-content a {
+  color: var(--color-fd-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-fd-border);
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.fde-content code {
+  background: var(--color-fd-muted);
+  border: 1px solid var(--color-fd-border);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+  font-size: 0.875em;
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace);
+}
+
+.fde-content pre {
+  background: var(--color-fd-card);
+  border: 1px solid var(--color-fd-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.fde-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.fde-content blockquote {
+  border-left: 2px solid var(--color-fd-border);
+  padding-left: 14px;
+  color: var(--color-fd-muted-foreground);
+  font-style: italic;
+}
+
+.fde-content ul,
+.fde-content ol {
+  padding-left: 1.5em;
+}
+
+.fde-content ul {
+  list-style: disc;
+}
+
+.fde-content ol {
+  list-style: decimal;
+}
+
+.fde-content li::marker {
+  color: var(--color-fd-muted-foreground);
+}
+
+.fde-content li > * + * {
+  margin-top: 0.4em;
+}
+
+.fde-content ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+
+.fde-content ul[data-type='taskList'] li {
+  display: flex;
+  gap: 8px;
+}
+
+.fde-content ul[data-type='taskList'] li > label {
+  flex-shrink: 0;
+  margin-top: 0.3em;
+}
+
+.fde-content ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+.fde-content img {
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--color-fd-border);
+}
+
+.fde-content hr {
+  border: none;
+  border-top: 1px solid var(--color-fd-border);
+  margin: 2em 0;
+}
+
+.fde-content table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.925em;
+}
+
+.fde-content th,
+.fde-content td {
+  border: 1px solid var(--color-fd-border);
+  padding: 7px 12px;
+  text-align: left;
+}
+
+.fde-content th {
+  background: var(--color-fd-muted);
+  font-weight: 600;
+}
+
+/* unregistered / raw MDX nodes get lightweight fallback chrome */
+.fde-content [data-mdx-flow] {
+  border: 1px dashed var(--color-fd-border);
+  border-radius: 10px;
+  padding: 26px 14px 10px;
+  position: relative;
+  margin-top: 1em;
+}
+
+.fde-content [data-mdx-flow]::before {
+  content: '<' attr(data-component) '>';
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace);
+  font-size: 11px;
+  color: var(--color-fd-muted-foreground);
+}
+
+.fde-content [data-mdx-inline] {
+  border-bottom: 1px dashed var(--color-fd-ring);
+}
+
+.fde-content pre[data-mdx-expression],
+.fde-content pre[data-mdx-esm],
+.fde-content pre[data-mdx-frontmatter],
+.fde-content pre[data-mdx-verbatim] {
+  border-style: dashed;
+  color: var(--color-fd-muted-foreground);
+  white-space: pre-wrap;
+}
+
+.fde-content pre[data-mdx-frontmatter] {
+  border-color: var(--color-fd-ring);
+}
+
+.fde-content code[data-mdx-expression],
+.fde-content code[data-mdx-verbatim] {
+  border-style: dashed;
+  color: var(--color-fd-muted-foreground);
+}
+
+.fde-content .ProseMirror-selectednode {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.fde-content .ProseMirror-gapcursor:after {
+  border-top: 1px solid var(--color-fd-foreground);
+}
+
+/* =========================================================================
+ * Component editable regions. The chrome around them is drawn with utility
+ * classes in the renderers; these rules cover what utilities can't: the
+ * empty-region placeholder and spacing between regions inside the single
+ * content hole.
+ * ====================================================================== */
+
+.fde-region {
+  position: relative;
+  outline: none;
+}
+
+.fde-region[data-empty][data-placeholder]:not([data-placeholder=''])::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  color: var(--color-fd-muted-foreground);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.fde-region-block[data-region='body'] > * + * {
+  margin-top: 0.5em;
+}
+
+/* Callout regions */
+.fde-callout .fde-region-inline[data-region='title'] {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.fde-callout .fde-region-block[data-region='body'] {
+  margin-top: 6px;
+  color: var(--color-fd-muted-foreground);
+}
+
+/* Card regions */
+.fde-card .fde-region-inline[data-region='title'] {
+  font-size: 0.95em;
+  font-weight: 500;
+}
+
+.fde-card .fde-region-inline[data-region='description'] {
+  margin-top: 4px;
+}
+
+.fde-card .fde-region-inline[data-region='description'],
+.fde-card .fde-region-block[data-region='body'] {
+  font-size: 0.9em;
+  color: var(--color-fd-muted-foreground);
+}
+
+.fde-card .fde-region-block[data-region='body'] {
+  margin-top: 6px;
+}
+
+/* The NodeViewContent wrappers must dissolve so nested children become direct
+ * layout items (grid cells, step markers, accordion rows). */
+.fde-cards > .fde-component-content,
+.fde-cards > .fde-component-content > [data-node-view-content-react],
+.fde-steps > .fde-component-content,
+.fde-steps > .fde-component-content > [data-node-view-content-react],
+.fde-accordions > .fde-component-content,
+.fde-accordions > .fde-component-content > [data-node-view-content-react],
+.fde-files > .fde-component-content,
+.fde-files > .fde-component-content > [data-node-view-content-react] {
+  display: contents;
+}
+
+/* =========================================================================
+ * Code blocks. The node view supplies the fumadocs `CodeBlock` figure chrome
+ * with utility classes; here we neutralise the generic `pre`/`code` rules for
+ * the inner element and provide the highlight.js token palette (lowlight).
+ * ====================================================================== */
+
+.fde-content pre.fde-codeblock-pre {
+  margin: 0;
+  padding: 14px 16px;
+  min-width: 100%;
+  width: max-content;
+  background: none;
+  border: none;
+  border-radius: 0;
+  overflow-x: visible;
+}
+
+.fde-content .fde-codeblock code {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* highlight.js token palette — github-light, darkened a touch so it keeps
+ * >4.5:1 contrast on the muted `fd-card` surface (not pure white). */
+.fde-codeblock .hljs-comment,
+.fde-codeblock .hljs-quote {
+  color: #57606a;
+  font-style: italic;
+}
+.fde-codeblock .hljs-keyword,
+.fde-codeblock .hljs-selector-tag,
+.fde-codeblock .hljs-doctag {
+  color: #cf222e;
+}
+.fde-codeblock .hljs-string,
+.fde-codeblock .hljs-meta .hljs-string,
+.fde-codeblock .hljs-regexp {
+  color: #0a3069;
+}
+.fde-codeblock .hljs-number,
+.fde-codeblock .hljs-literal {
+  color: #0550ae;
+}
+.fde-codeblock .hljs-title,
+.fde-codeblock .hljs-title.function_,
+.fde-codeblock .hljs-section {
+  color: #8250df;
+}
+.fde-codeblock .hljs-built_in,
+.fde-codeblock .hljs-type,
+.fde-codeblock .hljs-class .hljs-title {
+  color: #953800;
+}
+.fde-codeblock .hljs-attr,
+.fde-codeblock .hljs-attribute,
+.fde-codeblock .hljs-property,
+.fde-codeblock .hljs-variable,
+.fde-codeblock .hljs-template-variable {
+  color: #0550ae;
+}
+.fde-codeblock .hljs-tag,
+.fde-codeblock .hljs-name,
+.fde-codeblock .hljs-selector-id,
+.fde-codeblock .hljs-selector-class {
+  color: #116329;
+}
+.fde-codeblock .hljs-meta,
+.fde-codeblock .hljs-symbol {
+  color: #57606a;
+}
+.fde-codeblock .hljs-emphasis {
+  font-style: italic;
+}
+.fde-codeblock .hljs-strong {
+  font-weight: 600;
+}
+
+.dark .fde-codeblock .hljs-comment,
+.dark .fde-codeblock .hljs-quote {
+  color: #8b949e;
+}
+.dark .fde-codeblock .hljs-keyword,
+.dark .fde-codeblock .hljs-selector-tag,
+.dark .fde-codeblock .hljs-doctag {
+  color: #ff7b72;
+}
+.dark .fde-codeblock .hljs-string,
+.dark .fde-codeblock .hljs-meta .hljs-string,
+.dark .fde-codeblock .hljs-regexp {
+  color: #a5d6ff;
+}
+.dark .fde-codeblock .hljs-number,
+.dark .fde-codeblock .hljs-literal {
+  color: #79c0ff;
+}
+.dark .fde-codeblock .hljs-title,
+.dark .fde-codeblock .hljs-title.function_,
+.dark .fde-codeblock .hljs-section {
+  color: #d2a8ff;
+}
+.dark .fde-codeblock .hljs-built_in,
+.dark .fde-codeblock .hljs-type,
+.dark .fde-codeblock .hljs-class .hljs-title {
+  color: #ffa657;
+}
+.dark .fde-codeblock .hljs-attr,
+.dark .fde-codeblock .hljs-attribute,
+.dark .fde-codeblock .hljs-property,
+.dark .fde-codeblock .hljs-variable,
+.dark .fde-codeblock .hljs-template-variable {
+  color: #79c0ff;
+}
+.dark .fde-codeblock .hljs-tag,
+.dark .fde-codeblock .hljs-name,
+.dark .fde-codeblock .hljs-selector-id,
+.dark .fde-codeblock .hljs-selector-class {
+  color: #7ee787;
+}
+.dark .fde-codeblock .hljs-meta,
+.dark .fde-codeblock .hljs-symbol {
+  color: #8b949e;
+}
+
+/* =========================================================================
+ * Steps — mirrors the fumadocs `fd-steps` / `fd-step` utilities.
+ * ====================================================================== */
+
+.fde-content .fde-steps {
+  counter-reset: step;
+  position: relative;
+  margin-inline-start: 0.5rem;
+  padding-inline-start: 1.5rem;
+  border-inline-start: 1px solid var(--color-fd-border);
+}
+
+@media (min-width: 640px) {
+  .fde-content .fde-steps {
+    margin-inline-start: 1rem;
+    padding-inline-start: 1.75rem;
+  }
+}
+
+.fde-content .fde-step + .fde-step {
+  margin-top: 1.25rem;
+}
+
+.fde-content .fde-step::before {
+  content: counter(step);
+  counter-increment: step;
+  position: absolute;
+  inset-inline-start: -1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background-color: var(--color-fd-secondary);
+  color: var(--color-fd-secondary-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.fde-content .fde-step .fde-region-block[data-region='body'] > :first-child {
+  margin-top: 0;
+}
+
+/* =========================================================================
+ * Accordions — the editor renders every item open so its body is editable.
+ * ====================================================================== */
+
+.fde-content .fde-accordion {
+  position: relative;
+}
+
+.fde-content .fde-accordion .fde-region-inline[data-region='title'] {
+  font-weight: 500;
+  padding: 0.625rem 2.5rem 0.625rem 1rem;
+}
+
+.fde-content .fde-accordion .fde-region-block[data-region='body'] {
+  padding: 0 1rem 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--color-fd-muted-foreground);
+}
+
+.fde-content .fde-accordion .fde-region-block[data-region='body'] > :first-child {
+  margin-top: 0;
+}
+
+/* =========================================================================
+ * Files — a file tree mirroring the fumadocs `Files` / `File` / `Folder`.
+ * Only the plural `.fde-files` container is dissolved (so its entries are its
+ * direct children); each `.fde-folder` keeps its content wrapper, so nested
+ * entries and the folder name are reached one level down — mirroring how the
+ * accordions are structured.
+ * ====================================================================== */
+
+.fde-content .fde-files > [data-component] + [data-component] {
+  margin-top: 2px;
+}
+
+/* the editable name of a file or folder, sitting to the right of its icon */
+.fde-content .fde-file .fde-region-inline[data-region='file-name'],
+.fde-content .fde-folder .fde-region-inline[data-region='folder-name'] {
+  padding: 0.3rem 0.5rem 0.3rem 1.75rem;
+  border-radius: 0.375rem;
+  transition: background-color 150ms;
+}
+
+.fde-content .fde-file:hover .fde-region-inline[data-region='file-name'],
+.fde-content .fde-folder:hover > .fde-component-content > .fde-region-inline[data-region='folder-name'] {
+  background-color: var(--color-fd-accent);
+  color: var(--color-fd-accent-foreground);
+}
+
+/* nested entries indent under their folder, tracing a guide rail */
+.fde-content .fde-folder > .fde-component-content > [data-component] {
+  margin-inline-start: 1rem;
+  padding-inline-start: 0.5rem;
+  border-inline-start: 1px solid var(--color-fd-border);
+}
+
+.fde-content .fde-folder > .fde-component-content > [data-component] + [data-component] {
+  margin-top: 2px;
+}

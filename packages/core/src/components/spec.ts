@@ -11,6 +11,14 @@ export interface PropField {
   /** for `type: 'enum'` */
   options?: string[];
   default?: string | number | boolean;
+  /** placeholder text for `string` / `number` inputs in the attributes popover */
+  placeholder?: string;
+  /**
+   * Edited in-place by the component's own renderer (e.g. the Callout type,
+   * picked from its icon) rather than in the floating props panel. Keeps the
+   * attribute documented here while hiding it from the generic panel.
+   */
+  inline?: boolean;
 }
 
 /** A JSX string attribute surfaced as an inline (plain-text) editable region. */
@@ -36,10 +44,11 @@ export interface ComponentSpec {
   /** element children become a single block editable region */
   childrenRegion?: { region: string; placeholder?: string; label?: string };
   /**
-   * Repeated child elements of this tag name become nested component instances
-   * (e.g. Cards → Card). Mutually exclusive with `childrenRegion`.
+   * Repeated child elements become nested component instances (e.g. Cards →
+   * Card). Pass an array to accept more than one child tag — e.g. Files accepts
+   * both `File` and `Folder`. Mutually exclusive with `childrenRegion`.
    */
-  childComponent?: string;
+  childComponent?: string | string[];
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
   /** default document fragment inserted by the slash menu */

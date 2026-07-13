@@ -8,6 +8,7 @@ import { useEditorState } from '@tiptap/react';
 import { Toolbar } from '@base-ui/react/toolbar';
 import { Tooltip } from '@base-ui/react/tooltip';
 import { Select } from '@base-ui/react/select';
+import { Menu } from '@base-ui/react/menu';
 import {
   Bold,
   Check,
@@ -18,12 +19,22 @@ import {
   ListOrdered,
   ListTodo,
   Minus,
+  Plus,
   Redo2,
   Strikethrough,
   TextQuote,
   Undo2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import type { UiComponentSpec } from './components/spec';
+import {
+  ghostSelectCls,
+  iconButtonCls,
+  itemCls,
+  itemIndicatorCls,
+  popupCls,
+  tooltipCls,
+} from './components/styles';
 
 const BLOCK_ITEMS = [
   { value: 'p', label: 'Paragraph' },
@@ -65,7 +76,7 @@ function ActionButton({
       <Tooltip.Trigger
         render={
           <Toolbar.Button
-            className="fde-tb"
+            className={iconButtonCls}
             data-active={active || undefined}
             disabled={disabled}
             onClick={onClick}
@@ -76,18 +87,77 @@ function ActionButton({
       />
       <Tooltip.Portal>
         <Tooltip.Positioner sideOffset={6}>
-          <Tooltip.Popup className="fde-tooltip">{label}</Tooltip.Popup>
+          <Tooltip.Popup className={tooltipCls}>{label}</Tooltip.Popup>
         </Tooltip.Positioner>
       </Tooltip.Portal>
     </Tooltip.Root>
   );
 }
 
+function InsertMenu({
+  editor,
+  components,
+  disabled,
+}: {
+  editor: Editor | null;
+  components: UiComponentSpec[];
+  disabled: boolean;
+}) {
+  const insertable = components.filter((spec) => spec.insert);
+  if (insertable.length === 0) return null;
+
+  return (
+    <Menu.Root>
+      <Tooltip.Root>
+        <Tooltip.Trigger
+          render={
+            <Menu.Trigger
+              className={iconButtonCls}
+              disabled={disabled}
+              aria-label="Insert component"
+            >
+              <Plus size={16} />
+            </Menu.Trigger>
+          }
+        />
+        <Tooltip.Portal>
+          <Tooltip.Positioner sideOffset={6}>
+            <Tooltip.Popup className={tooltipCls}>Insert component</Tooltip.Popup>
+          </Tooltip.Positioner>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+      <Menu.Portal>
+        <Menu.Positioner sideOffset={4} align="start">
+          <Menu.Popup className={popupCls}>
+            {insertable.map((spec) => (
+              <Menu.Item
+                key={spec.name}
+                className={itemCls}
+                onClick={() => {
+                  const content = spec.insert?.();
+                  if (content && editor) editor.chain().focus().insertContent(content).run();
+                }}
+              >
+                <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
+                  {spec.icon}
+                </span>
+                <span>{spec.title ?? spec.name}</span>
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
 export function EditorToolbar({
   editor,
+  components = [],
   disabled = false,
 }: {
   editor: Editor | null;
+  components?: UiComponentSpec[];
   disabled?: boolean;
 }) {
   const state = useEditorState({
@@ -128,23 +198,23 @@ export function EditorToolbar({
 
   return (
     <Tooltip.Provider>
-      <Toolbar.Root className="fde-toolbar">
+      <Toolbar.Root className="flex flex-wrap items-center gap-1">
         <Select.Root
           items={BLOCK_ITEMS}
           value={state?.block ?? 'p'}
           onValueChange={(value) => setBlock(value as string)}
           disabled={off}
         >
-          <Select.Trigger className="fde-select-trigger">
+          <Select.Trigger className={ghostSelectCls}>
             <Select.Value />
             <ChevronDown size={14} />
           </Select.Trigger>
           <Select.Portal>
             <Select.Positioner sideOffset={4}>
-              <Select.Popup className="fde-popup">
+              <Select.Popup className={popupCls}>
                 {BLOCK_ITEMS.map((item) => (
-                  <Select.Item key={item.value} value={item.value} className="fde-item">
-                    <Select.ItemIndicator className="fde-item-indicator">
+                  <Select.Item key={item.value} value={item.value} className={itemCls}>
+                    <Select.ItemIndicator className={itemIndicatorCls}>
                       <Check size={14} />
                     </Select.ItemIndicator>
                     <Select.ItemText>{item.label}</Select.ItemText>
@@ -155,9 +225,9 @@ export function EditorToolbar({
           </Select.Portal>
         </Select.Root>
 
-        <Toolbar.Separator className="fde-sep" />
+        <Toolbar.Separator className="mx-1 h-5 w-px bg-fd-border" />
 
-        <Toolbar.Group className="fde-group">
+        <Toolbar.Group className="flex items-center gap-0.5">
           <ActionButton label="Bold" active={state?.bold} disabled={off} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={16} />
           </ActionButton>
@@ -172,9 +242,9 @@ export function EditorToolbar({
           </ActionButton>
         </Toolbar.Group>
 
-        <Toolbar.Separator className="fde-sep" />
+        <Toolbar.Separator className="mx-1 h-5 w-px bg-fd-border" />
 
-        <Toolbar.Group className="fde-group">
+        <Toolbar.Group className="flex items-center gap-0.5">
           <ActionButton label="Bullet list" active={state?.bulletList} disabled={off} onClick={() => run((c) => c.toggleBulletList())}>
             <List size={16} />
           </ActionButton>
@@ -192,9 +262,13 @@ export function EditorToolbar({
           </ActionButton>
         </Toolbar.Group>
 
-        <Toolbar.Separator className="fde-sep" />
+        <Toolbar.Separator className="mx-1 h-5 w-px bg-fd-border" />
 
-        <Toolbar.Group className="fde-group">
+        <InsertMenu editor={editor} components={components} disabled={off} />
+
+        <Toolbar.Separator className="mx-1 h-5 w-px bg-fd-border" />
+
+        <Toolbar.Group className="flex items-center gap-0.5">
           <ActionButton label="Undo" disabled={off || !state?.canUndo} onClick={() => run((c) => c.undo())}>
             <Undo2 size={16} />
           </ActionButton>

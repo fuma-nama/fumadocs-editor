@@ -19,7 +19,11 @@ import {
 } from 'react';
 import { EditorToolbar } from './toolbar';
 import { componentExtensions } from './components/node-views';
+import { codeBlockExtension } from './components/code-block';
 import type { UiComponentSpec } from './components/spec';
+import { focusRing } from './components/styles';
+import { useEditorTheme, type EditorTheme } from './theme';
+import { cn } from './utils/cn';
 
 export interface MdxEditorRef {
   getMarkdown: () => string;
@@ -32,6 +36,12 @@ export interface MdxEditorProps {
   onMarkdownChange?: (markdown: string) => void;
   /** MDX components to render as WYSIWYG nodes with editable regions */
   components?: UiComponentSpec[];
+  /**
+   * Scope the editor to a fixed colour theme. When omitted, the editor inherits
+   * the ambient theme — an {@link EditorThemeProvider}, a `next-themes` `.dark`
+   * class, or the OS preference — which is what a real fumadocs site wants.
+   */
+  theme?: EditorTheme;
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -40,14 +50,22 @@ type Mode = 'visual' | 'source';
 
 const EMPTY_DOC: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] };
 
+const modeTabCls =
+  `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
+
 export function MdxEditor({
   defaultValue = '',
   onMarkdownChange,
   components,
+  theme,
   className,
   ref,
 }: MdxEditorProps) {
   const registry = useMemo(() => createRegistry(components ?? []), [components]);
+  const ambient = useEditorTheme();
+  // an explicit `theme` prop wins; otherwise stay unscoped so the editor
+  // inherits the provider / next-themes / OS theme from an ancestor.
+  const scoped = theme === 'system' ? ambient.resolvedTheme : theme;
 
   const [initial] = useState(() => {
     try {
@@ -68,7 +86,11 @@ export function MdxEditor({
   });
 
   const extensions = useMemo(
-    () => [...editorExtensions({ componentNodes: false }), ...componentExtensions(components ?? [])],
+    () => [
+      ...editorExtensions({ componentNodes: false, codeBlock: false }),
+      codeBlockExtension(),
+      ...componentExtensions(components ?? []),
+    ],
     [components],
   );
 
@@ -108,15 +130,21 @@ export function MdxEditor({
   }
 
   return (
-    <div className={className ? `fde ${className}` : 'fde'}>
+    <div
+      className={cn(
+        scoped,
+        'flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60',
+        className,
+      )}
+    >
       <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
-        <div className="fde-header">
-          <EditorToolbar editor={editor} disabled={mode !== 'visual'} />
-          <Tabs.List className="fde-tabs">
-            <Tabs.Tab className="fde-tab" value="visual">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fd-border bg-fd-card/40 px-2 py-1.5">
+          <EditorToolbar editor={editor} components={components} disabled={mode !== 'visual'} />
+          <Tabs.List className="flex gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
+            <Tabs.Tab className={modeTabCls} value="visual">
               Visual
             </Tabs.Tab>
-            <Tabs.Tab className="fde-tab" value="source">
+            <Tabs.Tab className={modeTabCls} value="source">
               MDX
             </Tabs.Tab>
           </Tabs.List>
@@ -125,10 +153,14 @@ export function MdxEditor({
       {mode === 'visual' ? (
         <EditorContent editor={editor} className="fde-content" />
       ) : (
-        <div className="fde-source-wrap">
-          {sourceError != null && <div className="fde-error">{sourceError}</div>}
+        <div className="flex flex-1 flex-col">
+          {sourceError != null && (
+            <div className="border-b border-fd-border bg-fd-error/10 px-5 py-2.5 font-mono text-[13px] whitespace-pre-wrap text-fd-error">
+              {sourceError}
+            </div>
+          )}
           <textarea
-            className="fde-source"
+            className="min-h-[420px] flex-1 resize-y bg-fd-background px-5 py-4 font-mono text-[13px] leading-relaxed text-fd-foreground outline-none [tab-size:2] focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-fd-ring/40"
             value={source}
             spellCheck={false}
             onChange={(event) => {

@@ -1,19 +1,33 @@
 'use client';
 import {
+  Check,
+  ChevronRight,
   CircleCheck,
   CircleX,
+  File as FileIcon,
+  Folder as FolderIcon,
+  FolderTree,
   Info,
   Lightbulb,
+  LayoutGrid,
+  ListOrdered,
+  Rows3,
+  SquareStack,
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
+import { Select } from '@base-ui/react/select';
+import type { CSSProperties } from 'react';
+import { cn } from '../utils/cn';
+import { itemCls, popupCls } from './styles';
 import type { ComponentRenderProps, UiComponentSpec } from './spec';
 
 /*
  * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
- * component's structure so the editor is genuinely WYSIWYG; in a fumadocs-ui
- * consumer these renderers would import the actual components and drop
- * `<NodeViewContent>` into their editable slots.
+ * component's markup — same Tailwind utilities, same `fd-*` tokens — so the
+ * editor is genuinely WYSIWYG. In a fumadocs-ui consumer these renderers would
+ * import the actual components and drop `<NodeViewContent>` into their editable
+ * slots. The editable regions arrive as `children`, in document order.
  */
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
@@ -25,13 +39,80 @@ const CALLOUT_ICONS: Record<string, LucideIcon> = {
   idea: Lightbulb,
 };
 
-function Callout({ props, children }: ComponentRenderProps) {
-  const type = props.type ?? 'info';
-  const Icon = CALLOUT_ICONS[type] ?? Info;
+const CALLOUT_TYPES = [
+  { value: 'info', label: 'Info' },
+  { value: 'warn', label: 'Warning' },
+  { value: 'error', label: 'Error' },
+  { value: 'success', label: 'Success' },
+  { value: 'idea', label: 'Idea' },
+];
+
+/** map the JSX alias to the token/icon key */
+const colorKey = (type: string) => (type === 'warn' ? 'warning' : type);
+
+/** The callout icon doubles as an in-place picker for the callout `type`. */
+function CalloutTypeSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const Current = CALLOUT_ICONS[value] ?? Info;
+  const isIdea = value === 'idea';
   return (
-    <div className="fde-callout" data-type={type} contentEditable={false}>
-      <Icon className="fde-callout-icon" size={18} />
-      <div className="fde-callout-body" contentEditable suppressContentEditableWarning>
+    <Select.Root
+      items={CALLOUT_TYPES}
+      value={value}
+      onValueChange={(next) => onChange(next as string)}
+    >
+      <Select.Trigger
+        aria-label="Callout type"
+        className={cn(
+          '-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 transition-colors hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)',
+          isIdea ? 'text-(--callout-color)' : 'text-fd-card',
+        )}
+      >
+        <Current size={20} strokeWidth={2} />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner sideOffset={6} align="start">
+          <Select.Popup className={popupCls}>
+            {CALLOUT_TYPES.map((item) => {
+              const Icon = CALLOUT_ICONS[item.value] ?? Info;
+              return (
+                <Select.Item key={item.value} value={item.value} className={itemCls}>
+                  <Icon
+                    size={15}
+                    className="shrink-0"
+                    style={{ color: `var(--color-fd-${colorKey(item.value)})` }}
+                  />
+                  <Select.ItemText>{item.label}</Select.ItemText>
+                  <Select.ItemIndicator className="ms-auto text-fd-foreground">
+                    <Check size={14} />
+                  </Select.ItemIndicator>
+                </Select.Item>
+              );
+            })}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
+function Callout({ props, children, setProp }: ComponentRenderProps) {
+  const type = props.type ?? 'info';
+  return (
+    <div
+      className="fde-callout flex items-start gap-2 rounded-xl border border-fd-border bg-fd-card p-3 ps-1 text-[0.925em] text-fd-card-foreground shadow-md"
+      style={{ '--callout-color': `var(--color-fd-${colorKey(type)})` } as CSSProperties}
+      data-type={type}
+      contentEditable={false}
+    >
+      <div role="none" className="w-0.5 self-stretch rounded-sm bg-(--callout-color)/50" />
+      <CalloutTypeSelect value={type} onChange={(value) => setProp('type', value)} />
+      <div className="min-w-0 flex-1" contentEditable suppressContentEditableWarning>
         {children}
       </div>
     </div>
@@ -40,19 +121,92 @@ function Callout({ props, children }: ComponentRenderProps) {
 
 function Card({ props, children }: ComponentRenderProps) {
   return (
-    <div className="fde-card" data-has-href={props.href ? '' : undefined}>
+    <div
+      className={cn(
+        'fde-card rounded-xl border border-fd-border bg-fd-card p-4 text-fd-card-foreground transition-colors',
+        props.href && 'hover:bg-fd-accent/80',
+      )}
+      data-has-href={props.href ? '' : undefined}
+    >
       {children}
     </div>
   );
 }
 
 function Cards({ children }: ComponentRenderProps) {
-  return <div className="fde-cards">{children}</div>;
+  return <div className="fde-cards grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">{children}</div>;
+}
+
+function Steps({ children }: ComponentRenderProps) {
+  return <div className="fde-steps">{children}</div>;
+}
+
+function Step({ children }: ComponentRenderProps) {
+  return <div className="fde-step">{children}</div>;
+}
+
+function Accordions({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-accordions divide-y divide-fd-border overflow-hidden rounded-lg border border-fd-border bg-fd-card">
+      {children}
+    </div>
+  );
+}
+
+function Files({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-files rounded-xl border border-fd-border bg-fd-card p-2 text-[0.9em] text-fd-card-foreground">
+      {children}
+    </div>
+  );
+}
+
+function File({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-file relative">
+      <span
+        className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 text-fd-muted-foreground"
+        contentEditable={false}
+      >
+        <FileIcon size={15} />
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Folder({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-folder relative">
+      <span
+        className="pointer-events-none absolute start-2 top-[0.45rem] text-fd-muted-foreground"
+        contentEditable={false}
+      >
+        <FolderIcon size={15} />
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Accordion({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-accordion">
+      <span
+        className="pointer-events-none absolute end-4 top-3.5 text-fd-muted-foreground"
+        contentEditable={false}
+      >
+        <ChevronRight size={15} />
+      </span>
+      {children}
+    </div>
+  );
 }
 
 export const calloutSpec: UiComponentSpec = {
   name: 'Callout',
   title: 'Callout',
+  icon: <Info size={13} />,
   attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Title…' }],
   childrenRegion: { region: 'body', placeholder: 'Write the callout…' },
   props: [
@@ -62,6 +216,8 @@ export const calloutSpec: UiComponentSpec = {
       type: 'enum',
       options: ['info', 'warn', 'error', 'success', 'idea'],
       default: 'info',
+      // edited in place by clicking the callout icon
+      inline: true,
     },
   ],
   render: Callout,
@@ -78,18 +234,23 @@ export const calloutSpec: UiComponentSpec = {
 export const cardSpec: UiComponentSpec = {
   name: 'Card',
   title: 'Card',
+  icon: <SquareStack size={13} />,
   attributeRegions: [
     { attribute: 'title', region: 'title', placeholder: 'Card title…' },
     { attribute: 'description', region: 'description', placeholder: 'Description…' },
   ],
   childrenRegion: { region: 'body', placeholder: 'Body…' },
-  props: [{ name: 'href', label: 'Link', type: 'string' }],
+  props: [
+    { name: 'href', label: 'Link', type: 'string', placeholder: '/docs/…' },
+    { name: 'external', label: 'Open in new tab', type: 'boolean' },
+  ],
   render: Card,
 };
 
 export const cardsSpec: UiComponentSpec = {
   name: 'Cards',
   title: 'Cards',
+  icon: <LayoutGrid size={13} />,
   childComponent: 'Card',
   render: Cards,
   insert: () => ({
@@ -109,5 +270,132 @@ export const cardsSpec: UiComponentSpec = {
   }),
 };
 
-/** All built-in fumadocs-ui component specs. */
-export const fumadocsUiComponents: UiComponentSpec[] = [calloutSpec, cardSpec, cardsSpec];
+export const stepSpec: UiComponentSpec = {
+  name: 'Step',
+  title: 'Step',
+  childrenRegion: { region: 'body', placeholder: 'Describe this step…' },
+  render: Step,
+};
+
+export const stepsSpec: UiComponentSpec = {
+  name: 'Steps',
+  title: 'Steps',
+  icon: <ListOrdered size={13} />,
+  childComponent: 'Step',
+  render: Steps,
+  insert: () => ({
+    type: 'mdxComponent',
+    attrs: { name: 'Steps', attributes: [] },
+    content: [
+      {
+        type: 'mdxComponent',
+        attrs: { name: 'Step', attributes: [] },
+        content: [
+          {
+            type: 'mdxBlockRegion',
+            attrs: { region: 'body' },
+            content: [{ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Step one' }] }],
+          },
+        ],
+      },
+    ],
+  }),
+};
+
+export const accordionSpec: UiComponentSpec = {
+  name: 'Accordion',
+  title: 'Accordion',
+  attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Question…' }],
+  childrenRegion: { region: 'body', placeholder: 'Answer…' },
+  render: Accordion,
+};
+
+export const accordionsSpec: UiComponentSpec = {
+  name: 'Accordions',
+  title: 'Accordions',
+  icon: <Rows3 size={13} />,
+  childComponent: 'Accordion',
+  render: Accordions,
+  insert: () => ({
+    type: 'mdxComponent',
+    attrs: { name: 'Accordions', attributes: [] },
+    content: [
+      {
+        type: 'mdxComponent',
+        attrs: { name: 'Accordion', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
+        content: [
+          { type: 'mdxInlineRegion', attrs: { region: 'title' } },
+          { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+        ],
+      },
+    ],
+  }),
+};
+
+export const fileSpec: UiComponentSpec = {
+  name: 'File',
+  title: 'File',
+  icon: <FileIcon size={13} />,
+  attributeRegions: [{ attribute: 'name', region: 'file-name', placeholder: 'file name…' }],
+  render: File,
+};
+
+export const folderSpec: UiComponentSpec = {
+  name: 'Folder',
+  title: 'Folder',
+  icon: <FolderIcon size={13} />,
+  attributeRegions: [{ attribute: 'name', region: 'folder-name', placeholder: 'folder name…' }],
+  // a folder holds files and further folders — needs the array child form
+  childComponent: ['File', 'Folder'],
+  render: Folder,
+};
+
+export const filesSpec: UiComponentSpec = {
+  name: 'Files',
+  title: 'Files',
+  icon: <FolderTree size={13} />,
+  childComponent: ['File', 'Folder'],
+  render: Files,
+  insert: () => ({
+    type: 'mdxComponent',
+    attrs: { name: 'Files', attributes: [] },
+    content: [
+      {
+        type: 'mdxComponent',
+        attrs: { name: 'Folder', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'app' }] },
+        content: [
+          { type: 'mdxInlineRegion', attrs: { region: 'folder-name' }, content: [{ type: 'text', text: 'app' }] },
+          {
+            type: 'mdxComponent',
+            attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'page.tsx' }] },
+            content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' }, content: [{ type: 'text', text: 'page.tsx' }] }],
+          },
+        ],
+      },
+      {
+        type: 'mdxComponent',
+        attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'package.json' }] },
+        content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' }, content: [{ type: 'text', text: 'package.json' }] }],
+      },
+    ],
+  }),
+};
+
+/**
+ * All built-in fumadocs-ui component specs. Child-only specs ({@link cardSpec},
+ * {@link stepSpec}, {@link accordionSpec}, {@link fileSpec}, {@link folderSpec})
+ * are registered so the parser can resolve them as `childComponent` targets,
+ * even though they aren't offered as top-level inserts.
+ */
+export const fumadocsUiComponents: UiComponentSpec[] = [
+  calloutSpec,
+  cardSpec,
+  cardsSpec,
+  stepSpec,
+  stepsSpec,
+  accordionSpec,
+  accordionsSpec,
+  fileSpec,
+  folderSpec,
+  filesSpec,
+];

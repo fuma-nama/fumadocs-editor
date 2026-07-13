@@ -5,15 +5,16 @@
   "license": "MIT",
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "css"
   ],
   "exports": {
     ".": "./dist/index.js",
-    "./style.css": "./dist/style.css",
+    "./css/preset.css": "./css/preset.css",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsdown && cp src/style.css dist/style.css",
+    "build": "tsdown",
     "dev": "tsdown --watch",
     "types:check": "tsc --noEmit"
   },
@@ -21,9 +22,13 @@
     "@base-ui/react": "^1.6.0",
     "@fumadocs-editor/core": "workspace:*",
     "@tiptap/core": "^3.27.3",
+    "@tiptap/extension-code-block-lowlight": "^3.27.3",
     "@tiptap/extension-list": "^3.27.3",
     "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
+    "cnfast": "^0.0.8",
+    "highlight.js": "^11.11.1",
+    "lowlight": "^3.3.0",
     "lucide-react": "^1.23.0"
   },
   "peerDependencies": {
