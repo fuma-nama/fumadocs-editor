@@ -1,10 +1,10 @@
 "use client";
 import { EditorContent, useEditor } from "@tiptap/react";
 import {
+  createIncrementalSerializer,
   createRegistry,
   editorExtensions,
   parseMdxToDoc,
-  serializeDocToMdx,
   type DocSnapshot,
 } from "@fumadocs-editor/core";
 import type { JSONContent } from "@tiptap/core";
@@ -94,7 +94,9 @@ export function MdxEditor({
     [components],
   );
 
-  // serializing the whole doc on every keystroke is O(doc); report after a pause
+  // unchanged blocks serialize from a per-node cache, so cost tracks the
+  // edited block; still debounced so bursts of keystrokes report once
+  const serialize = useMemo(() => createIncrementalSerializer(registry), [registry]);
   const serializeTimer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(serializeTimer.current), []);
 
@@ -110,14 +112,21 @@ export function MdxEditor({
       if (!onChangeRef.current) return;
       clearTimeout(serializeTimer.current);
       serializeTimer.current = window.setTimeout(() => {
-        onChangeRef.current?.(serializeDocToMdx(editor.getJSON(), snapshotRef.current, registry));
+        serializeTimer.current = undefined;
+        onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
       }, 250);
+    },
+    onBlur({ editor }) {
+      if (serializeTimer.current === undefined) return;
+      clearTimeout(serializeTimer.current);
+      serializeTimer.current = undefined;
+      onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
     },
   });
 
   const getMarkdown = () => {
     if (mode === "source" || !editor) return source;
-    return serializeDocToMdx(editor.getJSON(), snapshotRef.current, registry);
+    return serialize(editor.state.doc, snapshotRef.current);
   };
 
   useImperativeHandle(ref, () => ({ getMarkdown }));
@@ -126,7 +135,7 @@ export function MdxEditor({
     if (next === mode || !editor) return;
 
     if (next === "source") {
-      setSource(serializeDocToMdx(editor.getJSON(), snapshotRef.current, registry));
+      setSource(serialize(editor.state.doc, snapshotRef.current));
       setMode("source");
       return;
     }
