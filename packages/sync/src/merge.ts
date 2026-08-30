@@ -46,12 +46,12 @@ export function mergeRemote(options: {
   remoteText: string;
 }): MergeResult {
   const { base, localNormalized, remoteText } = options;
-  const remote = parseMdxToDoc(remoteText, base.registry);
+  const remote = parseMdxToDoc(remoteText, base.syntax);
   const remoteNodes = remote.doc.content ?? [];
 
-  const baseNorm = base.blocks.map((block) => blockNormalized(block, base.registry));
+  const baseNorm = base.blocks.map((block) => blockNormalized(block, base.syntax));
   const remoteNorm = remote.snapshot.blocks.map((block) =>
-    blockNormalized(block, base.registry),
+    blockNormalized(block, base.syntax),
   );
 
   // which base block each live child still is (null = locally edited/new)

@@ -2,10 +2,11 @@ export { parseMdxToDoc } from "./document";
 export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
 export { parseMdx } from "./mdast/parse";
 export { blockToNode } from "./mdast/from-mdast";
-export { createRegistry } from "./components/spec";
+export { createSyntax } from "./components/spec";
 export type {
   ComponentSpec,
-  ComponentRegistry,
+  Syntax,
+  SyntaxOptions,
   PropField,
   AttributeRegion,
 } from "./components/spec";

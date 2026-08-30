@@ -1,9 +1,9 @@
 import type { JSONContent } from "@tiptap/core";
 import { parseMdx } from "./mdast/parse";
 import { blockToNode } from "./mdast/from-mdast";
-import { createRegistry, type ComponentRegistry } from "./components/spec";
+import { createSyntax, type Syntax } from "./components/spec";
 
-const EMPTY_REGISTRY = createRegistry();
+const EMPTY_SYNTAX = createSyntax();
 
 export interface SnapshotBlock {
   /** exact source text of the block */
@@ -25,8 +25,8 @@ export interface SnapshotBlock {
  * whitespace around them) byte-for-byte.
  */
 export interface DocSnapshot {
-  /** the registry the document was parsed with; normalization must match it */
-  registry: ComponentRegistry;
+  /** the syntax the document was parsed with; normalization must match it */
+  syntax: Syntax;
   blocks: SnapshotBlock[];
   /** text between block i and block i+1 */
   gaps: string[];
@@ -52,10 +52,10 @@ export interface ParsedDoc {
  */
 export function parseMdxToDoc(
   source: string,
-  registry: ComponentRegistry = EMPTY_REGISTRY,
+  syntax: Syntax = EMPTY_SYNTAX,
 ): ParsedDoc {
   const root = parseMdx(source);
-  const ctx = { source, registry };
+  const ctx = { source, syntax };
 
   const content: JSONContent[] = [];
   const blocks: SnapshotBlock[] = [];
@@ -87,7 +87,7 @@ export function parseMdxToDoc(
       content: content.length > 0 ? content : [{ type: "paragraph" }],
     },
     snapshot: {
-      registry,
+      syntax,
       blocks,
       gaps,
       leading: first ? source.slice(0, first.position?.start.offset ?? 0) : source,

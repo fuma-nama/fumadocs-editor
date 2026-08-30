@@ -1,6 +1,6 @@
 "use client";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { createRegistry, editorExtensions } from "@fumadocs-editor/core/extensions";
+import { createSyntax, editorExtensions } from "@fumadocs-editor/core/extensions";
 import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
 import type { DocSnapshot } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
@@ -53,7 +53,7 @@ export function LiveEditor({
     [components],
   );
   const serialize = useMemo(
-    () => createIncrementalSerializer(createRegistry(components)),
+    () => createIncrementalSerializer(createSyntax(components)),
     [components],
   );
 

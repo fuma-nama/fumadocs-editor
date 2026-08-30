@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import { Editor } from "@tiptap/core";
 import {
-  createRegistry,
+  createSyntax,
   editorExtensions,
   parseMdxToDoc,
   serializeDocToMdx,
@@ -11,11 +11,11 @@ import { caretPolicy } from "../src/components/caret-policy";
 import { structureGuard } from "../src/components/structure";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
 
-export const registry = createRegistry(fumadocsUiComponents);
+export const syntax = createSyntax(fumadocsUiComponents);
 export const specs: SpecMap = new Map(fumadocsUiComponents.map((spec) => [spec.name, spec]));
 
 export function makeEditor(mdx: string) {
-  const { doc, snapshot } = parseMdxToDoc(mdx, registry);
+  const { doc, snapshot } = parseMdxToDoc(mdx, syntax);
   const editor = new Editor({
     element: document.createElement("div"),
     extensions: [
@@ -29,8 +29,8 @@ export function makeEditor(mdx: string) {
   void editor.view; // the view (and plugin view hooks) mount lazily
   // serialized output must always reparse: structural moves may never emit invalid MDX
   const serialize = () => {
-    const out = serializeDocToMdx(editor.getJSON(), snapshot, registry);
-    expect(() => parseMdxToDoc(out, registry)).not.toThrow();
+    const out = serializeDocToMdx(editor.getJSON(), snapshot, syntax);
+    expect(() => parseMdxToDoc(out, syntax)).not.toThrow();
     return out;
   };
   return { editor, serialize };

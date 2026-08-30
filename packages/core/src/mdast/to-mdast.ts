@@ -14,11 +14,11 @@ import type {
   MdxJsxFlowElement,
 } from "mdast-util-mdx-jsx";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
-import type { ComponentRegistry, ComponentSpec } from "../components/spec";
-import { createRegistry } from "../components/spec";
+import type { Syntax, ComponentSpec } from "../components/spec";
+import { createSyntax } from "../components/spec";
 import type { RawNode } from "./stringify";
 
-const EMPTY_REGISTRY = createRegistry();
+const EMPTY_SYNTAX = createSyntax();
 
 interface PMMark {
   type: string;
@@ -164,14 +164,14 @@ export function inlineToPhrasing(nodes: JSONContent[] = []): PhrasingContent[] {
 function listItemsToMdast(
   node: JSONContent,
   task: boolean,
-  registry: ComponentRegistry,
+  syntax: Syntax,
 ): ListItem[] {
   return (node.content ?? []).map((item) => ({
     type: "listItem",
     spread: false,
     checked: task ? item.attrs?.checked === true : null,
     children: (item.content ?? []).map(
-      (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
+      (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
     ),
   }));
 }
@@ -199,7 +199,7 @@ function tableToMdast(node: JSONContent): RootContent {
 
 export function nodeToMdastBlock(
   node: JSONContent,
-  registry: ComponentRegistry = EMPTY_REGISTRY,
+  syntax: Syntax = EMPTY_SYNTAX,
 ): RootContent {
   switch (node.type) {
     case "paragraph":
@@ -214,7 +214,7 @@ export function nodeToMdastBlock(
       return {
         type: "blockquote",
         children: (node.content ?? []).map(
-          (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
+          (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
         ),
       };
     case "bulletList":
@@ -222,7 +222,7 @@ export function nodeToMdastBlock(
         type: "list",
         ordered: false,
         spread: false,
-        children: listItemsToMdast(node, false, registry),
+        children: listItemsToMdast(node, false, syntax),
       };
     case "orderedList":
       return {
@@ -230,14 +230,14 @@ export function nodeToMdastBlock(
         ordered: true,
         start: Number(node.attrs?.start ?? 1),
         spread: false,
-        children: listItemsToMdast(node, false, registry),
+        children: listItemsToMdast(node, false, syntax),
       };
     case "taskList":
       return {
         type: "list",
         ordered: false,
         spread: false,
-        children: listItemsToMdast(node, true, registry),
+        children: listItemsToMdast(node, true, syntax),
       };
     case "codeBlock":
       return {
@@ -256,11 +256,11 @@ export function nodeToMdastBlock(
         name: (node.attrs?.name as string | null) ?? null,
         attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
         children: (node.content ?? []).map(
-          (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
+          (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
         ),
       };
     case "mdxComponent":
-      return componentToMdast(node, registry);
+      return componentToMdast(node, syntax);
     case "mdxFlowExpression":
       return { type: "mdxFlowExpression", value: String(node.attrs?.value ?? "") };
     case "mdxjsEsm":
@@ -279,9 +279,9 @@ function regionText(node: JSONContent | undefined): string {
   return (node.content ?? []).map(textOf).join("");
 }
 
-function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJsxFlowElement {
+function componentToMdast(node: JSONContent, syntax: Syntax): MdxJsxFlowElement {
   const name = (node.attrs?.name as string | null) ?? null;
-  const spec = name ? registry.get(name) : undefined;
+  const spec = name ? syntax.components.get(name) : undefined;
   const attributes = attributesToMdast(node.attrs?.attributes as MdxAttribute[]);
   const children = (node.content ?? []) as JSONContent[];
 
@@ -291,7 +291,7 @@ function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJs
       name,
       attributes,
       children: children.map(
-        (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
+        (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
       ),
     };
   }
@@ -313,23 +313,23 @@ function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJs
   if (spec.childComponent) {
     mdChildren = children
       .filter((c) => c.type === "mdxComponent")
-      .map((c) => componentToMdast(c, registry) as BlockContent);
+      .map((c) => componentToMdast(c, syntax) as BlockContent);
   } else if (spec.childrenRegion) {
     const body = children.find(
       (c) => c.type === "mdxBlockRegion" && c.attrs?.region === spec.childrenRegion!.region,
     );
     mdChildren = (body?.content ?? []).map(
-      (c) => nodeToMdastBlock(c, registry) as BlockContent | DefinitionContent,
+      (c) => nodeToMdastBlock(c, syntax) as BlockContent | DefinitionContent,
     );
   }
 
   return { type: "mdxJsxFlowElement", name, attributes, children: mdChildren };
 }
 
-export function docToMdast(doc: JSONContent, registry: ComponentRegistry = EMPTY_REGISTRY): Root {
+export function docToMdast(doc: JSONContent, syntax: Syntax = EMPTY_SYNTAX): Root {
   return {
     type: "root",
-    children: (doc.content ?? []).map((node) => nodeToMdastBlock(node, registry)),
+    children: (doc.content ?? []).map((node) => nodeToMdastBlock(node, syntax)),
   };
 }
 

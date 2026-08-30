@@ -1,9 +1,9 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { assembleMdx, tryNormalize } from "./serialize";
 import type { DocSnapshot } from "./document";
-import { createRegistry, type ComponentRegistry } from "./components/spec";
+import { createSyntax, type Syntax } from "./components/spec";
 
-const EMPTY_REGISTRY = createRegistry();
+const EMPTY_SYNTAX = createSyntax();
 
 /**
  * Serializer over the live ProseMirror document. PM nodes are immutable and
@@ -13,7 +13,7 @@ const EMPTY_REGISTRY = createRegistry();
  * block, not the whole document.
  */
 export function createIncrementalSerializer(
-  registry: ComponentRegistry = EMPTY_REGISTRY,
+  syntax: Syntax = EMPTY_SYNTAX,
 ): (doc: PMNode, snapshot?: DocSnapshot) => string {
   const cache = new WeakMap<PMNode, string>();
 
@@ -23,7 +23,7 @@ export function createIncrementalSerializer(
       const child = doc.child(i);
       let text = cache.get(child);
       if (text === undefined) {
-        text = tryNormalize(child.toJSON(), registry) ?? "";
+        text = tryNormalize(child.toJSON(), syntax) ?? "";
         cache.set(child, text);
       }
       normalized.push(text);

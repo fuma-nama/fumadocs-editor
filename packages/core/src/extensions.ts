@@ -22,14 +22,15 @@ export {
   MdxBlockRegion,
 } from "./components/nodes";
 export {
-  createRegistry,
+  createSyntax,
   COMPONENT_NODE,
   INLINE_REGION_NODE,
   BLOCK_REGION_NODE,
 } from "./components/spec";
 export type {
   ComponentSpec,
-  ComponentRegistry,
+  Syntax,
+  SyntaxOptions,
   PropField,
   AttributeRegion,
 } from "./components/spec";
