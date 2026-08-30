@@ -10,6 +10,9 @@
 
 /* consume workspace source directly, so component class names are discovered */
 @source '../../../packages/ui/src/**/*.{ts,tsx}';
+/* the FS-mirror documents are runtime data, not class sources: scanning them
+ * would make every save invalidate the CSS and reload the page mid-edit */
+@source not '../docs';
 
 body {
   margin: 0;

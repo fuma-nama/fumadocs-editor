@@ -41,6 +41,16 @@ export interface MdxEditorRef {
   setMarkdown: (text: string) => Promise<void>;
 }
 
+export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline";
+
+export interface SyncIndicatorProps {
+  status: SyncStatus;
+  /** conflict resolution: overwrite the disk with the local document */
+  onKeepMine: () => void;
+  /** conflict resolution: drop local edits for the disk version */
+  onTakeDisk: () => void;
+}
+
 export interface MdxEditorProps {
   /** initial MDX source */
   defaultValue?: string;
@@ -65,6 +75,8 @@ export interface MdxEditorProps {
    * class, or the OS preference, which is what a real fumadocs site wants.
    */
   theme?: EditorTheme;
+  /** sync state shown beside the mode tabs; conflicts surface a quiet chip */
+  sync?: SyncIndicatorProps;
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -79,6 +91,43 @@ type Stage = "static" | "mounting" | "live";
 
 const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
 
+const SYNC_DOT: Record<SyncStatus, string> = {
+  synced: "bg-fd-success",
+  dirty: "bg-fd-warning",
+  saving: "bg-fd-warning animate-pulse",
+  conflict: "bg-fd-error",
+  offline: "bg-fd-muted-foreground",
+};
+
+const SYNC_LABEL: Record<SyncStatus, string> = {
+  synced: "Saved",
+  dirty: "Edited",
+  saving: "Saving…",
+  conflict: "Changed on disk",
+  offline: "Offline",
+};
+
+const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground transition-colors hover:bg-fd-accent ${focusRing}`;
+
+function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 ps-1.5 text-[12px] text-fd-muted-foreground">
+      <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", SYNC_DOT[status])} />
+      <span className="truncate">{SYNC_LABEL[status]}</span>
+      {status === "conflict" && (
+        <span className="flex shrink-0 items-center gap-1">
+          <button type="button" className={conflictBtnCls} onClick={onKeepMine}>
+            Keep mine
+          </button>
+          <button type="button" className={conflictBtnCls} onClick={onTakeDisk}>
+            Take disk
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function MdxEditor({
   defaultValue = "",
   onMarkdownChange,
@@ -86,6 +135,7 @@ export function MdxEditor({
   cacheKey,
   staticFallback,
   theme,
+  sync,
   className,
   ref,
 }: MdxEditorProps) {
@@ -285,8 +335,9 @@ export function MdxEditor({
       )}
     >
       <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
-        <div className="flex items-center justify-end border-b border-fd-border bg-fd-card/40 px-2 py-1">
-          <Tabs.List className="flex gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
+        <div className="flex items-center justify-between gap-3 border-b border-fd-border bg-fd-card/40 px-2 py-1">
+          {sync ? <SyncIndicator {...sync} /> : <span />}
+          <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
             <Tabs.Tab className={modeTabCls} value="visual">
               Visual
             </Tabs.Tab>
