@@ -1,10 +1,11 @@
 "use client";
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor, type Range } from "@tiptap/core";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
+import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
-import { SlashPopup, type PopupProps, type SlashItem } from "../slash-menu";
+import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
 import type { FileProvider } from "./media";
 
@@ -77,6 +78,7 @@ export function fileSuggest(
             title: path,
             group: "Files",
             icon: <FileText size={15} />,
+            mono: true,
             run: () => apply(path),
           }),
         ),
@@ -155,6 +157,67 @@ export function fileSuggest(
               return false;
             },
           },
+        }),
+      ];
+    },
+  });
+}
+
+/**
+ * Obsidian-style page links: typing `[[` in text opens the same suggestion
+ * popup over the FileProvider's pages; picking one inserts a link whose text
+ * is the page name — no select-then-toggle needed.
+ */
+export function linkSuggest(files: FileProvider): Extension {
+  let paths: string[] | null = null;
+
+  const insert = (path: string) => (editor: Editor, range: Range) => {
+    const name = path.replace(/^\.\//, "").replace(/\.mdx?$/, "");
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContentAt(range.from, {
+        type: "text",
+        text: name,
+        marks: [{ type: "link", attrs: { href: path } }],
+      })
+      // continued typing must not extend the link
+      .unsetMark("link")
+      .run();
+  };
+
+  return Extension.create({
+    name: "fdeLinkSuggest",
+    addProseMirrorPlugins() {
+      return [
+        Suggestion<SlashItem, SlashItem>({
+          pluginKey: new PluginKey("fdeLinkSuggest"),
+          editor: this.editor,
+          char: "[[",
+          allow: ({ state, range }) => {
+            const $pos = state.doc.resolve(range.from);
+            if (!$pos.parent.type.allowsMarkType(state.schema.marks.link)) return false;
+            // attribute regions serialize to plain strings: no links there
+            for (let depth = $pos.depth; depth > 0; depth--) {
+              if ($pos.node(depth).type.name === INLINE_REGION_NODE) return false;
+            }
+            return true;
+          },
+          items: async ({ query }) => {
+            paths ??= await files.list();
+            const q = query.toLowerCase();
+            const matches = q ? paths.filter((path) => path.toLowerCase().includes(q)) : paths;
+            return matches.map((path) => ({
+              title: path,
+              group: "Link to page",
+              icon: <FileText size={15} />,
+              mono: true,
+              run: insert(path),
+            }));
+          },
+          command: ({ editor, range, props }) => props.run(editor, range),
+          render: suggestionRender,
         }),
       ];
     },
