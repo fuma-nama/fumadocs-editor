@@ -226,8 +226,18 @@ function mixedChildrenToBlocks(
 
 export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONContent {
   switch (node.type) {
-    case "paragraph":
+    case "paragraph": {
+      // a registered element written inline on its own line (MDX parses
+      // `<include>./x.mdx</include>` as a paragraph around a text element)
+      // is the component, not prose around it
+      const only = node.children.length === 1 ? node.children[0] : undefined;
+      if (only?.type === "mdxJsxTextElement" && only.name != null) {
+        const spec = ctx.syntax.components.get(only.name);
+        const component = spec ? componentToNode(only, spec, ctx) : null;
+        if (component) return component;
+      }
       return { type: "paragraph", content: phrasingToInline(node.children, [], ctx) };
+    }
     case "heading":
       return {
         type: "heading",
@@ -255,7 +265,8 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       return tableToNode(node, ctx);
     case "mdxJsxFlowElement": {
       const spec = node.name ? ctx.syntax.components.get(node.name) : undefined;
-      if (spec) return componentToNode(node, spec, ctx);
+      const component = spec ? componentToNode(node, spec, ctx) : null;
+      if (component) return component;
       return {
         type: "mdxJsxFlowElement",
         attrs: { name: node.name ?? null, attributes: cleanAttributes(node.attributes) },
@@ -297,12 +308,48 @@ function collectChildElements(children: JsxElement["children"], names: string[])
   return out;
 }
 
-/** Convert a registered component's JSX element into structured region nodes. */
+/** every text descendant of an mdast subtree, in order */
+function mdastText(nodes: { type: string; value?: string; children?: unknown[] }[]): string {
+  let out = "";
+  for (const node of nodes) {
+    if (typeof node.value === "string") out += node.value;
+    else if (node.children) out += mdastText(node.children as typeof nodes);
+  }
+  return out;
+}
+
+/**
+ * Parse a string-array expression (`["a", 'b']`) into its entries; null when
+ * the expression is anything else (kept verbatim in that case).
+ */
+export function parseStringArray(expression: string): string[] | null {
+  const trimmed = expression.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return null;
+  const inner = trimmed.slice(1, -1);
+  const out: string[] = [];
+  const item = /\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*(,|$)/y;
+  let at = 0;
+  while (at < inner.length) {
+    item.lastIndex = at;
+    const match = item.exec(inner);
+    if (!match) return null;
+    const raw = match[1] ?? match[2];
+    out.push(raw.replace(/\\(.)/g, "$1"));
+    at = item.lastIndex;
+  }
+  return out;
+}
+
+/**
+ * Convert a registered component's JSX element into structured region nodes.
+ * Returns null when the element can't be edited structurally (e.g. an items
+ * expression that isn't a literal string array) — the caller keeps it generic.
+ */
 function componentToNode(
   node: JsxElement,
   spec: ComponentSpec,
   ctx: FromMdastContext,
-): JSONContent {
+): JSONContent | null {
   const regions: JSONContent[] = [];
 
   for (const { attribute, region } of spec.attributeRegions ?? []) {
@@ -321,12 +368,49 @@ function componentToNode(
   // body text, so it's dropped from the stored attributes and re-emitted as
   // children on save
   let folded: string | undefined;
+  /** attribute dropped on parse because it's derived from child regions */
+  let derived: string | undefined;
 
-  if (spec.childComponent) {
+  if (spec.contentRegion) {
+    const text = mdastText(node.children as Parameters<typeof mdastText>[0]);
+    regions.push({
+      type: "mdxInlineRegion",
+      attrs: { region: spec.contentRegion.region },
+      content: text ? [{ type: "text", text }] : undefined,
+    });
+  } else if (spec.childComponent) {
+    let items: string[] | null = null;
+    if (spec.itemsAttribute) {
+      const attr = node.attributes.find(
+        (a) => a.type === "mdxJsxAttribute" && a.name === spec.itemsAttribute!.attribute,
+      );
+      if (attr && attr.type === "mdxJsxAttribute" && attr.value != null) {
+        items =
+          typeof attr.value === "string" ? [attr.value] : parseStringArray(attr.value.value);
+        // an items expression we can't read as labels (a variable, computed
+        // values) makes the labels uneditable: keep the whole element generic
+        if (items == null) return null;
+      }
+      derived = spec.itemsAttribute.attribute;
+    }
+
     const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+    let index = 0;
     for (const child of collectChildElements(node.children, names)) {
       const childSpec = child.name != null ? ctx.syntax.components.get(child.name) : undefined;
-      if (childSpec) regions.push(componentToNode(child, childSpec, ctx));
+      if (!childSpec) continue;
+      const childNode = componentToNode(child, childSpec, ctx);
+      if (childNode == null) return null;
+      if (spec.itemsAttribute) {
+        const label = items?.[index] ?? "";
+        (childNode.content ??= []).unshift({
+          type: "mdxInlineRegion",
+          attrs: { region: spec.itemsAttribute.childRegion },
+          content: label ? [{ type: "text", text: label }] : undefined,
+        });
+      }
+      regions.push(childNode);
+      index += 1;
     }
   } else if (spec.childrenRegion) {
     const content = mixedChildrenToBlocks(node.children, ctx);
@@ -348,15 +432,12 @@ function componentToNode(
     });
   }
 
-  const attributes = cleanAttributes(node.attributes);
+  const attributes = cleanAttributes(node.attributes).filter(
+    (a) => !(a.type === "mdxJsxAttribute" && (a.name === folded || a.name === derived)),
+  );
   return {
     type: "mdxComponent",
-    attrs: {
-      name: spec.name,
-      attributes: folded
-        ? attributes.filter((a) => !(a.type === "mdxJsxAttribute" && a.name === folded))
-        : attributes,
-    },
+    attrs: { name: spec.name, attributes },
     content: regions.length > 0 ? regions : undefined,
   };
 }

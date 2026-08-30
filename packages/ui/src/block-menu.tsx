@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import { childInsertContext, focusAt, moveComponentAt } from "./components/keymap";
 import { PropControl } from "./attributes-panel";
-import { readStringProps, setStringProp } from "./components/attributes";
+import { readPropValue, setPropValue } from "./components/attributes";
 import { focusRing, itemCls, popupCls } from "./components/styles";
 
 /**
@@ -153,7 +153,6 @@ export function BlockPanel({
 
   const node = editor.state.doc.nodeAt(active.pos);
   const attributes = (node?.attrs.attributes ?? []) as MdxAttribute[];
-  const values = readStringProps(attributes);
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
 
@@ -177,8 +176,8 @@ export function BlockPanel({
             <PropControl
               key={field.name}
               field={field}
-              value={values[field.name] ?? ""}
-              onChange={(value) => setAttributes(setStringProp(attributes, field.name, value))}
+              value={readPropValue(attributes, field)}
+              onChange={(value) => setAttributes(setPropValue(attributes, field, value))}
             />
           ))}
         </div>
