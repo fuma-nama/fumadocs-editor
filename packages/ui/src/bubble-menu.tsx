@@ -1,7 +1,8 @@
 "use client";
-// side-effect import: registers starter-kit command typings
+// side-effect imports: register starter-kit + table command typings
 import "@tiptap/starter-kit";
-import { useEffect, useState, type ReactNode } from "react";
+import "@tiptap/extension-table";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -16,16 +17,22 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  ImageIcon,
   Italic,
+  Link2,
   List,
   ListOrdered,
   ListTodo,
   Pilcrow,
   SquareCode,
   Strikethrough,
+  Table2,
   TextQuote,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
+import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
 import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
 
@@ -97,6 +104,10 @@ function activeBlock(editor: Editor): string {
 interface BubbleState {
   format: boolean;
   active: { pos: number; name: string } | null;
+  /** text selection sits inside a table: row/column controls apply */
+  table: boolean;
+  /** a node-selected atom the bubble edits directly */
+  atom: { kind: "image" | "frontmatter"; pos: number } | null;
 }
 
 function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
@@ -121,9 +132,15 @@ function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): B
   // the chip appears only when something is selected: a resting caret keeps
   // the quieter ⋯ handle instead of a floating menu
   let active: BubbleState["active"] = null;
-  if (selection instanceof NodeSelection && selection.node.type.name === COMPONENT_NODE) {
-    const name = selection.node.attrs.name as string;
-    if (specs.has(name)) active = { pos: selection.from, name };
+  let atom: BubbleState["atom"] = null;
+  if (selection instanceof NodeSelection) {
+    const name = selection.node.type.name;
+    if (name === COMPONENT_NODE) {
+      const componentName = selection.node.attrs.name as string;
+      if (specs.has(componentName)) active = { pos: selection.from, name: componentName };
+    } else if (name === "image" || name === "frontmatter") {
+      atom = { kind: name, pos: selection.from };
+    }
   } else if (textual) {
     for (let depth = $from.depth; !active && depth > 0; depth--) {
       if ($from.node(depth).type.name === COMPONENT_NODE) {
@@ -132,7 +149,14 @@ function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): B
       }
     }
   }
-  return { format, active };
+
+  let table = false;
+  if (textual) {
+    for (let depth = $from.depth; depth > 0; depth--) {
+      if ($from.node(depth).type.name === "table") table = true;
+    }
+  }
+  return { format, active, table, atom };
 }
 
 function MarkButton({
@@ -160,12 +184,201 @@ function MarkButton({
   );
 }
 
+const fieldCls =
+  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none transition-colors placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
+
+/** URL editor for the link mark; portalled into the bubble's parent. */
+function LinkControl({
+  editor,
+  href,
+  container,
+}: {
+  editor: Editor;
+  href: string | null;
+  container: HTMLElement | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    if (open) setDraft(href ?? "");
+  }, [open, href]);
+
+  const apply = () => {
+    const url = draft.trim();
+    if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    else editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    setOpen(false);
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        aria-label="Link"
+        className={iconButtonCls}
+        data-active={href != null || undefined}
+      >
+        <Link2 size={15} />
+      </Popover.Trigger>
+      <Popover.Portal container={container}>
+        <Popover.Positioner sideOffset={6} align="start" className="z-50">
+          <Popover.Popup className={`${popupCls} flex w-64 items-center gap-1.5 p-1.5`}>
+            <input
+              className={fieldCls}
+              placeholder="https://… or ./page.mdx"
+              value={draft}
+              spellCheck={false}
+              autoFocus
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") apply();
+                if (event.key === "Escape") setOpen(false);
+              }}
+            />
+            {href != null && (
+              <button
+                type="button"
+                aria-label="Remove link"
+                className={iconButtonCls}
+                onClick={() => {
+                  editor.chain().focus().extendMarkRange("link").unsetLink().run();
+                  setOpen(false);
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+const TABLE_OPS = [
+  { label: "Add row below", run: (c: Chain) => c.addRowAfter() },
+  { label: "Add column right", run: (c: Chain) => c.addColumnAfter() },
+  { label: "Delete row", run: (c: Chain) => c.deleteRow() },
+  { label: "Delete column", run: (c: Chain) => c.deleteColumn() },
+  { label: "Delete table", run: (c: Chain) => c.deleteTable() },
+] as const;
+
+function TableControl({
+  editor,
+  container,
+}: {
+  editor: Editor;
+  container: HTMLElement | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger aria-label="Table options" className={iconButtonCls}>
+        <Table2 size={15} />
+      </Popover.Trigger>
+      <Popover.Portal container={container}>
+        <Popover.Positioner sideOffset={6} align="start" className="z-50">
+          <Popover.Popup className={`${popupCls} flex w-44 flex-col`}>
+            {TABLE_OPS.map((op) => (
+              <button
+                key={op.label}
+                type="button"
+                className={itemCls}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  op.run(editor.chain().focus()).run();
+                  setOpen(false);
+                }}
+              >
+                {op.label}
+              </button>
+            ))}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** src / alt editor for a node-selected image, with provider upload. */
+function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }) {
+  const attrs = editor.getAttributes("image");
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex items-center gap-1.5 p-0.5">
+      <input
+        className={`${fieldCls} w-52`}
+        placeholder="Image source…"
+        value={(attrs.src as string) ?? ""}
+        spellCheck={false}
+        onChange={(event) => editor.commands.updateAttributes("image", { src: event.target.value })}
+      />
+      <input
+        className={`${fieldCls} w-36`}
+        placeholder="Alt text"
+        value={(attrs.alt as string) ?? ""}
+        onChange={(event) => editor.commands.updateAttributes("image", { alt: event.target.value })}
+      />
+      {media && (
+        <>
+          <button
+            type="button"
+            aria-label="Upload image"
+            className={iconButtonCls}
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload size={14} />
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              void media.upload(file).then((src) => {
+                if (!editor.isDestroyed) editor.commands.updateAttributes("image", { src });
+              });
+              event.target.value = "";
+            }}
+          />
+        </>
+      )}
+      <button
+        type="button"
+        aria-label="Remove image"
+        className={iconButtonCls}
+        onClick={() => editor.chain().focus().deleteSelection().run()}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
+/** raw YAML editor for the node-selected frontmatter block */
+function FrontmatterPanel({ editor }: { editor: Editor }) {
+  const value = (editor.getAttributes("frontmatter").value as string) ?? "";
+  return (
+    <textarea
+      className="min-h-24 w-72 resize-y rounded-md border border-fd-border bg-fd-background p-2 font-mono text-[12px] leading-relaxed text-fd-foreground outline-none focus-visible:border-fd-ring"
+      value={value}
+      spellCheck={false}
+      onChange={(event) =>
+        editor.commands.updateAttributes("frontmatter", { value: event.target.value })
+      }
+    />
+  );
+}
+
 export function EditorBubble({
   editor,
   specs,
+  media,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
+  media?: MediaProvider;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
@@ -185,6 +398,7 @@ export function EditorBubble({
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
         code: current.isActive("code"),
+        link: current.isActive("link") ? String(current.getAttributes("link").href ?? "") : null,
         block: activeBlock(current),
       };
     },
@@ -227,8 +441,8 @@ export function EditorBubble({
       shouldShow={({ state: editorState }) => {
         // touch has the mobile bar; one surface per input mode
         if (window.matchMedia("(pointer: coarse)").matches) return false;
-        const { format, active: current } = bubbleState(editorState, specs);
-        return format || current != null;
+        const { format, active: current, atom } = bubbleState(editorState, specs);
+        return format || current != null || atom != null;
       }}
       className="z-40 flex items-center gap-0.5 rounded-[10px] border border-fd-border bg-fd-popover p-1 text-fd-popover-foreground shadow-lg"
     >
@@ -263,6 +477,34 @@ export function EditorBubble({
                       )}
                     </button>
                   ))}
+                  {state.block.startsWith("h") && (
+                    <div className="mt-1 flex flex-col gap-1.5 border-t border-fd-border px-1 pt-2 pb-1">
+                      <input
+                        className={`${fieldCls} font-mono text-[12px]`}
+                        placeholder="#anchor-id"
+                        spellCheck={false}
+                        value={String(editor.getAttributes("heading").anchor ?? "")}
+                        onChange={(event) =>
+                          editor.commands.updateAttributes("heading", {
+                            anchor: event.target.value.replace(/^#/, "") || null,
+                          })
+                        }
+                      />
+                      <select
+                        className="h-7 w-full cursor-pointer rounded-md border border-fd-border bg-fd-background px-1.5 text-[12.5px] text-fd-foreground outline-none focus-visible:border-fd-ring"
+                        value={String(editor.getAttributes("heading").toc ?? "")}
+                        onChange={(event) =>
+                          editor.commands.updateAttributes("heading", {
+                            toc: event.target.value || null,
+                          })
+                        }
+                      >
+                        <option value="">In the TOC (default)</option>
+                        <option value="hide">Hidden from TOC</option>
+                        <option value="only">TOC only</option>
+                      </select>
+                    </div>
+                  )}
                 </Popover.Popup>
               </Popover.Positioner>
             </Popover.Portal>
@@ -292,7 +534,15 @@ export function EditorBubble({
           >
             <Code size={15} />
           </MarkButton>
+          <LinkControl editor={editor} href={state.link} container={panelContainer} />
+          {state.table && <TableControl editor={editor} container={panelContainer} />}
         </>
+      )}
+      {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
+      {state?.atom?.kind === "frontmatter" && (
+        <div className="p-0.5">
+          <FrontmatterPanel editor={editor} />
+        </div>
       )}
       {active && spec && (
         <>

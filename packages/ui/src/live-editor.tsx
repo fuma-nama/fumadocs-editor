@@ -13,6 +13,7 @@ import { EditorBubble } from "./bubble-menu";
 import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
+import { imageExtension, type MediaProvider } from "./components/media";
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 
@@ -26,6 +27,7 @@ export interface LiveEditorProps {
   onReady: (editor: Editor, serialize: SerializeFn) => void;
   /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
+  media?: MediaProvider;
 }
 
 /**
@@ -42,15 +44,17 @@ export function LiveEditor({
   onChangeRef,
   onReady,
   hidden,
+  media,
 }: LiveEditorProps) {
   const extensions = useMemo(
     () => [
-      ...editorExtensions({ componentNodes: false, codeBlock: false }),
+      ...editorExtensions({ componentNodes: false, codeBlock: false, image: false }),
       codeBlockExtension(),
+      imageExtension(media),
       ...componentExtensions(components),
-      slashMenu(components),
+      slashMenu(components, media),
     ],
-    [components],
+    [components, media],
   );
   const serialize = useMemo(
     () => createIncrementalSerializer(createSyntax(components)),
@@ -109,7 +113,7 @@ export function LiveEditor({
   return (
     <div className="relative" hidden={hidden} data-fde-settled={settled || undefined}>
       <EditorContent editor={editor} className="fde-content" />
-      {editor && <EditorBubble editor={editor} specs={specs} />}
+      {editor && <EditorBubble editor={editor} specs={specs} media={media} />}
       {editor && <BlockMenu editor={editor} specs={specs} />}
       {editor && <MobileBar editor={editor} components={components} specs={specs} />}
     </div>

@@ -127,6 +127,34 @@ describe("contentRegion (include)", () => {
   });
 });
 
+describe("heading suffixes", () => {
+  test("[#id], [!toc] and [toc] parse into attributes, not text", () => {
+    const source = "## Install [#setup]\n\n### Internal [!toc]\n\n### Ghost [toc]\n";
+    const { doc } = parseMdxToDoc(source, syntax);
+    const [a, b, c] = doc.content!;
+    expect(a.attrs).toMatchObject({ level: 2, anchor: "setup" });
+    expect(a.content?.[0].text).toBe("Install");
+    expect(b.attrs).toMatchObject({ toc: "hide" });
+    expect(b.content?.[0].text).toBe("Internal");
+    expect(c.attrs).toMatchObject({ toc: "only" });
+  });
+
+  test("suffixes round-trip byte-for-byte and re-serialize unescaped", () => {
+    const source = "## Install [#setup]\n\n# Page title [toc] [#top]\n";
+    const { doc, snapshot } = parseMdxToDoc(source, syntax);
+    expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
+    // normalized (edited) form keeps the exact suffix syntax
+    expect(serializeDocToMdx(doc, undefined, syntax)).toBe(source);
+  });
+
+  test("headingSuffixes: false leaves the text alone", () => {
+    const plain = createSyntax([], { headingSuffixes: false });
+    const { doc } = parseMdxToDoc("## Install [#setup]\n", plain);
+    expect(doc.content?.[0].content?.[0].text).toBe("Install [#setup]");
+    expect(doc.content?.[0].attrs?.anchor ?? null).toBeNull();
+  });
+});
+
 describe("leaf components", () => {
   test("a props-only component parses with no regions and round-trips", () => {
     const source = '<GithubInfo owner="fuma-nama" repo="fumadocs" />\n';

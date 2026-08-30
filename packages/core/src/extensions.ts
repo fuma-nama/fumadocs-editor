@@ -1,4 +1,4 @@
-export { editorExtensions, CodeBlockMdx, LinkMdx, TableMdx } from "./extensions/kit";
+export { editorExtensions, CodeBlockMdx, HeadingMdx, LinkMdx, TableMdx } from "./extensions/kit";
 export {
   mdxNodes,
   MdxJsxFlowElement,
