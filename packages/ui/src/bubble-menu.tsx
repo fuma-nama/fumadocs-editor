@@ -423,12 +423,17 @@ export function EditorBubble({
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
-  // Where the panel portals matters twice over: the menu hides on editor blur
-  // unless focus lands inside the bubble's parent, and the bubble itself is
-  // positioned with a transform, which would skew any popup measured inside
-  // it. The bubble's parent (the editor wrapper) satisfies both.
+  // Where the panel portals matters three times over: the menu hides on
+  // editor blur unless focus lands inside the bubble's parent (the plugin
+  // checks `element.parentNode.contains(relatedTarget)`), the bubble itself
+  // is positioned with a transform (which would skew any popup measured
+  // inside it), and the container must sit inside [data-fde-root] for the
+  // theme scope and themed ::selection. The plugin appends the bubble to
+  // `view.dom.parentElement`, so that exact element satisfies all three —
+  // resolved directly from the editor, never derived through refs (a
+  // ref-timing miss silently fell back to a body portal).
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
-  const panelContainer = portalEl?.parentElement?.parentElement ?? undefined;
+  const panelContainer = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
