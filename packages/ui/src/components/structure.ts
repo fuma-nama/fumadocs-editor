@@ -281,7 +281,7 @@ function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
           if (!line) {
             line = document.createElement("div");
             line.className = "fde-drop-indicator";
-            document.body.appendChild(line);
+            (view.dom.closest("[data-fde-root]") ?? document.body).appendChild(line);
           }
           line.style.left = `${rect.left}px`;
           line.style.width = `${rect.width}px`;

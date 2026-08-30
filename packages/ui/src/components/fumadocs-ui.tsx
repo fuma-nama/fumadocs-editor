@@ -28,6 +28,7 @@ import { Select } from "@base-ui/react/select";
 import type { CSSProperties } from "react";
 import { cn } from "../utils/cn";
 import { itemCls, popupCls } from "./styles";
+import { useEditorPortal } from "../utils/portal";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
@@ -68,6 +69,7 @@ function CalloutTypeSelect({
 }) {
   const Current = CALLOUT_ICONS[value] ?? Info;
   const isIdea = value === "idea";
+  const { anchorRef, container } = useEditorPortal();
   return (
     <Select.Root
       items={CALLOUT_TYPES}
@@ -75,6 +77,7 @@ function CalloutTypeSelect({
       onValueChange={(next) => onChange(next as string)}
     >
       <Select.Trigger
+        ref={anchorRef}
         aria-label="Callout type"
         tabIndex={-1}
         className={cn(
@@ -84,7 +87,7 @@ function CalloutTypeSelect({
       >
         <Current size={20} strokeWidth={2} />
       </Select.Trigger>
-      <Select.Portal>
+      <Select.Portal container={container}>
         <Select.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
           <Select.Popup className={popupCls}>
             {CALLOUT_TYPES.map((item) => {

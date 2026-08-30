@@ -4,6 +4,7 @@ import "@tiptap/starter-kit";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
+import { useEditorPortal } from "./utils/portal";
 import { redoDepth, undoDepth } from "@tiptap/pm/history";
 import { NodeSelection } from "@tiptap/pm/state";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
@@ -112,6 +113,7 @@ export function MobileBar({
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
 }) {
+  const { anchorRef, container } = useEditorPortal();
   const coarse = useMediaQuery("(pointer: coarse)");
   const inset = useKeyboardInset();
   const [focused, setFocused] = useState(editor.isFocused);
@@ -170,6 +172,7 @@ export function MobileBar({
   return (
     <>
       <div
+        ref={anchorRef}
         className="fixed inset-x-0 bottom-0 z-40 border-t border-fd-border bg-fd-popover text-fd-popover-foreground transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] pb-[env(safe-area-inset-bottom)]"
         style={{
           transform: visible ? `translateY(-${inset}px)` : "translateY(100%)",
@@ -259,7 +262,7 @@ export function MobileBar({
       </div>
 
       <Dialog.Root open={sheet != null} onOpenChange={(next) => !next && setSheet(null)}>
-        <Dialog.Portal>
+        <Dialog.Portal container={container}>
           <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 transition-opacity duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
           <Dialog.Popup className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]">
             {sheet === "turn-into" &&

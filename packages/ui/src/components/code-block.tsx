@@ -16,6 +16,7 @@ import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-rea
 import type { Editor } from "@tiptap/core";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
+import { useEditorPortal } from "../utils/portal";
 
 /**
  * Real-time syntax highlighting for fenced code blocks. `lowlight` (highlight.js)
@@ -116,6 +117,7 @@ function normalize(lang: string | null): string {
 }
 
 function LanguageSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { anchorRef, container } = useEditorPortal();
   const current = normalize(value);
   // surface an unknown language so the trigger never renders blank
   const items = LANGUAGES.some((item) => item.value === current)
@@ -124,11 +126,11 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
 
   return (
     <Select.Root items={items} value={current} onValueChange={(next) => onChange(next as string)}>
-      <Select.Trigger aria-label="Code language" tabIndex={-1} className={selectTriggerCls}>
+      <Select.Trigger ref={anchorRef} aria-label="Code language" tabIndex={-1} className={selectTriggerCls}>
         <Select.Value />
         <ChevronDown size={12} />
       </Select.Trigger>
-      <Select.Portal>
+      <Select.Portal container={container}>
         <Select.Positioner sideOffset={6} align="end" alignItemWithTrigger={false}>
           <Select.Popup className={`${popupCls} max-h-[300px] overflow-y-auto`}>
             {items.map((item) => (
@@ -154,6 +156,7 @@ function MetaSettings({
   meta: ReturnType<typeof parseCodeMeta>;
   onChange: (next: ReturnType<typeof parseCodeMeta>) => void;
 }) {
+  const { anchorRef, container } = useEditorPortal();
   const rowCls = "flex items-center justify-between gap-3 text-[12.5px] text-fd-foreground";
   const switchRootCls =
     "relative flex h-4.5 w-7.5 shrink-0 cursor-pointer rounded-full bg-fd-border p-0.5 transition-colors data-[checked]:bg-fd-primary";
@@ -162,13 +165,14 @@ function MetaSettings({
   return (
     <Popover.Root>
       <Popover.Trigger
+        ref={anchorRef}
         aria-label="Code block options"
         tabIndex={-1}
         className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
       >
         <Settings2 size={13} />
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end">
           <Popover.Popup className={`${popupCls} flex w-52 flex-col gap-2.5 p-2.5`}>
             <label className={rowCls}>
