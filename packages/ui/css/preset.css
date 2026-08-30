@@ -300,20 +300,21 @@
   margin: 2em 0;
 }
 
-.fde-content table {
+/* Document tables only — the TypeTable renders its own <table> as chrome
+ * with utility classes, and this skin's cell borders would stack on it. */
+.fde-content table:not(.fde-typetable *) {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.925em;
 }
 
-.fde-content th,
-.fde-content td {
+.fde-content :is(th, td):not(.fde-typetable *) {
   border: 1px solid var(--color-fd-border);
   padding: 7px 12px;
   text-align: left;
 }
 
-.fde-content th {
+.fde-content th:not(.fde-typetable *) {
   background: var(--color-fd-muted);
   font-weight: 600;
 }
