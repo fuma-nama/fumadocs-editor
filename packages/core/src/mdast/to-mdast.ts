@@ -204,12 +204,26 @@ export function nodeToMdastBlock(
   switch (node.type) {
     case "paragraph":
       return { type: "paragraph", children: inlineToPhrasing(node.content) };
-    case "heading":
+    case "heading": {
+      const children = inlineToPhrasing(node.content);
+      // suffix order matters on the fumadocs side: `[#id]` must come last
+      let suffix = "";
+      if (node.attrs?.toc === "hide") suffix += " [!toc]";
+      else if (node.attrs?.toc === "only") suffix += " [toc]";
+      if (node.attrs?.anchor) suffix += ` [#${String(node.attrs.anchor)}]`;
+      if (suffix) {
+        // raw, not text: the serializer would escape the brackets
+        children.push({
+          type: "raw",
+          value: children.length > 0 ? suffix : suffix.trimStart(),
+        } as unknown as PhrasingContent);
+      }
       return {
         type: "heading",
         depth: Math.min(6, Math.max(1, Number(node.attrs?.level ?? 1))) as 1 | 2 | 3 | 4 | 5 | 6,
-        children: inlineToPhrasing(node.content),
+        children,
       };
+    }
     case "blockquote":
       return {
         type: "blockquote",

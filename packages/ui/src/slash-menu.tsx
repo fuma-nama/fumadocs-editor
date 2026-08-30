@@ -16,6 +16,8 @@ import {
   Minus,
   SquareCode,
   TextQuote,
+  ImageIcon,
+  Table2,
 } from "lucide-react";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
@@ -27,7 +29,9 @@ import {
   listEntryDepth,
   type SpecMap,
 } from "./components/keymap";
+import "@tiptap/extension-table";
 import { itemCls, popupCls } from "./components/styles";
+import { insertImages, type MediaProvider } from "./components/media";
 
 export interface SlashItem {
   title: string;
@@ -70,7 +74,31 @@ const BLOCKS: SlashItem[] = [
   block("Divider", <Minus size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).setHorizontalRule().run(),
   ),
+  block("Table", <Table2 size={15} />, (e, r) =>
+    e.chain().focus().deleteRange(r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  ),
 ];
+
+/** Image: pick + upload with a provider, otherwise a source-less node the
+ * bubble fills in. */
+function imageItem(media: MediaProvider | undefined): SlashItem {
+  return block("Image", <ImageIcon size={15} />, (e, r) => {
+    if (media) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        e.chain().focus().deleteRange(r).run();
+        if (file) void insertImages(e, media, [file], r.from);
+      };
+      input.click();
+      return;
+    }
+    e.chain().focus().deleteRange(r).insertContentAt(r.from, { type: "image", attrs: { src: "" } }).run();
+    e.commands.setNodeSelection(r.from);
+  });
+}
 
 /** every spec with an insert, minus child-only specs (File, Card, Step, …) */
 function componentItems(specs: UiComponentSpec[]): SlashItem[] {
@@ -149,8 +177,8 @@ function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
 }
 
 /** the full insert list: block types plus registered top-level components */
-export function insertItems(specs: UiComponentSpec[]): SlashItem[] {
-  return [...BLOCKS, ...componentItems(specs)];
+export function insertItems(specs: UiComponentSpec[], media?: MediaProvider): SlashItem[] {
+  return [...BLOCKS, imageItem(media), ...componentItems(specs)];
 }
 
 /**
@@ -186,8 +214,8 @@ export function entryItems(
 }
 
 /** `/` in a paragraph opens the insert menu: block types plus registered components. */
-export function slashMenu(specs: UiComponentSpec[]): Extension {
-  const all = insertItems(specs);
+export function slashMenu(specs: UiComponentSpec[], media?: MediaProvider): Extension {
+  const all = insertItems(specs, media);
   const specMap = new Map(specs.map((spec) => [spec.name, spec]));
 
   return Extension.create({

@@ -9,10 +9,13 @@ import {
 } from "@tiptap/react";
 import { createLowlight } from "lowlight";
 import { Select } from "@base-ui/react/select";
+import { Popover } from "@base-ui/react/popover";
+import { Switch } from "@base-ui/react/switch";
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Clipboard, SquareCode } from "lucide-react";
+import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
+import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 
 /**
  * Real-time syntax highlighting for fenced code blocks. `lowlight` (highlight.js)
@@ -66,6 +69,8 @@ const LANGUAGES: { value: string; label: string }[] = [
   { value: "go", label: "Go" },
   { value: "sql", label: "SQL" },
   { value: "yaml", label: "YAML" },
+  { value: "npm", label: "npm command" },
+  { value: "package-install", label: "Package install" },
 ];
 
 /** highlight.js aliases that a fence may use → the canonical menu value */
@@ -141,8 +146,81 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
   );
 }
 
+/** Fence options fumadocs' rehypeCode reads: line numbers and the copy button. */
+function MetaSettings({
+  meta,
+  onChange,
+}: {
+  meta: ReturnType<typeof parseCodeMeta>;
+  onChange: (next: ReturnType<typeof parseCodeMeta>) => void;
+}) {
+  const rowCls = "flex items-center justify-between gap-3 text-[12.5px] text-fd-foreground";
+  const switchRootCls =
+    "relative flex h-4.5 w-7.5 shrink-0 cursor-pointer rounded-full bg-fd-border p-0.5 transition-colors data-[checked]:bg-fd-primary";
+  const switchThumbCls =
+    "aspect-square h-full rounded-full bg-fd-background shadow-sm transition-[translate] data-[checked]:translate-x-3";
+  return (
+    <Popover.Root>
+      <Popover.Trigger
+        aria-label="Code block options"
+        tabIndex={-1}
+        className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
+      >
+        <Settings2 size={13} />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner sideOffset={6} align="end">
+          <Popover.Popup className={`${popupCls} flex w-52 flex-col gap-2.5 p-3`}>
+            <label className={rowCls}>
+              Line numbers
+              <Switch.Root
+                className={switchRootCls}
+                checked={meta.lineNumbers !== false}
+                onCheckedChange={(on) => onChange({ ...meta, lineNumbers: on })}
+              >
+                <Switch.Thumb className={switchThumbCls} />
+              </Switch.Root>
+            </label>
+            {meta.lineNumbers !== false && (
+              <label className={rowCls}>
+                Start at
+                <input
+                  className="h-6 w-14 rounded-md border border-fd-border bg-fd-background px-1.5 text-right text-[12px] outline-none focus-visible:border-fd-ring"
+                  type="number"
+                  min={1}
+                  value={typeof meta.lineNumbers === "number" ? meta.lineNumbers : 1}
+                  onChange={(event) => {
+                    const n = Number(event.target.value);
+                    onChange({ ...meta, lineNumbers: n > 1 ? n : true });
+                  }}
+                />
+              </label>
+            )}
+            <label className={rowCls}>
+              Copy button
+              <Switch.Root
+                className={switchRootCls}
+                checked={!meta.noCopy}
+                onCheckedChange={(on) => onChange({ ...meta, noCopy: !on })}
+              >
+                <Switch.Thumb className={switchThumbCls} />
+              </Switch.Root>
+            </label>
+            {meta.rest && (
+              <p className="border-t border-fd-border pt-2 font-mono text-[11px] text-fd-muted-foreground">
+                {meta.rest}
+              </p>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
   const language = (node.attrs.language as string | null) ?? null;
+  const meta = parseCodeMeta(node.attrs.meta as string | null);
   useEffect(() => ensureGrammars(editor), [editor]);
 
   return (
@@ -156,7 +234,20 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
         contentEditable={false}
       >
         <SquareCode size={15} className="shrink-0 opacity-70" />
-        <div className="flex-1" />
+        <input
+          className="h-6 min-w-0 flex-1 bg-transparent px-1.5 text-[13px] font-medium text-fd-foreground outline-none placeholder:text-fd-muted-foreground/50"
+          value={meta.title}
+          placeholder="Title…"
+          spellCheck={false}
+          tabIndex={-1}
+          onChange={(event) =>
+            updateAttributes({ meta: buildCodeMeta({ ...meta, title: event.target.value }) })
+          }
+        />
+        <MetaSettings
+          meta={meta}
+          onChange={(next) => updateAttributes({ meta: buildCodeMeta(next) })}
+        />
         <LanguageSelect
           value={language ?? ""}
           onChange={(value) => updateAttributes({ language: value })}

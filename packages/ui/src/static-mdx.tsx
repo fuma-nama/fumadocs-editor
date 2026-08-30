@@ -2,9 +2,10 @@
 import type { JSONContent } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
-import { Fragment, type ReactNode } from "react";
+import { createContext, useContext, Fragment, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readStringProps } from "./components/attributes";
+import { resolveSrc, type MediaProvider } from "./components/media";
 
 /**
  * Stage-0 paint: the parsed PM document as plain React, no TipTap and no
@@ -15,6 +16,19 @@ import { readStringProps } from "./components/attributes";
  */
 
 type SpecMap = Map<string, UiComponentSpec>;
+
+const MediaContext = createContext<MediaProvider | undefined>(undefined);
+
+function StaticImg({ node }: { node: JSONContent }) {
+  const media = useContext(MediaContext);
+  return (
+    <img
+      src={resolveSrc(media, String(node.attrs?.src ?? ""))}
+      alt={(node.attrs?.alt as string) ?? ""}
+      title={(node.attrs?.title as string) ?? undefined}
+    />
+  );
+}
 
 const noop = () => {};
 
@@ -160,7 +174,15 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       return <p key={key}>{children()}</p>;
     case "heading": {
       const Tag = `h${(node.attrs?.level as number) ?? 1}` as "h1";
-      return <Tag key={key}>{children()}</Tag>;
+      return (
+        <Tag
+          key={key}
+          data-anchor={(node.attrs?.anchor as string) ?? undefined}
+          data-toc={(node.attrs?.toc as string) ?? undefined}
+        >
+          {children()}
+        </Tag>
+      );
     }
     case "hardBreak":
       return <br key={key} />;
@@ -197,14 +219,7 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
     case "horizontalRule":
       return <hr key={key} />;
     case "image":
-      return (
-        <img
-          key={key}
-          src={node.attrs?.src as string}
-          alt={(node.attrs?.alt as string) ?? ""}
-          title={(node.attrs?.title as string) ?? undefined}
-        />
-      );
+      return <StaticImg key={key} node={node} />;
     case "table":
       return (
         <table key={key}>
@@ -276,10 +291,20 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
   }
 }
 
-export function StaticMdx({ doc, specs }: { doc: JSONContent; specs: SpecMap }) {
+export function StaticMdx({
+  doc,
+  specs,
+  media,
+}: {
+  doc: JSONContent;
+  specs: SpecMap;
+  media?: MediaProvider;
+}) {
   return (
-    <div className="ProseMirror" style={{ whiteSpace: "pre-wrap" }} aria-label="Loading editor">
-      {renderChildren(doc.content, specs)}
-    </div>
+    <MediaContext.Provider value={media}>
+      <div className="ProseMirror" style={{ whiteSpace: "pre-wrap" }} aria-label="Loading editor">
+        {renderChildren(doc.content, specs)}
+      </div>
+    </MediaContext.Provider>
   );
 }

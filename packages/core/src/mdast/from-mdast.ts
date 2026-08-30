@@ -238,12 +238,31 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       }
       return { type: "paragraph", content: phrasingToInline(node.children, [], ctx) };
     }
-    case "heading":
-      return {
-        type: "heading",
-        attrs: { level: node.depth },
-        content: phrasingToInline(node.children, [], ctx),
-      };
+    case "heading": {
+      const content = phrasingToInline(node.children, [], ctx);
+      const attrs: Record<string, unknown> = { level: node.depth };
+      // fumadocs heading suffixes: `[#custom-id]` (must trail), `[!toc]`, `[toc]`
+      const last = content[content.length - 1];
+      if (ctx.syntax.options.headingSuffixes !== false && last?.type === "text" && !last.marks) {
+        let text = last.text ?? "";
+        const anchor = /\s*\[#([^\]]+?)\]\s*$/.exec(text);
+        if (anchor) {
+          attrs.anchor = anchor[1];
+          text = text.slice(0, anchor.index);
+        }
+        if (text.includes("[!toc]")) {
+          attrs.toc = "hide";
+          text = text.replace("[!toc]", "");
+        } else if (text.includes("[toc]")) {
+          attrs.toc = "only";
+          text = text.replace("[toc]", "");
+        }
+        text = text.replace(/\s+$/, "");
+        if (text) content[content.length - 1] = { ...last, text };
+        else if (attrs.anchor != null || attrs.toc != null) content.pop();
+      }
+      return { type: "heading", attrs, content };
+    }
     case "blockquote": {
       const content = node.children.map((child) => blockToNode(child, ctx));
       return {

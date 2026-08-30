@@ -16,6 +16,7 @@ import {
 import { StaticMdx } from "./static-mdx";
 import { parseDocCached } from "./doc-cache";
 import type { SerializeFn } from "./live-editor";
+import type { MediaProvider } from "./components/media";
 import type { UiComponentSpec } from "./components/spec";
 import { focusRing } from "./components/styles";
 import { useEditorTheme, type EditorTheme } from "./theme";
@@ -77,6 +78,8 @@ export interface MdxEditorProps {
   theme?: EditorTheme;
   /** sync state shown beside the mode tabs; conflicts surface a quiet chip */
   sync?: SyncIndicatorProps;
+  /** where uploads go and how document srcs resolve for display */
+  media?: MediaProvider;
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -136,6 +139,7 @@ export function MdxEditor({
   staticFallback,
   theme,
   sync,
+  media,
   className,
   ref,
 }: MdxEditorProps) {
@@ -360,6 +364,7 @@ export function MdxEditor({
                 snapshotRef={snapshotRef}
                 onChangeRef={onChangeRef}
                 hidden={stage !== "live"}
+                media={media}
                 onReady={(editor, serialize) => {
                   editorRef.current = editor;
                   serializeRef.current = serialize;
@@ -393,7 +398,7 @@ export function MdxEditor({
             >
               {staticFallback ??
                 (parsed ? (
-                  <StaticMdx doc={parsed.doc} specs={specMap} />
+                  <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
                 ) : (
                   <div className="ProseMirror" aria-hidden />
                 ))}

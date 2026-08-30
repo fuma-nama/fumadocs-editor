@@ -5,6 +5,7 @@ import {
   useEditorTheme,
   fumadocsUiComponents,
   type MdxEditorRef,
+  type MediaProvider,
   type SyncStatus,
 } from "@fumadocs-editor/ui";
 import {
@@ -42,6 +43,23 @@ function ThemeToggle() {
     </button>
   );
 }
+
+// uploads land in docs/assets via the dev server; relative srcs display
+// through the asset endpoint
+const media: MediaProvider = {
+  async upload(file) {
+    const res = await fetch("/__fde_upload", {
+      method: "POST",
+      body: file,
+      headers: { "x-filename": encodeURIComponent(file.name) },
+    });
+    if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+    const { src } = (await res.json()) as { src: string };
+    return src;
+  },
+  resolve: (src) =>
+    /^(?:[a-z]+:|\/)/i.test(src) ? src : `/__fde_asset/${src.replace(/^\.\//, "")}`,
+};
 
 function Playground() {
   const [transport, setTransport] = useState<WsTransport | null>(null);
@@ -191,6 +209,7 @@ function Playground() {
                 sessionRef.current?.changed();
               }}
               ref={editorRef}
+              media={media}
               sync={
                 active != null
                   ? {

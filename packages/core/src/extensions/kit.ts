@@ -2,6 +2,7 @@ import type { Extensions } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Placeholder, Selection } from "@tiptap/extensions";
 import { CodeBlock } from "@tiptap/extension-code-block";
+import { Heading } from "@tiptap/extension-heading";
 import { Link } from "@tiptap/extension-link";
 import { Image } from "@tiptap/extension-image";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -16,6 +17,33 @@ export const CodeBlockMdx = CodeBlock.extend({
       ...this.parent?.(),
       meta: { default: null },
     };
+  },
+});
+
+/**
+ * Fumadocs heading suffixes live as attributes: `## Title [#custom-id]`
+ * (anchor), `[!toc]` (hidden from TOC) and `[toc]` (TOC-only) — parsed out
+ * of the text so flags never read as prose, surfaced as data attributes for
+ * the editor chrome.
+ */
+export const HeadingMdx = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      anchor: { default: null as string | null },
+      toc: { default: null as "hide" | "only" | null },
+    };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const level = this.options.levels.includes(node.attrs.level)
+      ? (node.attrs.level as number)
+      : this.options.levels[0];
+    const attrs: Record<string, unknown> = { ...HTMLAttributes };
+    delete attrs.anchor;
+    delete attrs.toc;
+    if (node.attrs.anchor) attrs["data-anchor"] = node.attrs.anchor;
+    if (node.attrs.toc) attrs["data-toc"] = node.attrs.toc;
+    return [`h${level}`, attrs, 0];
   },
 });
 
@@ -53,16 +81,20 @@ export interface EditorExtensionsOptions {
    * @defaultValue true
    */
   codeBlock?: boolean;
+  /** Include the base image node; `false` when the UI ships a node view. */
+  image?: boolean;
 }
 
 export function editorExtensions({
   componentNodes = true,
   codeBlock = true,
+  image = true,
 }: EditorExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false,
       codeBlock: false,
+      heading: false,
       link: false,
       // the UI layer draws its own drop indicator from the real drop target;
       // the stock cursor previews dropPoint, which disagrees with it
@@ -75,9 +107,10 @@ export function editorExtensions({
     // a ghost hint on the current empty paragraph; `includeChildren` stays off
     // so component regions keep their own placeholders
     Placeholder.configure({ placeholder: "Write, or type '/' for blocks…" }),
+    HeadingMdx,
     ...(codeBlock ? [CodeBlockMdx] : []),
     LinkMdx.configure({ openOnClick: false }),
-    Image.configure({ inline: true }),
+    ...(image ? [Image.configure({ inline: true })] : []),
     TaskList,
     TaskItem.configure({ nested: true }),
     TableMdx,

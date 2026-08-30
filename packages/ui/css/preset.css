@@ -863,3 +863,40 @@
   );
   color: var(--color-fd-secondary-foreground);
 }
+
+/* Heading suffixes surface as quiet chips, not body text */
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-anchor]::after,
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc]::after {
+  margin-inline-start: 10px;
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-fd-muted-foreground);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-anchor]:not([data-toc])::after {
+  content: "#" attr(data-anchor);
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc="hide"]:not([data-anchor])::after {
+  content: "hidden from TOC";
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc="only"]:not([data-anchor])::after {
+  content: "TOC only";
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-anchor][data-toc="hide"]::after {
+  content: "#" attr(data-anchor) " · hidden from TOC";
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-anchor][data-toc="only"]::after {
+  content: "#" attr(data-anchor) " · TOC only";
+}
+
+.fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc="only"] {
+  opacity: 0.65;
+}
