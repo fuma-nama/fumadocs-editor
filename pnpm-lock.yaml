@@ -23,6 +23,9 @@ importers:
       '@fumadocs-editor/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@fumadocs-editor/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@fumadocs-editor/ui':
         specifier: workspace:*
         version: link:../../packages/ui

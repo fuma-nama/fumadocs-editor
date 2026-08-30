@@ -27,6 +27,8 @@ export interface FileSession {
   /** resolve a conflict by dropping local edits for the disk version */
   takeDisk(): Promise<void>;
   status(): SessionStatus;
+  /** what the disk held the last time we were in sync with it */
+  syncedText(): string;
   close(): void;
 }
 
@@ -54,8 +56,12 @@ export function createFileSession(options: FileSessionOptions): FileSession {
   const status = (): SessionStatus =>
     conflict ? "conflict" : !online ? "offline" : saving ? "saving" : dirty ? "dirty" : "synced";
 
+  // no emissions while constructing: the transport reports its online state
+  // synchronously, and callers haven't seen the session object yet
+  let constructed = false;
   let lastEmitted: SessionStatus | undefined;
   const emit = () => {
+    if (!constructed) return;
     const current = status();
     if (current === lastEmitted) return;
     lastEmitted = current;
@@ -70,7 +76,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
 
   const save = async (): Promise<void> => {
     clearTimers();
-    if (closed || conflict || !online || saving) return;
+    if (closed || conflict || !online || saving || !dirty) return;
     const text = getText();
     if (text === lastSynced) {
       dirty = false;
@@ -127,6 +133,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
       emit();
       if (online && dirty && !conflict) schedule();
     }) ?? (() => {});
+  constructed = true;
 
   return {
     async open() {
@@ -163,6 +170,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
       emit();
     },
     status,
+    syncedText: () => lastSynced,
     close() {
       closed = true;
       clearTimers();

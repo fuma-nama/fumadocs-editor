@@ -3,12 +3,19 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fdeSync } from "@fumadocs-editor/sync/vite";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: { port: 5199 },
+  plugins: [react(), tailwindcss(), fdeSync({ root: "docs" })],
+  server: {
+    port: 5199,
+    // the mirrored documents are runtime data owned by the sync server;
+    // vite must not react to their changes (tailwind's auto-scan would
+    // otherwise invalidate the CSS and reload the page on every save)
+    watch: { ignored: [path.resolve(dir, "docs")] },
+  },
   build: {
     rolldownOptions: {
       output: {
