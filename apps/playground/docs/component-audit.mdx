@@ -1,0 +1,115 @@
+# Component audit
+
+Paragraph with **bold**, *italic*, ~~strike~~, `code`, and a [link](./writing.mdx).
+
+## Tabs
+
+<Tabs items={["npm", "pnpm", "bun"]}>
+  <Tab>
+    Run `npm install fumadocs`.
+  </Tab>
+  <Tab>
+    Run `pnpm add fumadocs`.
+  </Tab>
+  <Tab>
+    Run `bun add fumadocs`.
+  </Tab>
+</Tabs>
+
+## Callout
+
+<Callout type="warn" title="Heads up">
+  Callout body text.
+</Callout>
+
+## Cards
+
+<Cards>
+  <Card title="First" href="./writing.mdx">
+    First card body.
+  </Card>
+  <Card title="Second">
+    Second card body.
+  </Card>
+</Cards>
+
+## Steps
+
+<Steps>
+  <Step>
+    ### Install
+
+    Step one body.
+  </Step>
+
+  <Step>
+    ### Configure
+
+    Step two body.
+  </Step>
+</Steps>
+
+## Accordions
+
+<Accordions>
+  <Accordion title="One">
+    Panel one.
+  </Accordion>
+
+  <Accordion title="Two">
+    Panel two.
+  </Accordion>
+</Accordions>
+
+## Files
+
+<Files>
+  <Folder name="app" defaultOpen>
+    <File name="page.tsx" />
+  </Folder>
+
+  <File name="package.json" />
+</Files>
+
+## Leaves
+
+<include lang="tsx">./snippets/hero.tsx</include>
+
+<TypeTable
+  type={{
+    name: {
+      type: "string",
+      description: "Display name",
+      required: true,
+    },
+  }}
+/>
+
+<GithubInfo owner="fuma-nama" repo="fumadocs" />
+
+<InlineTOC items={toc} />
+
+## Blocks
+
+> A quote block.
+
+- Bullet one
+- Bullet two
+
+1. Numbered one
+2. Numbered two
+
+- [ ] Task open
+- [x] Task done
+
+```ts title="demo.ts" lineNumbers
+const x = 1;
+```
+
+| Col A | Col B |
+| ----- | ----- |
+| a1    | b1    |
+
+***
+
+Closing paragraph.

@@ -530,6 +530,39 @@ function handleClearingDelete(editor: Editor, specs: SpecMap): boolean {
 }
 
 /**
+ * A text selection spanning an inline-region boundary must never reach
+ * ProseMirror's structural replace: the region backs a single string, and a
+ * replace across it splits the component into valid-but-wrong pieces (a
+ * Tab's body remnant re-healed as a second Tab's label).
+ */
+export function crossesRegion(state: EditorState): boolean {
+  const selection = state.selection;
+  if (!(selection instanceof TextSelection) || selection.empty) return false;
+  const startOf = ($pos: ResolvedPos) => {
+    const depth = inlineRegionDepth($pos);
+    return depth === -1 ? -1 : $pos.start(depth);
+  };
+  return startOf(selection.$from) !== startOf(selection.$to);
+}
+
+/** clear the selected text block-by-block, leaving every node intact */
+export function deleteAcrossRegions(editor: Editor): boolean {
+  if (!crossesRegion(editor.state)) return false;
+  const { from, to } = editor.state.selection;
+  const tr = editor.state.tr;
+  editor.state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isTextblock) return true;
+    const start = Math.max(from, pos + 1);
+    const end = Math.min(to, pos + 1 + node.content.size);
+    if (start < end) tr.delete(tr.mapping.map(start), tr.mapping.map(end));
+    return false;
+  });
+  tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(from))));
+  editor.view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/**
  * Backspace/Delete at the edge of a fully empty, childless component removes
  * the component itself: an empty File row, an emptied Callout.
  */
@@ -602,7 +635,11 @@ function unwrapEmptyEntry(editor: Editor, specs: SpecMap): boolean {
 function handleUnitDelete(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean {
   const { selection } = editor.state;
   if (!selection.empty) {
-    return handleClearingDelete(editor, specs) || editor.commands.deleteSelection();
+    return (
+      handleClearingDelete(editor, specs) ||
+      deleteAcrossRegions(editor) ||
+      editor.commands.deleteSelection()
+    );
   }
   const { $from } = selection;
   if (!$from.parent.isTextblock) return false;
@@ -787,11 +824,13 @@ export function componentKeymap(specs: SpecMap): Extension[] {
           "Shift-Tab": ({ editor }) => handleTab(editor, specs, -1),
           Backspace: ({ editor }) =>
             handleClearingDelete(editor, specs) ||
+            deleteAcrossRegions(editor) ||
             deleteEmptyComponent(editor, -1) ||
             unwrapEmptyEntry(editor, specs) ||
             guardRegionBoundary(editor, -1),
           Delete: ({ editor }) =>
             handleClearingDelete(editor, specs) ||
+            deleteAcrossRegions(editor) ||
             deleteEmptyComponent(editor, 1) ||
             unwrapEmptyEntry(editor, specs) ||
             guardRegionBoundary(editor, 1),

@@ -207,6 +207,61 @@ after
 `);
   });
 
+  test("a region-crossing selection deletes text only, never structure", () => {
+    // label → body selections must not reach PM's structural replace: it
+    // splits the Tab into valid-but-wrong pieces
+    const { editor, serialize } = makeEditor(`<Tabs items={["npm", "pnpm"]}>
+  <Tab>
+    Run npm.
+  </Tab>
+
+  <Tab>
+    Run pnpm.
+  </Tab>
+</Tabs>
+`);
+    const from = caret(editor, "npm", "start");
+    let to = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === "Run npm.") to = pos + 4;
+    });
+    editor.commands.setTextSelection({ from, to });
+    press(editor, "Backspace");
+    const out = serialize();
+    expect(out).toContain('items={["', '"pnpm"');
+    expect(out).toContain("npm.");
+    // still exactly two tabs, each with its own label region
+    expect(out.match(/<Tab>/g)).toHaveLength(2);
+  });
+
+  test("type-over of a region-crossing selection edits text in place", () => {
+    const { editor, serialize } = makeEditor(`<Tabs items={["npm", "pnpm"]}>
+  <Tab>
+    Run npm.
+  </Tab>
+
+  <Tab>
+    Run pnpm.
+  </Tab>
+</Tabs>
+`);
+    const from = caret(editor, "npm", "start");
+    let to = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === "Run npm.") to = pos + 4;
+    });
+    editor.commands.setTextSelection({ from: from + 1, to });
+    // the browser delivers typing over a selection through handleTextInput
+    const handled = editor.view.someProp("handleTextInput", (f) =>
+      f(editor.view, from + 1, to, "Z"),
+    );
+    expect(handled).toBe(true);
+    const out = serialize();
+    expect(out).toContain('"nZ"');
+    expect(out).toContain("npm.");
+    expect(out.match(/<Tab>/g)).toHaveLength(2);
+  });
+
   test("selection wiping all text of a leaf component removes it", () => {
     const { editor, serialize } = makeEditor(CALLOUT);
     const from = caret(editor, "Heads up", "start");

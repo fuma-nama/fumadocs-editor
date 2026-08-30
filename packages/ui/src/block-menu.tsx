@@ -125,7 +125,7 @@ export function BlockMenu({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end" className="z-50">
-          <Popover.Popup className={cn(popupCls, "flex w-56 flex-col")}>
+          <Popover.Popup data-fde-popup="" className={cn(popupCls, "flex w-56 flex-col")}>
             <BlockPanel
               editor={editor}
               specs={specs}

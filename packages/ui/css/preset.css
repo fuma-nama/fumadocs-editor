@@ -46,6 +46,7 @@
  * to override an ancestor `.dark`: or the OS override below, so it re-declares
  * the light values authoritatively. */
 .light {
+  color-scheme: light;
   --color-fd-background: hsl(0 0% 96%);
   --color-fd-foreground: hsl(0 0% 3.9%);
   --color-fd-muted: hsl(0 0% 96.1%);
@@ -66,6 +67,10 @@
 
 /* Dark theme: via a `.dark` class (fumadocs / next-themes) … */
 .dark {
+  /* form-control internals (input selection, caret, native menus) follow the
+   * UA colour scheme, not our tokens: without this, Chrome paints light-mode
+   * selection inside inputs on the dark theme — near-zero contrast */
+  color-scheme: dark;
   --color-fd-background: hsl(0 0% 7.04%);
   --color-fd-foreground: hsl(0 0% 92%);
   --color-fd-muted: hsl(0 0% 12.9%);
@@ -87,6 +92,7 @@
 /* … or the OS preference when no explicit theme class is set (standalone). */
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not(.dark) {
+    color-scheme: dark;
     --color-fd-background: hsl(0 0% 7.04%);
     --color-fd-foreground: hsl(0 0% 92%);
     --color-fd-muted: hsl(0 0% 12.9%);
@@ -104,6 +110,15 @@
     --color-fd-accent-foreground: hsl(0 0% 90%);
     --color-fd-ring: hsl(0 0% 54.9%);
   }
+}
+
+/* Themed selection everywhere in the editor — the native translucent blue
+ * has almost no contrast on the dark surfaces (chrome inputs included).
+ * Background tint ONLY: overriding `color` blanks text on node selections,
+ * where the browser applies the colour but ProseMirror suppresses the
+ * native background paint. */
+[data-fde-root] ::selection {
+  background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
 /* =========================================================================
@@ -234,6 +249,32 @@
 
 .fde-content ul[data-type="taskList"] li > div {
   flex: 1;
+}
+
+/* task checkboxes match the chrome checkboxes (TypeTable), not the OS */
+.fde-content ul[data-type="taskList"] input[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 4px;
+  background: var(--color-fd-background);
+  cursor: pointer;
+}
+
+.fde-content ul[data-type="taskList"] input[type="checkbox"]:checked {
+  border-color: var(--color-fd-primary);
+  background: var(--color-fd-primary);
+}
+
+.fde-content ul[data-type="taskList"] input[type="checkbox"]:checked::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: var(--color-fd-primary-foreground);
+  clip-path: polygon(14% 44%, 0 62%, 38% 100%, 100% 18%, 84% 2%, 38% 68%);
 }
 
 .fde-content img {
@@ -833,11 +874,15 @@
   display: inline-block;
   margin: 8px 16px 0;
   padding-bottom: 5px;
-  min-width: 4ch;
   font-size: 0.875em;
   font-weight: 500;
   color: var(--color-fd-primary);
   border-bottom: 2px solid var(--color-fd-primary);
+}
+
+/* the underline hugs the label; only an empty one keeps a caret target */
+.fde-tab .fde-region-inline[data-region="label"][data-empty] {
+  min-width: 4ch;
 }
 
 .fde-tab .fde-region-block[data-region="body"] {
@@ -855,21 +900,6 @@
 .fde-include .fde-region-inline[data-region="path"] {
   font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 0.875em;
-}
-
-/* Banner variants */
-.fde-banner[data-variant="normal"] {
-  background: var(--color-fd-secondary);
-  color: var(--color-fd-secondary-foreground);
-}
-
-.fde-banner[data-variant="rainbow"] {
-  background: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-fd-primary) 25%, var(--color-fd-secondary)),
-    color-mix(in oklab, #f0abfc 35%, var(--color-fd-secondary))
-  );
-  color: var(--color-fd-secondary-foreground);
 }
 
 /* Heading suffixes surface as quiet chips, not body text */
