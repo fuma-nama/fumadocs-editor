@@ -2,7 +2,7 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
-import { itemCls, itemIndicatorCls, popupCls } from "./styles";
+import { itemCls, itemIndicatorCls, popupSurfaceCls } from "./styles";
 import { useEditorPortal } from "../utils/portal";
 
 export interface PickerItem {
@@ -71,12 +71,15 @@ export function Picker<T extends PickerItem>({
       </Combobox.Trigger>
       <Combobox.Portal container={container ?? portal.container}>
         <Combobox.Positioner sideOffset={6} align={align} className="z-50">
-          <Combobox.Popup className={`${popupCls} w-52 overflow-hidden p-0`}>
+          <Combobox.Popup className={`${popupSurfaceCls} w-52 overflow-hidden`}>
+            {/* px-3 puts the input text on the item labels' left edge (list
+             * p-1 + item px-2); Empty stays mounted while there are matches,
+             * so it must collapse (`empty:hidden`) or it reads as padding */}
             <Combobox.Input
               placeholder="Filter…"
-              className="h-8 w-full border-b border-fd-border bg-transparent px-2.5 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60"
+              className="h-8 w-full border-b border-fd-border bg-transparent px-3 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60"
             />
-            <Combobox.Empty className="px-2.5 py-2 text-[12.5px] text-fd-muted-foreground">
+            <Combobox.Empty className="px-3 py-2 text-[12.5px] text-fd-muted-foreground empty:hidden">
               No matches
             </Combobox.Empty>
             <Combobox.List className="max-h-80 overflow-y-auto overscroll-contain p-1">

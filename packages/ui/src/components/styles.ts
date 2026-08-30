@@ -13,9 +13,15 @@ export const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background";
 
 /* No entrance animation: popups are on the writing hot path (slash menu,
- * turn-into) and must feel immediate. */
-export const popupCls =
-  "z-50 min-w-40 rounded-[10px] border border-fd-border bg-fd-popover p-1 text-[13px] text-fd-popover-foreground shadow-lg [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]";
+ * turn-into) and must feel immediate.
+ *
+ * Padding scale: menu/list popups use `popupCls` (p-1, items px-2);
+ * form popovers add `p-2`; a composite popup (the picker) takes the bare
+ * surface and pads each section itself. Never fight the p-1 with a p-0. */
+export const popupSurfaceCls =
+  "z-50 min-w-40 rounded-[10px] border border-fd-border bg-fd-popover text-[13px] text-fd-popover-foreground shadow-lg [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]";
+
+export const popupCls = `${popupSurfaceCls} p-1`;
 
 /* hover/highlight react instantly: a fade would lag menu scrubbing */
 export const itemCls =

@@ -13,7 +13,7 @@ import { Switch } from "@base-ui/react/switch";
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
-import { popupCls } from "./styles";
+import { popupSurfaceCls } from "./styles";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { useEditorPortal } from "../utils/portal";
@@ -166,7 +166,7 @@ function MetaSettings({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end">
-          <Popover.Popup className={`${popupCls} flex w-52 flex-col gap-2.5 p-2.5`}>
+          <Popover.Popup className={`${popupSurfaceCls} flex w-52 flex-col gap-2 p-2`}>
             <label className={rowCls}>
               Line numbers
               <Switch.Root
