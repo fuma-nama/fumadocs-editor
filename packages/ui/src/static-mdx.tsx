@@ -113,7 +113,7 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
         className="relative"
         style={{ whiteSpace: "normal" }}
       >
-        <Render props={readStringProps(attributes)} selected={false} setProp={noop}>
+        <Render props={readStringProps(attributes)} selected={false} setProp={noop} setRegionText={noop}>
           <ContentHole className="fde-component-content">{children}</ContentHole>
         </Render>
       </div>

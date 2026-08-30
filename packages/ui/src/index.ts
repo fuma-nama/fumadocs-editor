@@ -1,7 +1,7 @@
 export { MdxEditor } from "./editor";
 export type { MdxEditorProps, MdxEditorRef, SyncIndicatorProps, SyncStatus } from "./editor";
 export { StaticMdx } from "./static-mdx";
-export type { MediaProvider } from "./components/media";
+export type { FileProvider, MediaProvider } from "./components/media";
 export { EditorThemeProvider, useEditorTheme } from "./theme";
 export type { EditorTheme, ResolvedTheme } from "./theme";
 export { componentExtensions } from "./components/node-views";

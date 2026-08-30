@@ -270,7 +270,11 @@ export function slashMenu(specs: UiComponentSpec[], media?: MediaProvider): Exte
                   editor: props.editor,
                   props: popupProps(),
                 });
-                document.body.appendChild(renderer.element);
+                // inside the editor root, like every floating surface: a body
+                // mount escapes the resolved theme scope (it stays position:
+                // fixed, so the root's overflow-hidden cannot clip it)
+                const host = props.editor.view.dom.closest("[data-fde-root]") ?? document.body;
+                host.appendChild(renderer.element);
               },
               onUpdate(props) {
                 current = props;

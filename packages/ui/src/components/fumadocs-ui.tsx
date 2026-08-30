@@ -8,6 +8,7 @@ import {
   File as FileIcon,
   FileInput,
   Folder as FolderIcon,
+  FolderOpen,
   FolderTree,
   GitBranch,
   Info,
@@ -25,10 +26,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Select } from "@base-ui/react/select";
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { cn } from "../utils/cn";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 import { useEditorPortal } from "../utils/portal";
+import { useEditorProviders } from "./providers";
+import { Picker } from "./picker";
+import type { FileProvider } from "./media";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
@@ -257,7 +261,34 @@ function Tab({ children }: ComponentRenderProps) {
   return <div className="fde-tab">{children}</div>;
 }
 
-function Include({ props, children }: ComponentRenderProps) {
+/** file list from the host's provider; picking writes the path region */
+function IncludePathPicker({
+  files,
+  onPick,
+}: {
+  files: FileProvider;
+  onPick: (path: string) => void;
+}) {
+  const [paths, setPaths] = useState<string[] | null>(null);
+  return (
+    <Picker
+      items={(paths ?? []).map((path) => ({ value: path, label: path }))}
+      value={undefined}
+      onPick={(item) => onPick(item.value)}
+      onOpenChange={(open) => {
+        if (open && paths == null) void files.list().then(setPaths);
+      }}
+      ariaLabel="Pick a file to include"
+      triggerCls="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
+      triggerTabIndex={-1}
+    >
+      <FolderOpen size={14} />
+    </Picker>
+  );
+}
+
+function Include({ props, children, setRegionText }: ComponentRenderProps) {
+  const { files } = useEditorProviders();
   return (
     <div className="fde-include flex items-center gap-2 rounded-xl border border-dashed border-fd-border bg-fd-card px-3 py-2 text-[0.9em]">
       <span className="flex shrink-0 items-center gap-2" contentEditable={false}>
@@ -267,6 +298,11 @@ function Include({ props, children }: ComponentRenderProps) {
         </span>
       </span>
       {children}
+      {files && (
+        <span className="flex shrink-0" contentEditable={false}>
+          <IncludePathPicker files={files} onPick={(path) => setRegionText("path", path)} />
+        </span>
+      )}
       {props.lang ? (
         <span
           className="shrink-0 rounded-md border border-fd-border bg-fd-muted px-1.5 py-0.5 font-mono text-[11px] text-fd-muted-foreground"
