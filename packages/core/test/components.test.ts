@@ -50,10 +50,12 @@ describe("component regions", () => {
     const source = '<Callout type="warn" title="Old">\n  Body.\n</Callout>\n';
     const { doc, snapshot } = parseMdxToDoc(source, registry);
 
-    const title = find(doc, "mdxInlineRegion", "title")!;
+    // edit a clone: editor edits produce fresh JSON, never mutate the parsed doc
+    const edited = structuredClone(doc);
+    const title = find(edited, "mdxInlineRegion", "title")!;
     title.content = [{ type: "text", text: "New title" }];
 
-    const out = serializeDocToMdx(doc, snapshot, registry);
+    const out = serializeDocToMdx(edited, snapshot, registry);
     expect(out).toContain('title="New title"');
     expect(out).toContain('type="warn"');
     expect(out).toContain("Body.");
@@ -95,10 +97,11 @@ describe("component regions", () => {
     const source = '<Card title="Themes" description="Old copy" />\n';
     const { doc, snapshot } = parseMdxToDoc(source, registry);
 
-    const body = find(doc, "mdxBlockRegion", "body")!;
+    const edited = structuredClone(doc);
+    const body = find(edited, "mdxBlockRegion", "body")!;
     body.content = [{ type: "paragraph", content: [{ type: "text", text: "New copy" }] }];
 
-    const out = serializeDocToMdx(doc, snapshot, registry);
+    const out = serializeDocToMdx(edited, snapshot, registry);
     expect(out).toContain("New copy");
     expect(out).not.toContain("description=");
     expect(out).toContain('title="Themes"');

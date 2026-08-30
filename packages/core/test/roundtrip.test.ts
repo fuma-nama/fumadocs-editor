@@ -31,15 +31,16 @@ test("editing one block only rewrites that block", () => {
   const source = readFileSync(path.join(fixturesDir, "kitchen-sink.mdx"), "utf-8");
   const { doc, snapshot } = parseMdxToDoc(source);
 
-  // simulate an edit: change the text of the first heading
-  const heading = doc.content!.find((node) => node.type === "heading")!;
+  // simulate an edit on a clone: change the text of the first heading
+  const edited = structuredClone(doc);
+  const heading = edited.content!.find((node) => node.type === "heading")!;
   heading.content = [{ type: "text", text: "Edited heading" }];
 
-  const output = serializeDocToMdx(doc, snapshot);
+  const output = serializeDocToMdx(edited, snapshot);
   expect(output).toContain("# Edited heading");
   // every other block is untouched
   for (const [index, block] of snapshot.blocks.entries()) {
-    if (index === doc.content!.indexOf(heading)) continue;
+    if (index === edited.content!.indexOf(heading)) continue;
     expect(output).toContain(block.source);
   }
 });

@@ -7,6 +7,14 @@ import { createRegistry, type ComponentRegistry } from "./components/spec";
 
 const EMPTY_REGISTRY = createRegistry();
 
+export function tryNormalize(node: JSONContent, registry: ComponentRegistry): string | undefined {
+  try {
+    return stringifyBlock(nodeToMdastBlock(node, registry));
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SnapshotBlock {
   /** exact source text of the block */
   source: string;
@@ -14,8 +22,10 @@ export interface SnapshotBlock {
    * The block as it would serialize after a lossless PM round-trip
    * (mdast → PM → mdast → markdown). A save-time block whose serialization
    * equals this was not edited, so `source` is emitted instead.
+   * Computed lazily on first read (a caching getter): parse pays nothing,
+   * the first serialize pays once.
    */
-  normalized: string;
+  readonly normalized: string;
 }
 
 /**
@@ -34,6 +44,11 @@ export interface DocSnapshot {
 }
 
 export interface ParsedDoc {
+  /**
+   * Treat as immutable: the snapshot's lazy `normalized` getters read these
+   * nodes on first serialize. Editors never mutate it (PM copies the JSON
+   * into its own state), so derive edits from copies, not in place.
+   */
   doc: JSONContent;
   snapshot: DocSnapshot;
 }
@@ -63,13 +78,13 @@ export function parseMdxToDoc(
     const pmNode = blockToNode(child, ctx);
     content.push(pmNode);
 
-    let normalized: string;
-    try {
-      normalized = stringifyBlock(nodeToMdastBlock(pmNode, registry));
-    } catch {
-      normalized = blockSource;
-    }
-    blocks.push({ source: blockSource, normalized });
+    let cached: string | undefined;
+    blocks.push({
+      source: blockSource,
+      get normalized() {
+        return (cached ??= tryNormalize(pmNode, registry) ?? blockSource);
+      },
+    });
 
     if (i < children.length - 1) {
       const nextStart = children[i + 1].position?.start.offset ?? end;
@@ -104,8 +119,19 @@ export function serializeDocToMdx(
   snapshot?: DocSnapshot,
   registry: ComponentRegistry = EMPTY_REGISTRY,
 ): string {
-  const nodes = doc.content ?? [];
+  const normalized: string[] = [];
+  for (const node of doc.content ?? []) {
+    normalized.push(tryNormalize(node, registry) ?? "");
+  }
+  return assembleMdx(normalized, snapshot);
+}
 
+/**
+ * Match per-block normalized texts against the snapshot and reassemble the
+ * document, emitting untouched blocks (and the whitespace around them)
+ * byte-for-byte from their original source.
+ */
+export function assembleMdx(normalized: string[], snapshot?: DocSnapshot): string {
   const byNormalized = new Map<string, number[]>();
   snapshot?.blocks.forEach((block, index) => {
     const list = byNormalized.get(block.normalized);
@@ -117,15 +143,8 @@ export function serializeDocToMdx(
   const parts: { text: string; index: number | null }[] = [];
   let prevMatch: number | null = null;
 
-  for (const node of nodes) {
-    let normalized: string;
-    try {
-      normalized = stringifyBlock(nodeToMdastBlock(node, registry));
-    } catch {
-      normalized = "";
-    }
-
-    const candidates = (byNormalized.get(normalized) ?? []).filter((i) => !used.has(i));
+  for (const text of normalized) {
+    const candidates = (byNormalized.get(text) ?? []).filter((i) => !used.has(i));
     // prefer the block that originally followed the previous match, so
     // original inter-block whitespace can be reused
     const pick =
@@ -136,7 +155,7 @@ export function serializeDocToMdx(
       parts.push({ text: snapshot!.blocks[pick].source, index: pick });
       prevMatch = pick;
     } else {
-      parts.push({ text: normalized, index: null });
+      parts.push({ text, index: null });
       prevMatch = null;
     }
   }
