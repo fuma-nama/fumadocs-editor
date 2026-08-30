@@ -29,6 +29,14 @@
     "chokidar": "^4.0.3",
     "ws": "^8.19.0"
   },
+  "peerDependencies": {
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.13.2",
     "@types/ws": "^8.18.1",

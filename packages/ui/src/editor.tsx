@@ -37,6 +37,8 @@ export interface MdxEditorRef {
    * conflicts (-1 = whole document, e.g. while in raw-source mode).
    */
   applyExternalMarkdown: (text: string) => Promise<number[]>;
+  /** replace the document outright (e.g. resolving a conflict as "take disk") */
+  setMarkdown: (text: string) => Promise<void>;
 }
 
 export interface MdxEditorProps {
@@ -241,7 +243,16 @@ export function MdxEditor({
     return result.conflicts;
   };
 
-  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown }));
+  const setMarkdown = async (text: string): Promise<void> => {
+    const result = await parseDocCached(undefined, text, components ?? []);
+    snapshotRef.current = result.snapshot;
+    setParsed(result);
+    setSourceError(null);
+    if (mode === "source") setSource(text);
+    else editorRef.current?.commands.setContent(result.doc);
+  };
+
+  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown }));
 
   function switchMode(next: Mode) {
     if (next === mode) return;
