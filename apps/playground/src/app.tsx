@@ -196,7 +196,11 @@ function Playground() {
                   ? {
                       status,
                       onKeepMine: () => void sessionRef.current?.keepMine(),
-                      onTakeDisk: () => void sessionRef.current?.takeDisk(),
+                      onTakeDisk: () =>
+                        void sessionRef.current?.takeDisk().then(() => {
+                          const session = sessionRef.current;
+                          if (session) setMarkdown(session.syncedText());
+                        }),
                     }
                   : undefined
               }

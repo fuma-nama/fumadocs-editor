@@ -298,8 +298,10 @@ export function MdxEditor({
     snapshotRef.current = result.snapshot;
     setParsed(result);
     setSourceError(null);
+    // a programmatic replacement is not an edit: no update event, so the
+    // sync session doesn't see it as new dirt to save back
     if (mode === "source") setSource(text);
-    else editorRef.current?.commands.setContent(result.doc);
+    else editorRef.current?.commands.setContent(result.doc, { emitUpdate: false });
   };
 
   useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown }));

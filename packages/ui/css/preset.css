@@ -344,6 +344,9 @@
   pointer-events: none;
   color: var(--color-fd-muted-foreground);
   opacity: 0.5;
+}
+
+[data-fde-settled] .ProseMirror > p.is-empty::before {
   animation: fde-fade-in 80ms ease-out;
 }
 
@@ -392,8 +395,11 @@
   }
 }
 
-/* a freshly inserted component (a new row, step, card) settles into place */
-.fde-content .react-renderer.node-mdxComponent {
+/* A freshly inserted component (a new row, step, card) settles into place.
+ * Gated behind [data-fde-settled] — set one painted frame after the live
+ * editor appears — so neither the static paint nor the hydration swap
+ * flashes every component on screen; only real insertions animate. */
+[data-fde-settled] .react-renderer.node-mdxComponent {
   @starting-style {
     opacity: 0;
     translate: 0 -3px;
@@ -411,6 +417,9 @@
   color: var(--color-fd-muted-foreground);
   opacity: 0.6;
   pointer-events: none;
+}
+
+[data-fde-settled] .fde-region[data-empty][data-placeholder]:not([data-placeholder=""])::before {
   animation: fde-fade-in 80ms ease-out;
 }
 

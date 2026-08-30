@@ -5,7 +5,7 @@ import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
 import type { DocSnapshot } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
 import { slashMenu } from "./slash-menu";
@@ -91,8 +91,23 @@ export function LiveEditor({
     },
   });
 
+  // insert animations arm one painted frame after the editor shows: the
+  // hydration swap must be perfectly still, only real insertions move
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (hidden || !editor) return;
+    let inner: number;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setSettled(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [hidden, editor]);
+
   return (
-    <div className="relative" hidden={hidden}>
+    <div className="relative" hidden={hidden} data-fde-settled={settled || undefined}>
       <EditorContent editor={editor} className="fde-content" />
       {editor && <EditorBubble editor={editor} specs={specs} />}
       {editor && <BlockMenu editor={editor} specs={specs} />}
