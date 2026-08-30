@@ -27,7 +27,7 @@ import {
 import { Select } from "@base-ui/react/select";
 import type { CSSProperties } from "react";
 import { cn } from "../utils/cn";
-import { itemCls, popupCls } from "./styles";
+import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 import { useEditorPortal } from "../utils/portal";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
@@ -100,7 +100,7 @@ function CalloutTypeSelect({
                     style={{ color: `var(--color-fd-${colorKey(item.value)})` }}
                   />
                   <Select.ItemText>{item.label}</Select.ItemText>
-                  <Select.ItemIndicator className="ms-auto text-fd-foreground">
+                  <Select.ItemIndicator className={itemIndicatorCls}>
                     <Check size={14} />
                   </Select.ItemIndicator>
                 </Select.Item>

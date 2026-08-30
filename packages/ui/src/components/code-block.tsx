@@ -8,13 +8,13 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { createLowlight } from "lowlight";
-import { Select } from "@base-ui/react/select";
 import { Popover } from "@base-ui/react/popover";
 import { Switch } from "@base-ui/react/switch";
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
-import { itemCls, itemIndicatorCls, popupCls } from "./styles";
+import { popupCls } from "./styles";
+import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { useEditorPortal } from "../utils/portal";
 
@@ -117,34 +117,26 @@ function normalize(lang: string | null): string {
 }
 
 function LanguageSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const { anchorRef, container } = useEditorPortal();
   const current = normalize(value);
   // surface an unknown language so the trigger never renders blank
   const items = LANGUAGES.some((item) => item.value === current)
     ? LANGUAGES
     : [{ value: current, label: current }, ...LANGUAGES];
+  const selected = items.find((item) => item.value === current);
 
   return (
-    <Select.Root items={items} value={current} onValueChange={(next) => onChange(next as string)}>
-      <Select.Trigger ref={anchorRef} aria-label="Code language" tabIndex={-1} className={selectTriggerCls}>
-        <Select.Value />
-        <ChevronDown size={12} />
-      </Select.Trigger>
-      <Select.Portal container={container}>
-        <Select.Positioner sideOffset={6} align="end" alignItemWithTrigger={false}>
-          <Select.Popup className={`${popupCls} max-h-[300px] overflow-y-auto`}>
-            {items.map((item) => (
-              <Select.Item key={item.value} value={item.value} className={itemCls}>
-                <Select.ItemIndicator className={itemIndicatorCls}>
-                  <Check size={14} />
-                </Select.ItemIndicator>
-                <Select.ItemText>{item.label}</Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Popup>
-        </Select.Positioner>
-      </Select.Portal>
-    </Select.Root>
+    <Picker
+      items={items}
+      value={selected}
+      onPick={(item) => onChange(item.value)}
+      align="end"
+      ariaLabel="Code language"
+      triggerCls={selectTriggerCls}
+      triggerTabIndex={-1}
+    >
+      {selected?.label}
+      <ChevronDown size={12} />
+    </Picker>
   );
 }
 
@@ -227,6 +219,17 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
   const meta = parseCodeMeta(node.attrs.meta as string | null);
   useEffect(() => ensureGrammars(editor), [editor]);
 
+  // the meta's `lineNumbers` previewed in the editor: one number per line,
+  // in a gutter matching the code's metrics (no wrapping, so 1 line = 1 row)
+  let gutter: string | null = null;
+  if (meta.lineNumbers !== false) {
+    const start = typeof meta.lineNumbers === "number" ? meta.lineNumbers : 1;
+    const count = node.textContent.split("\n").length;
+    const rows: string[] = [];
+    for (let i = 0; i < count; i++) rows.push(String(start + i));
+    gutter = rows.join("\n");
+  }
+
   return (
     <NodeViewWrapper
       as="figure"
@@ -258,10 +261,17 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
         />
         <CopyButton getText={() => node.textContent} />
       </div>
-      <div className="overflow-auto">
-        <pre className="fde-codeblock-pre">
-          <NodeViewContent as={"code" as "div"} />
-        </pre>
+      <div className="flex">
+        {gutter != null && (
+          <pre className="fde-codeblock-lines" contentEditable={false} aria-hidden>
+            {gutter}
+          </pre>
+        )}
+        <div className="min-w-0 flex-1 overflow-auto">
+          <pre className="fde-codeblock-pre">
+            <NodeViewContent as={"code" as "div"} />
+          </pre>
+        </div>
       </div>
     </NodeViewWrapper>
   );

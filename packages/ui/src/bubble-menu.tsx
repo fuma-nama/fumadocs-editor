@@ -11,7 +11,6 @@ import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
 import {
   Bold,
-  Check,
   ChevronDown,
   Code,
   Heading1,
@@ -34,15 +33,12 @@ import {
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
+import { Picker } from "./components/picker";
 import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
 
 type Chain = ReturnType<Editor["chain"]>;
 
-/**
- * The turn-into menu. A Popover, not a Select: the select's own focus
- * management fights the bubble's blur handling, while a popover of plain
- * buttons (like the component panel) leaves focus where it lies.
- */
+/** The turn-into list: every block a text selection can become. */
 export const TURN_INTO = [
   { value: "p", label: "Paragraph", icon: Pilcrow, run: (c: Chain) => c.setParagraph() },
   {
@@ -448,67 +444,54 @@ export function EditorBubble({
     >
       {state?.format && (
         <>
-          <Popover.Root open={turnIntoOpen} onOpenChange={setTurnIntoOpen}>
-            <Popover.Trigger className={ghostSelectCls}>
-              {TURN_INTO.find((item) => item.value === state.block)?.label ?? "Paragraph"}
-              <ChevronDown size={13} className="text-fd-muted-foreground" />
-            </Popover.Trigger>
-            <Popover.Portal container={panelContainer}>
-              <Popover.Positioner sideOffset={6} align="start" className="z-50">
-                <Popover.Popup className={`${popupCls} flex w-44 flex-col`}>
-                  {TURN_INTO.map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      className={itemCls}
-                      // keep the caret where it is; act on click like a menu
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        run(item.run);
-                        setTurnIntoOpen(false);
-                      }}
-                    >
-                      <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
-                        <item.icon size={15} />
-                      </span>
-                      <span>{item.label}</span>
-                      {state.block === item.value && (
-                        <Check size={14} className="ms-auto text-fd-foreground" />
-                      )}
-                    </button>
-                  ))}
-                  {state.block.startsWith("h") && (
-                    <div className="mt-1 flex flex-col gap-1.5 border-t border-fd-border px-1 pt-2 pb-1">
-                      <input
-                        className={`${fieldCls} font-mono text-[12px]`}
-                        placeholder="#anchor-id"
-                        spellCheck={false}
-                        value={String(editor.getAttributes("heading").anchor ?? "")}
-                        onChange={(event) =>
-                          editor.commands.updateAttributes("heading", {
-                            anchor: event.target.value.replace(/^#/, "") || null,
-                          })
-                        }
-                      />
-                      <select
-                        className="h-7 w-full cursor-pointer rounded-md border border-fd-border bg-fd-background px-1.5 text-[12.5px] text-fd-foreground outline-none focus-visible:border-fd-ring"
-                        value={String(editor.getAttributes("heading").toc ?? "")}
-                        onChange={(event) =>
-                          editor.commands.updateAttributes("heading", {
-                            toc: event.target.value || null,
-                          })
-                        }
-                      >
-                        <option value="">In the TOC (default)</option>
-                        <option value="hide">Hidden from TOC</option>
-                        <option value="only">TOC only</option>
-                      </select>
-                    </div>
-                  )}
-                </Popover.Popup>
-              </Popover.Positioner>
-            </Popover.Portal>
-          </Popover.Root>
+          <Picker
+            items={TURN_INTO}
+            value={TURN_INTO.find((item) => item.value === state.block)}
+            onPick={(item) => run(item.run)}
+            open={turnIntoOpen}
+            onOpenChange={setTurnIntoOpen}
+            ariaLabel="Block type"
+            triggerCls={ghostSelectCls}
+            container={panelContainer}
+            lead={(item) => (
+              <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
+                <item.icon size={15} />
+              </span>
+            )}
+            footer={
+              state.block.startsWith("h") ? (
+                <div className="flex flex-col gap-1.5 border-t border-fd-border p-2">
+                  <input
+                    className={`${fieldCls} font-mono text-[12px]`}
+                    placeholder="#anchor-id"
+                    spellCheck={false}
+                    value={String(editor.getAttributes("heading").anchor ?? "")}
+                    onChange={(event) =>
+                      editor.commands.updateAttributes("heading", {
+                        anchor: event.target.value.replace(/^#/, "") || null,
+                      })
+                    }
+                  />
+                  <select
+                    className="h-7 w-full cursor-pointer rounded-md border border-fd-border bg-fd-background px-1.5 text-[12.5px] text-fd-foreground outline-none focus-visible:border-fd-ring"
+                    value={String(editor.getAttributes("heading").toc ?? "")}
+                    onChange={(event) =>
+                      editor.commands.updateAttributes("heading", {
+                        toc: event.target.value || null,
+                      })
+                    }
+                  >
+                    <option value="">In the TOC (default)</option>
+                    <option value="hide">Hidden from TOC</option>
+                    <option value="only">TOC only</option>
+                  </select>
+                </div>
+              ) : undefined
+            }
+          >
+            {TURN_INTO.find((item) => item.value === state.block)?.label ?? "Paragraph"}
+            <ChevronDown size={13} className="text-fd-muted-foreground" />
+          </Picker>
           <span className="mx-0.5 h-4 w-px bg-fd-border" />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={15} />

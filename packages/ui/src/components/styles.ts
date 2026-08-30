@@ -19,9 +19,11 @@ export const popupCls =
 
 /* hover/highlight react instantly: a fade would lag menu scrubbing */
 export const itemCls =
-  "flex cursor-default items-center gap-2 rounded-md py-[5px] pr-2 pl-1.5 select-none text-fd-popover-foreground hover:bg-fd-accent hover:text-fd-accent-foreground data-[highlighted]:bg-fd-accent data-[highlighted]:text-fd-accent-foreground";
+  "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 select-none text-fd-popover-foreground hover:bg-fd-accent hover:text-fd-accent-foreground data-[highlighted]:bg-fd-accent data-[highlighted]:text-fd-accent-foreground";
 
-export const itemIndicatorCls = "inline-flex w-4 shrink-0 text-fd-foreground";
+/* the check sits at the item's end: a leading check would indent only the
+ * selected label and break the left alignment of the list */
+export const itemIndicatorCls = "ms-auto inline-flex shrink-0 ps-2 text-fd-foreground";
 
 /** icon toolbar button: pointer chrome, never part of the tab order.
  * Hover and the toggled state are visibly different: hover is the accent
