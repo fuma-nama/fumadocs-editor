@@ -19,13 +19,14 @@ describe("JSX flow siblings", () => {
   test("an edited <Files> tree serializes without blank lines between rows", () => {
     const { doc, snapshot } = parseMdxToDoc(source);
 
-    // Rename a nested <File />, forcing the block to be re-serialized instead
-    // of emitted verbatim from the snapshot.
-    const files = doc.content![0];
-    const folder = files.content![0];
+    // Rename a nested <File /> in a clone (editor edits never mutate the
+    // parsed doc), forcing the block to be re-serialized instead of emitted
+    // verbatim from the snapshot.
+    const edited = structuredClone(doc);
+    const folder = edited.content![0].content![0];
     folder.content![0].attrs!.attributes[0].value = "layout.ts";
 
-    const output = serializeDocToMdx(doc, snapshot);
+    const output = serializeDocToMdx(edited, snapshot);
 
     expect(output).toBe(`<Files>
   <Folder name="app">
