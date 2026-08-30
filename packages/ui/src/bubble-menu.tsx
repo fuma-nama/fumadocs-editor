@@ -39,6 +39,7 @@ import {
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
+import { updateAtomAttributes } from "./components/attributes";
 import { OPEN_COMPONENT_MENU } from "./components/caret-policy";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
@@ -357,13 +358,13 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
         placeholder="Image source…"
         value={(attrs.src as string) ?? ""}
         spellCheck={false}
-        onChange={(event) => editor.commands.updateAttributes("image", { src: event.target.value })}
+        onChange={(event) => updateAtomAttributes(editor, "image", { src: event.target.value })}
       />
       <input
         className={cn(fieldCls, "w-36")}
         placeholder="Alt text"
         value={(attrs.alt as string) ?? ""}
-        onChange={(event) => editor.commands.updateAttributes("image", { alt: event.target.value })}
+        onChange={(event) => updateAtomAttributes(editor, "image", { alt: event.target.value })}
       />
       {media && (
         <>
@@ -384,7 +385,7 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
               const file = event.target.files?.[0];
               if (!file) return;
               void media.upload(file).then((src) => {
-                if (!editor.isDestroyed) editor.commands.updateAttributes("image", { src });
+                if (!editor.isDestroyed) updateAtomAttributes(editor, "image", { src });
               });
               event.target.value = "";
             }}
@@ -412,7 +413,7 @@ function FrontmatterPanel({ editor }: { editor: Editor }) {
       value={value}
       spellCheck={false}
       onChange={(event) =>
-        editor.commands.updateAttributes("frontmatter", { value: event.target.value })
+        updateAtomAttributes(editor, "frontmatter", { value: event.target.value })
       }
     />
   );
@@ -444,14 +445,22 @@ export function EditorBubble({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
+      const bubble = bubbleState(current.state, specs);
+      const doc = current.state.doc;
       return {
-        ...bubbleState(current.state, specs),
+        ...bubble,
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
         code: current.isActive("code"),
         link: current.isActive("link") ? String(current.getAttributes("link").href ?? "") : null,
         block: activeBlock(current),
+        // the panels render these: without them in the snapshot, attribute
+        // edits don't re-render and React resets the controlled inputs'
+        // caret on every keystroke
+        componentAttrs: bubble.active ? (doc.nodeAt(bubble.active.pos)?.attrs.attributes ?? null) : null,
+        atomAttrs: bubble.atom ? (doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
+        headingAttrs: bubble.format ? current.getAttributes("heading") : null,
       };
     },
   });

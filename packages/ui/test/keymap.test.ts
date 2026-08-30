@@ -573,3 +573,22 @@ describe("leaf component click", () => {
     expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
   });
 });
+
+describe("panel attribute edits", () => {
+  test("keep a childless component node-selected (setNodeMarkup replaces it whole)", async () => {
+    const { setComponentAttributes } = await import("../src/components/attributes");
+    const { editor } = makeEditor('<GithubInfo owner="a" repo="b" />\n');
+    let pos = -1;
+    editor.state.doc.descendants((node, at) => {
+      if (node.attrs?.name === "GithubInfo") pos = at;
+    });
+    editor.commands.setNodeSelection(pos);
+    setComponentAttributes(editor, pos, [
+      { type: "mdxJsxAttribute", name: "owner", value: "fuma" },
+      { type: "mdxJsxAttribute", name: "repo", value: "fumadocs" },
+    ]);
+    const selection = editor.state.selection;
+    expect(selection).toBeInstanceOf(NodeSelection);
+    expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
+  });
+});
