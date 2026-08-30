@@ -18,10 +18,12 @@ import {
   ListTree,
   Megaphone,
   PanelTop,
+  Plus,
   Rows3,
   SquareStack,
   Table2,
   TriangleAlert,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Select } from "@base-ui/react/select";
@@ -279,19 +281,175 @@ function Include({ props, children }: ComponentRenderProps) {
   );
 }
 
-function TypeTable({ props }: ComponentRenderProps) {
+type TypeTableRows = Record<string, Record<string, unknown>>;
+
+function typeTableRows(value: unknown): TypeTableRows | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  for (const entry of Object.values(value)) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
+  }
+  return value as TypeTableRows;
+}
+
+const typeCellCls =
+  "w-full bg-transparent outline-none placeholder:text-fd-muted-foreground/50 focus-visible:bg-fd-accent/50";
+
+/** one editable cell of the type table */
+function TypeCell({
+  value,
+  placeholder,
+  mono,
+  onChange,
+}: {
+  value: unknown;
+  placeholder: string;
+  mono?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      className={cn(typeCellCls, mono && "font-mono text-[12px]")}
+      value={typeof value === "string" ? value : (value?.toString() ?? "")}
+      placeholder={placeholder}
+      spellCheck={false}
+      tabIndex={-1}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+/**
+ * The `type` object edited in place as the table it renders as: one row per
+ * property, cells for the fields fumadocs' TypeTable reads. Unknown fields
+ * on a property ride along untouched; a dynamic (non-literal) expression
+ * keeps the summary card and stays source-editable via the ⋯ menu.
+ */
+function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
+  const rows =
+    typeTableRows(literals.type) ?? (props.type === undefined ? ({} as TypeTableRows) : null);
+
+  if (!rows) {
+    return (
+      <div
+        className="fde-typetable flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
+        contentEditable={false}
+      >
+        <Table2 size={16} className="shrink-0 text-fd-muted-foreground" />
+        <div className="min-w-0">
+          <p className="font-medium">TypeTable</p>
+          <p className="truncate font-mono text-[12px] text-fd-muted-foreground">
+            dynamic type={"{…}"} — edit the expression via the ⋯ menu
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const entries = Object.entries(rows);
+  // rebuild preserving order; rename swaps the key in place
+  const write = (mutate: (next: [string, Record<string, unknown>][]) => void) => {
+    const next = entries.map(([key, def]) => [key, def] as [string, Record<string, unknown>]);
+    mutate(next);
+    setLiteral("type", Object.fromEntries(next));
+  };
+  const patch = (index: number, field: string, value: string | boolean) =>
+    write((next) => {
+      const def = { ...next[index][1] };
+      if (value === "" || value === false) delete def[field];
+      else def[field] = value;
+      next[index][1] = def;
+    });
+
+  const headCls = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground";
+  const cellCls = "border-t border-fd-border px-3 py-1.5";
+
   return (
     <div
-      className="fde-typetable flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
+      className="fde-typetable overflow-x-auto rounded-xl border border-fd-border bg-fd-card text-[13px]"
       contentEditable={false}
     >
-      <Table2 size={16} className="shrink-0 text-fd-muted-foreground" />
-      <div className="min-w-0">
-        <p className="font-medium">TypeTable</p>
-        <p className="truncate font-mono text-[12px] text-fd-muted-foreground">
-          {props.type ? "type={…}" : "no type set — edit via the ⋯ menu"}
-        </p>
-      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={headCls}>Prop</th>
+            <th className={headCls}>Type</th>
+            <th className={headCls}>Default</th>
+            <th className={headCls}>Description</th>
+            <th className={cn(headCls, "w-0")} aria-label="Required">
+              Req
+            </th>
+            <th className="w-0" />
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(([name, def], index) => (
+            <tr key={index} className="group/row">
+              <td className={cn(cellCls, "w-[18%] min-w-28")}>
+                <TypeCell
+                  value={name}
+                  placeholder="name"
+                  mono
+                  onChange={(next) => write((rows) => (rows[index][0] = next))}
+                />
+              </td>
+              <td className={cn(cellCls, "w-[22%] min-w-32")}>
+                <TypeCell
+                  value={def.type}
+                  placeholder="string"
+                  mono
+                  onChange={(next) => patch(index, "type", next)}
+                />
+              </td>
+              <td className={cn(cellCls, "w-[15%] min-w-20")}>
+                <TypeCell
+                  value={def.default}
+                  placeholder="–"
+                  mono
+                  onChange={(next) => patch(index, "default", next)}
+                />
+              </td>
+              <td className={cellCls}>
+                <TypeCell
+                  value={def.description}
+                  placeholder="Description…"
+                  onChange={(next) => patch(index, "description", next)}
+                />
+              </td>
+              <td className={cn(cellCls, "text-center")}>
+                <input
+                  type="checkbox"
+                  aria-label={`${name} required`}
+                  className="size-3.5 cursor-pointer accent-fd-primary"
+                  tabIndex={-1}
+                  checked={def.required === true}
+                  onChange={(event) => patch(index, "required", event.target.checked)}
+                />
+              </td>
+              <td className={cn(cellCls, "pr-2 pl-0")}>
+                <button
+                  type="button"
+                  aria-label={`Remove ${name}`}
+                  className="invisible inline-flex size-5 cursor-pointer items-center justify-center rounded text-fd-muted-foreground group-hover/row:visible hover:bg-fd-accent hover:text-fd-error"
+                  tabIndex={-1}
+                  onClick={() => write((rows) => rows.splice(index, 1))}
+                >
+                  <X size={12} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
+        type="button"
+        className="flex w-full cursor-pointer items-center gap-1.5 border-t border-fd-border px-3 py-1.5 text-[12px] text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
+        tabIndex={-1}
+        onClick={() =>
+          write((rows) => rows.push([`prop${rows.length + 1}`, { type: "string" }]))
+        }
+      >
+        <Plus size={13} /> Add prop
+      </button>
     </div>
   );
 }
@@ -674,7 +832,7 @@ export const typeTableSpec: UiComponentSpec = {
         {
           type: "mdxJsxAttribute",
           name: "type",
-          value: { type: "mdxJsxAttributeValueExpression", value: "{}" },
+          value: { type: "mdxJsxAttributeValueExpression", value: "{}", literal: {} },
         },
       ],
     },

@@ -4,7 +4,7 @@ import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
 import { createContext, useContext, Fragment, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
-import { readStringProps } from "./components/attributes";
+import { readLiterals, readStringProps } from "./components/attributes";
 import { resolveSrc, type MediaProvider } from "./components/media";
 
 /**
@@ -113,7 +113,13 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
         className="relative"
         style={{ whiteSpace: "normal" }}
       >
-        <Render props={readStringProps(attributes)} selected={false} setProp={noop}>
+        <Render
+          props={readStringProps(attributes)}
+          literals={readLiterals(attributes)}
+          selected={false}
+          setProp={noop}
+          setLiteral={noop}
+        >
           <ContentHole className="fde-component-content">{children}</ContentHole>
         </Render>
       </div>

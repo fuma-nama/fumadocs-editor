@@ -2,12 +2,19 @@ import type { ComponentSpec } from "@fumadocs-editor/core";
 import type { FC, ReactNode } from "react";
 
 export interface ComponentRenderProps {
-  /** plain-string JSX attributes (e.g. Callout `type`) */
+  /** plain-string JSX attributes (e.g. Callout `type`); expressions appear
+   * as their source */
   props: Record<string, string>;
+  /** static values of expression props (e.g. TypeTable `type`); a prop
+   * missing here is dynamic and only editable as source */
+  literals: Record<string, unknown>;
   /** the editable regions: render this where content should appear */
   children: ReactNode;
   /** update a string attribute in place (for controls the renderer owns) */
   setProp: (name: string, value: string) => void;
+  /** rewrite an expression prop from a literal value (source is derived);
+   * a no-op in the static paint */
+  setLiteral: (name: string, value: unknown) => void;
   selected: boolean;
 }
 

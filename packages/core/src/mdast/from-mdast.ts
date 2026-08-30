@@ -40,6 +40,85 @@ function withMarks(node: JSONContent, marks: PMMark[]): JSONContent {
   return node;
 }
 
+/** estree node, structurally typed just enough for literal extraction */
+interface EstreeNode {
+  type: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Statically evaluate a literal-only expression (strings, numbers, booleans,
+ * null, arrays, plain objects). `undefined` means "not static": any
+ * identifier, call, spread or computed key gives up, and the attribute stays
+ * a raw expression the UI can only edit as source.
+ */
+function staticLiteral(node: EstreeNode | undefined): unknown {
+  if (!node) return undefined;
+  switch (node.type) {
+    case "Literal": {
+      const value = node.value;
+      if (value === null) return null;
+      const kind = typeof value;
+      return kind === "string" || kind === "number" || kind === "boolean" ? value : undefined;
+    }
+    case "TemplateLiteral": {
+      const expressions = node.expressions as EstreeNode[];
+      if (expressions.length > 0) return undefined;
+      let out = "";
+      for (const quasi of node.quasis as { value: { cooked?: string } }[]) {
+        if (quasi.value.cooked == null) return undefined;
+        out += quasi.value.cooked;
+      }
+      return out;
+    }
+    case "UnaryExpression": {
+      if (node.operator !== "-") return undefined;
+      const value = staticLiteral(node.argument as EstreeNode);
+      return typeof value === "number" ? -value : undefined;
+    }
+    case "ArrayExpression": {
+      const out: unknown[] = [];
+      for (const element of node.elements as (EstreeNode | null)[]) {
+        if (!element || element.type === "SpreadElement") return undefined;
+        const value = staticLiteral(element);
+        if (value === undefined) return undefined;
+        out.push(value);
+      }
+      return out;
+    }
+    case "ObjectExpression": {
+      const out: Record<string, unknown> = {};
+      for (const prop of node.properties as EstreeNode[]) {
+        if (prop.type !== "Property" || prop.computed || prop.kind !== "init") return undefined;
+        const key = prop.key as EstreeNode;
+        const name =
+          key.type === "Identifier"
+            ? (key.name as string)
+            : key.type === "Literal" && typeof key.value === "string"
+              ? key.value
+              : undefined;
+        if (name === undefined) return undefined;
+        const value = staticLiteral(prop.value as EstreeNode);
+        if (value === undefined) return undefined;
+        out[name] = value;
+      }
+      return out;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** the parsed expression inside `data.estree` (a one-statement Program) */
+function attributeExpression(value: { data?: unknown }): EstreeNode | undefined {
+  const program = (value.data as { estree?: EstreeNode } | undefined)?.estree;
+  const body = program?.body as EstreeNode[] | undefined;
+  const statement = body?.[0];
+  return statement?.type === "ExpressionStatement"
+    ? (statement.expression as EstreeNode)
+    : undefined;
+}
+
 export function cleanAttributes(
   attrs: (MdastJsxAttribute | MdastJsxExpressionAttribute)[] = [],
 ): MdxAttribute[] {
@@ -47,13 +126,18 @@ export function cleanAttributes(
     if (attr.type === "mdxJsxExpressionAttribute") {
       return { type: "mdxJsxExpressionAttribute", value: attr.value };
     }
+    if (attr.value == null || typeof attr.value === "string") {
+      return { type: "mdxJsxAttribute", name: attr.name, value: attr.value ?? null };
+    }
+    const literal = staticLiteral(attributeExpression(attr.value));
     return {
       type: "mdxJsxAttribute",
       name: attr.name,
-      value:
-        attr.value == null || typeof attr.value === "string"
-          ? (attr.value ?? null)
-          : { type: "mdxJsxAttributeValueExpression", value: attr.value.value },
+      value: {
+        type: "mdxJsxAttributeValueExpression",
+        value: attr.value.value,
+        ...(literal !== undefined && { literal }),
+      },
     };
   });
 }
