@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
   useEditorTheme,
   fumadocsUiComponents,
+  type FileProvider,
   type MdxEditorRef,
   type MediaProvider,
   type SyncStatus,
@@ -144,6 +145,22 @@ function Playground() {
     };
   }, [active, transport]);
 
+  // the mirrored files double as reference targets (include, page links);
+  // paths are written relative to the open document (all docs sit at the root)
+  const fileProvider = useMemo<FileProvider | undefined>(() => {
+    if (!transport) return undefined;
+    return {
+      list: async () => {
+        const entries = await transport.list();
+        const paths: string[] = [];
+        for (const entry of entries) {
+          if (entry.path !== active) paths.push(`./${entry.path}`);
+        }
+        return paths;
+      },
+    };
+  }, [transport, active]);
+
   // Cmd-S and leaving the tab flush the pending autosave
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -218,6 +235,7 @@ function Playground() {
               }}
               ref={editorRef}
               media={media}
+              files={fileProvider}
               sync={
                 active != null
                   ? {

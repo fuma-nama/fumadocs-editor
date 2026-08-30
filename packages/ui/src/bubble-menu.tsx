@@ -8,6 +8,7 @@ import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
   Bold,
@@ -34,6 +35,7 @@ import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
 import { Picker } from "./components/picker";
+import { useEditorProviders } from "./components/providers";
 import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
@@ -184,7 +186,12 @@ function MarkButton({
 const fieldCls =
   "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
 
-/** URL editor for the link mark; portalled into the bubble's parent. */
+/**
+ * URL editor for the link mark; portalled into the bubble's parent. With a
+ * FileProvider the input autocompletes the workspace's pages — the
+ * conventional way to link between documents — while staying free-form for
+ * external URLs.
+ */
 function LinkControl({
   editor,
   href,
@@ -194,15 +201,23 @@ function LinkControl({
   href: string | null;
   container: HTMLElement | undefined;
 }) {
+  const { files } = useEditorProviders();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [paths, setPaths] = useState<string[]>([]);
+  // Enter applies the typed draft only while no suggestion is highlighted;
+  // a highlighted one commits through Base UI as an item-press instead
+  const highlighted = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (open) setDraft(href ?? "");
   }, [open, href]);
+  useEffect(() => {
+    if (open && files) void files.list().then(setPaths);
+  }, [open, files]);
 
-  const apply = () => {
-    const url = draft.trim();
-    if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  const apply = (url: string) => {
+    const target = url.trim();
+    if (target) editor.chain().focus().extendMarkRange("link").setLink({ href: target }).run();
     else editor.chain().focus().extendMarkRange("link").unsetLink().run();
     setOpen(false);
   };
@@ -219,18 +234,43 @@ function LinkControl({
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="start" className="z-50">
           <Popover.Popup className={cn(popupCls, "flex w-64 items-center gap-2 p-2")}>
-            <input
-              className={fieldCls}
-              placeholder="https://… or ./page.mdx"
+            <Autocomplete.Root
+              items={paths}
               value={draft}
-              spellCheck={false}
-              autoFocus
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") apply();
-                if (event.key === "Escape") setOpen(false);
+              onValueChange={(value, details) => {
+                setDraft(value);
+                if (details.reason === "item-press") apply(value);
               }}
-            />
+              onItemHighlighted={(value) => {
+                highlighted.current = value;
+              }}
+            >
+              <Autocomplete.Input
+                className={fieldCls}
+                placeholder="https://… or ./page.mdx"
+                spellCheck={false}
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && highlighted.current == null) apply(draft);
+                  if (event.key === "Escape") setOpen(false);
+                }}
+              />
+              <Autocomplete.Portal container={container}>
+                <Autocomplete.Positioner sideOffset={6} className="z-50">
+                  <Autocomplete.Popup
+                    className={cn(popupCls, "max-h-64 w-(--anchor-width) overflow-y-auto")}
+                  >
+                    <Autocomplete.List>
+                      {(path: string) => (
+                        <Autocomplete.Item key={path} value={path} className={itemCls}>
+                          {path}
+                        </Autocomplete.Item>
+                      )}
+                    </Autocomplete.List>
+                  </Autocomplete.Popup>
+                </Autocomplete.Positioner>
+              </Autocomplete.Portal>
+            </Autocomplete.Root>
             {href != null && (
               <button
                 type="button"

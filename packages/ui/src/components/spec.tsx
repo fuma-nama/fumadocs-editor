@@ -8,6 +8,9 @@ export interface ComponentRenderProps {
   children: ReactNode;
   /** update a string attribute in place (for controls the renderer owns) */
   setProp: (name: string, value: string) => void;
+  /** replace the text of one of the component's regions (picker controls);
+   * a no-op in the static paint */
+  setRegionText: (region: string, text: string) => void;
   selected: boolean;
 }
 

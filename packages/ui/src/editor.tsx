@@ -16,7 +16,8 @@ import {
 import { StaticMdx } from "./static-mdx";
 import { parseDocCached } from "./doc-cache";
 import type { SerializeFn } from "./live-editor";
-import type { MediaProvider } from "./components/media";
+import type { FileProvider, MediaProvider } from "./components/media";
+import { ProvidersContext } from "./components/providers";
 import type { UiComponentSpec } from "./components/spec";
 import { focusRing } from "./components/styles";
 import { useEditorTheme, type EditorTheme } from "./theme";
@@ -80,6 +81,8 @@ export interface MdxEditorProps {
   sync?: SyncIndicatorProps;
   /** where uploads go and how document srcs resolve for display */
   media?: MediaProvider;
+  /** what the document can reference: include paths, page links */
+  files?: FileProvider;
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -140,6 +143,7 @@ export function MdxEditor({
   theme,
   sync,
   media,
+  files,
   className,
   ref,
 }: MdxEditorProps) {
@@ -332,7 +336,10 @@ export function MdxEditor({
     );
   }
 
+  const providers = useMemo(() => ({ media, files }), [media, files]);
+
   return (
+    <ProvidersContext.Provider value={providers}>
     <div
       data-fde-root=""
       className={cn(
@@ -425,5 +432,6 @@ export function MdxEditor({
         </div>
       )}
     </div>
+    </ProvidersContext.Provider>
   );
 }

@@ -66,6 +66,24 @@ function makeComponentView(specs: SpecMap) {
     const Render = spec.render;
     const setProp = (propName: string, value: string) =>
       updateAttributes({ attributes: setStringProp(attributes, propName, value) });
+    const setRegionText = (regionName: string, text: string) => {
+      const pos = typeof getPos === "function" ? getPos() : null;
+      if (typeof pos !== "number") return;
+      const current = editor.state.doc.nodeAt(pos);
+      if (!current) return;
+      let done = false;
+      current.forEach((child, offset) => {
+        if (done || child.attrs.region !== regionName) return;
+        done = true;
+        const from = pos + 1 + offset + 1;
+        const tr = editor.state.tr.replaceWith(
+          from,
+          from + child.content.size,
+          text ? editor.schema.text(text) : [],
+        );
+        editor.view.dispatch(tr);
+      });
+    };
 
     return (
       <NodeViewWrapper
@@ -73,7 +91,12 @@ function makeComponentView(specs: SpecMap) {
         data-component={name}
         data-selected={ringed || undefined}
       >
-        <Render props={readStringProps(attributes)} selected={selected} setProp={setProp}>
+        <Render
+          props={readStringProps(attributes)}
+          selected={selected}
+          setProp={setProp}
+          setRegionText={setRegionText}
+        >
           <NodeViewContent className="fde-component-content" />
         </Render>
       </NodeViewWrapper>
