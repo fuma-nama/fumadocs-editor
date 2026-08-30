@@ -147,9 +147,12 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     },
     changed() {
       if (closed || conflict) return;
-      dirty = true;
+      // compare now (cheap with an incremental serializer): a change that
+      // lands back on the synced text — a clean external merge's own update
+      // event, or an undo — never even reports dirty
+      dirty = getText() !== lastSynced;
       emit();
-      schedule();
+      if (dirty) schedule();
     },
     flush: () => save(),
     async keepMine() {
