@@ -34,7 +34,8 @@ import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
 import { Picker } from "./components/picker";
-import { ghostSelectCls, iconButtonCls, itemCls, popupCls, popupSurfaceCls } from "./components/styles";
+import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
+import { cn } from "./utils/cn";
 
 type Chain = ReturnType<Editor["chain"]>;
 
@@ -217,7 +218,7 @@ function LinkControl({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="start" className="z-50">
-          <Popover.Popup className={`${popupSurfaceCls} flex w-64 items-center gap-2 p-2`}>
+          <Popover.Popup className={cn(popupCls, "flex w-64 items-center gap-2 p-2")}>
             <input
               className={fieldCls}
               placeholder="https://… or ./page.mdx"
@@ -273,7 +274,7 @@ function TableControl({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="start" className="z-50">
-          <Popover.Popup className={`${popupCls} flex w-44 flex-col`}>
+          <Popover.Popup className={cn(popupCls, "flex w-44 flex-col")}>
             {TABLE_OPS.map((op) => (
               <button
                 key={op.label}
@@ -302,14 +303,14 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   return (
     <div className="flex items-center gap-1.5 p-0.5">
       <input
-        className={`${fieldCls} w-52`}
+        className={cn(fieldCls, "w-52")}
         placeholder="Image source…"
         value={(attrs.src as string) ?? ""}
         spellCheck={false}
         onChange={(event) => editor.commands.updateAttributes("image", { src: event.target.value })}
       />
       <input
-        className={`${fieldCls} w-36`}
+        className={cn(fieldCls, "w-36")}
         placeholder="Alt text"
         value={(attrs.alt as string) ?? ""}
         onChange={(event) => editor.commands.updateAttributes("image", { alt: event.target.value })}
@@ -462,7 +463,7 @@ export function EditorBubble({
               state.block.startsWith("h") ? (
                 <div className="flex flex-col gap-1.5 border-t border-fd-border p-2">
                   <input
-                    className={`${fieldCls} font-mono text-[12px]`}
+                    className={cn(fieldCls, "font-mono text-[12px]")}
                     placeholder="#anchor-id"
                     spellCheck={false}
                     value={String(editor.getAttributes("heading").anchor ?? "")}
@@ -541,7 +542,7 @@ export function EditorBubble({
             </Popover.Trigger>
             <Popover.Portal container={panelContainer}>
               <Popover.Positioner sideOffset={6} align="end" className="z-50">
-                <Popover.Popup className={`${popupCls} flex w-56 flex-col`}>
+                <Popover.Popup className={cn(popupCls, "flex w-56 flex-col")}>
                   <BlockPanel
                     editor={editor}
                     specs={specs}
