@@ -15,12 +15,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function mount(props: MdxEditorProps) {
+function render(props: MdxEditorProps) {
   host = document.body.appendChild(document.createElement("div"));
   root = createRoot(host);
   act(() => root!.render(createElement(MdxEditor, props)));
-  const dom = host.querySelector(".ProseMirror") as HTMLElement & { editor: Editor };
-  return { editor: dom.editor, dom };
+}
+
+/** progressive mount: the idle fallback timer hydrates the live editor */
+function hydrate() {
+  act(() => void vi.advanceTimersByTime(250));
+  let dom: (HTMLElement & { editor?: Editor }) | undefined;
+  for (const el of host!.querySelectorAll<HTMLElement & { editor?: Editor }>(".ProseMirror")) {
+    if (el.editor) dom = el as HTMLElement & { editor: Editor };
+  }
+  return { editor: dom!.editor!, dom: dom! };
+}
+
+function mount(props: MdxEditorProps) {
+  render(props);
+  return hydrate();
 }
 
 test("onMarkdownChange is debounced and serializes the edit", () => {
@@ -55,6 +68,32 @@ test("blur flushes the pending serialize so no edit is lost", () => {
   // the debounce timer was cancelled: no duplicate report later
   act(() => void vi.advanceTimersByTime(1000));
   expect(onChange).toHaveBeenCalledTimes(1);
+});
+
+test("the static view paints first and captures keystrokes for replay", () => {
+  vi.useFakeTimers();
+  const onChange = vi.fn<(markdown: string) => void>();
+  render({ defaultValue: "Hello.\n", onMarkdownChange: onChange });
+
+  // before hydration: the static paint is up, no live editor exists
+  const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement & {
+    editor?: unknown;
+  };
+  expect(staticView.editor).toBeUndefined();
+  expect(staticView.textContent).toContain("Hello.");
+
+  // type while only the static view is mounted
+  const container = staticView.parentElement!;
+  act(() => {
+    container.dispatchEvent(new KeyboardEvent("keydown", { key: "H", bubbles: true }));
+    container.dispatchEvent(new KeyboardEvent("keydown", { key: "i", bubbles: true }));
+  });
+
+  const { editor } = hydrate();
+  expect(editor.state.doc.textContent).toBe("HiHello.");
+
+  act(() => void vi.advanceTimersByTime(300));
+  expect(onChange.mock.calls.at(-1)?.[0]).toContain("HiHello.");
 });
 
 test("unedited document round-trips byte-identical through the debounce", () => {
