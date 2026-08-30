@@ -10,6 +10,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
+    "./merge": "./dist/merge.js",
     "./node": "./dist/node.js",
     "./vite": "./dist/vite.js",
     "./package.json": "./package.json"

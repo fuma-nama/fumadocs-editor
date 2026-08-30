@@ -1,5 +1,3 @@
-export { mergeRemote } from "./merge";
-export type { MergeOp, MergeResult } from "./merge";
 export { wsTransport } from "./client";
 export type { WsTransport } from "./client";
 export { createFileSession } from "./session";
