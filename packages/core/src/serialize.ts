@@ -7,8 +7,39 @@ import type { DocSnapshot, SnapshotBlock } from "./document";
 const EMPTY_REGISTRY = createRegistry();
 
 /** a snapshot block's lossless-round-trip serialization, computed once */
-function blockNormalized(block: SnapshotBlock, registry: ComponentRegistry): string {
+export function blockNormalized(block: SnapshotBlock, registry: ComponentRegistry): string {
   return (block._normalized ??= tryNormalize(block.node, registry) ?? block.source);
+}
+
+/**
+ * Match per-block normalized texts against the snapshot's blocks: the block
+ * identity every consumer (serializer, sync merge) must agree on. Each
+ * snapshot block is used at most once; runs of consecutive blocks are kept
+ * together so original inter-block whitespace can be reused.
+ */
+export function matchBlocks(normalized: string[], snapshot: DocSnapshot): (number | null)[] {
+  const byNormalized = new Map<string, number[]>();
+  snapshot.blocks.forEach((block, index) => {
+    const key = blockNormalized(block, snapshot.registry);
+    const list = byNormalized.get(key);
+    if (list) list.push(index);
+    else byNormalized.set(key, [index]);
+  });
+
+  const used = new Set<number>();
+  const matches: (number | null)[] = [];
+  let prevMatch: number | null = null;
+
+  for (const text of normalized) {
+    const candidates = (byNormalized.get(text) ?? []).filter((i) => !used.has(i));
+    // prefer the block that originally followed the previous match
+    const pick =
+      candidates.find((i) => prevMatch != null && i === prevMatch + 1) ?? candidates[0] ?? null;
+    if (pick != null) used.add(pick);
+    matches.push(pick);
+    prevMatch = pick;
+  }
+  return matches;
 }
 
 export function tryNormalize(
@@ -45,33 +76,11 @@ export function serializeDocToMdx(
  * byte-for-byte from their original source.
  */
 export function assembleMdx(normalized: string[], snapshot?: DocSnapshot): string {
-  const byNormalized = new Map<string, number[]>();
-  snapshot?.blocks.forEach((block, index) => {
-    const key = blockNormalized(block, snapshot.registry);
-    const list = byNormalized.get(key);
-    if (list) list.push(index);
-    else byNormalized.set(key, [index]);
-  });
-
-  const used = new Set<number>();
+  const matches = snapshot ? matchBlocks(normalized, snapshot) : normalized.map(() => null);
   const parts: { text: string; index: number | null }[] = [];
-  let prevMatch: number | null = null;
-
-  for (const text of normalized) {
-    const candidates = (byNormalized.get(text) ?? []).filter((i) => !used.has(i));
-    // prefer the block that originally followed the previous match, so
-    // original inter-block whitespace can be reused
-    const pick =
-      candidates.find((i) => prevMatch != null && i === prevMatch + 1) ?? candidates[0] ?? null;
-
-    if (pick != null) {
-      used.add(pick);
-      parts.push({ text: snapshot!.blocks[pick].source, index: pick });
-      prevMatch = pick;
-    } else {
-      parts.push({ text, index: null });
-      prevMatch = null;
-    }
+  for (let i = 0; i < normalized.length; i++) {
+    const index = matches[i];
+    parts.push(index != null ? { text: snapshot!.blocks[index].source, index } : { text: normalized[i], index: null });
   }
 
   const filtered = parts.filter((part) => part.text !== "");
