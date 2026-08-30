@@ -262,7 +262,11 @@ function LinkControl({
                   >
                     <Autocomplete.List>
                       {(path: string) => (
-                        <Autocomplete.Item key={path} value={path} className={itemCls}>
+                        <Autocomplete.Item
+                          key={path}
+                          value={path}
+                          className={cn(itemCls, "font-mono text-[12px]")}
+                        >
                           {path}
                         </Autocomplete.Item>
                       )}

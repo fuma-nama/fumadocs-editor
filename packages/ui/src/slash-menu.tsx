@@ -39,6 +39,8 @@ export interface SlashItem {
   title: string;
   group: string;
   icon?: ReactNode;
+  /** file paths render in the code face */
+  mono?: boolean;
   run: (editor: Editor, range: Range) => void;
 }
 
@@ -171,12 +173,87 @@ export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
             <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
               {item.icon}
             </span>
-            <span>{item.title}</span>
+            <span className={cn("truncate", item.mono && "font-mono text-[12px]")}>
+              {item.title}
+            </span>
           </button>
         </div>
       ))}
     </div>
   );
+}
+
+/**
+ * The Suggestion `render` implementation behind every trigger-driven popup
+ * (`/` inserts, `[[` page links): a SlashPopup mounted inside the editor root
+ * — a body mount would escape the resolved theme scope (position: fixed, so
+ * the root's overflow-hidden cannot clip it) — with list keyboard handling.
+ */
+export function suggestionRender(): {
+  onStart: (props: SuggestionProps<SlashItem, SlashItem>) => void;
+  onUpdate: (props: SuggestionProps<SlashItem, SlashItem>) => void;
+  onKeyDown: (props: { event: KeyboardEvent }) => boolean;
+  onExit: () => void;
+} {
+  let renderer: ReactRenderer<unknown, PopupProps> | null = null;
+  let selected = 0;
+  let hidden = false;
+  let current: SuggestionProps<SlashItem, SlashItem> | null = null;
+
+  const popupProps = (): PopupProps => ({
+    items: current?.items ?? [],
+    selected,
+    rect: current?.clientRect?.() ?? null,
+    onSelect: (index) => {
+      const item = current?.items[index];
+      if (item) current?.command(item);
+    },
+  });
+
+  return {
+    onStart(props) {
+      current = props;
+      selected = 0;
+      hidden = false;
+      renderer = new ReactRenderer(SlashPopup, {
+        editor: props.editor,
+        props: popupProps(),
+      });
+      const host = props.editor.view.dom.closest("[data-fde-root]") ?? document.body;
+      host.appendChild(renderer.element);
+    },
+    onUpdate(props) {
+      current = props;
+      if (selected >= props.items.length) selected = 0;
+      renderer?.updateProps(popupProps());
+    },
+    onKeyDown({ event }) {
+      if (!current || hidden) return false;
+      const count = current.items.length;
+      if (event.key === "Escape") {
+        hidden = true;
+        renderer?.element.setAttribute("hidden", "");
+        return true;
+      }
+      if (count === 0) return false;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        selected = (selected + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
+        renderer?.updateProps(popupProps());
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        current.command(current.items[selected]);
+        return true;
+      }
+      return false;
+    },
+    onExit() {
+      renderer?.element.remove();
+      renderer?.destroy();
+      renderer = null;
+      current = null;
+    },
+  };
 }
 
 /** the full insert list: block types plus registered top-level components */
@@ -246,70 +323,7 @@ export function slashMenu(specs: UiComponentSpec[], media?: MediaProvider): Exte
             return q ? pool.filter((item) => item.title.toLowerCase().includes(q)) : pool;
           },
           command: ({ editor, range, props }) => props.run(editor, range),
-          render: () => {
-            let renderer: ReactRenderer<unknown, PopupProps> | null = null;
-            let selected = 0;
-            let hidden = false;
-            let current: SuggestionProps<SlashItem, SlashItem> | null = null;
-
-            const popupProps = (): PopupProps => ({
-              items: current?.items ?? [],
-              selected,
-              rect: current?.clientRect?.() ?? null,
-              onSelect: (index) => {
-                const item = current?.items[index];
-                if (item) current?.command(item);
-              },
-            });
-
-            return {
-              onStart(props) {
-                current = props;
-                selected = 0;
-                hidden = false;
-                renderer = new ReactRenderer(SlashPopup, {
-                  editor: props.editor,
-                  props: popupProps(),
-                });
-                // inside the editor root, like every floating surface: a body
-                // mount escapes the resolved theme scope (it stays position:
-                // fixed, so the root's overflow-hidden cannot clip it)
-                const host = props.editor.view.dom.closest("[data-fde-root]") ?? document.body;
-                host.appendChild(renderer.element);
-              },
-              onUpdate(props) {
-                current = props;
-                if (selected >= props.items.length) selected = 0;
-                renderer?.updateProps(popupProps());
-              },
-              onKeyDown({ event }) {
-                if (!current || hidden) return false;
-                const count = current.items.length;
-                if (event.key === "Escape") {
-                  hidden = true;
-                  renderer?.element.setAttribute("hidden", "");
-                  return true;
-                }
-                if (count === 0) return false;
-                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                  selected = (selected + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
-                  renderer?.updateProps(popupProps());
-                  return true;
-                }
-                if (event.key === "Enter" || event.key === "Tab") {
-                  current.command(current.items[selected]);
-                  return true;
-                }
-                return false;
-              },
-              onExit() {
-                renderer?.element.remove();
-                renderer?.destroy();
-                renderer = null;
-                current = null;
-              },
-            };
-          },
+          render: suggestionRender,
         }),
       ];
     },

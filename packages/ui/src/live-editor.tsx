@@ -14,7 +14,7 @@ import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
-import { fileSuggest } from "./components/file-suggest";
+import { fileSuggest, linkSuggest } from "./components/file-suggest";
 import type { FileProvider, MediaProvider } from "./components/media";
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
@@ -57,7 +57,7 @@ export function LiveEditor({
       imageExtension(media),
       ...componentExtensions(components),
       slashMenu(components, media),
-      ...(files ? [fileSuggest(specs, files)] : []),
+      ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
     ],
     [components, media, files, specs],
   );

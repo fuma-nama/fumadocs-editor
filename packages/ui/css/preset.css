@@ -149,12 +149,19 @@
   margin-top: 1.2em;
 }
 
+/* Links must read as links at rest — with the neutral theme, `fd-primary` is
+ * nearly the foreground colour, so the underline carries the declaration:
+ * clearly visible always, full-strength on hover. */
 .fde-content a {
   color: var(--color-fd-primary);
   text-decoration: underline;
-  text-decoration-color: var(--color-fd-border);
-  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, var(--color-fd-primary) 45%, transparent);
+  text-underline-offset: 3px;
   font-weight: 500;
+}
+
+.fde-content a:hover {
+  text-decoration-color: var(--color-fd-primary);
 }
 
 .fde-content code {
