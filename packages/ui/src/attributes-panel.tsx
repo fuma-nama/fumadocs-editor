@@ -4,6 +4,7 @@ import { Switch } from "@base-ui/react/switch";
 import { Check, ChevronDown } from "lucide-react";
 import type { MdxAttribute, PropField } from "@fumadocs-editor/core/extensions";
 import { focusRing, itemCls, itemIndicatorCls, popupCls } from "./components/styles";
+import { useEditorPortal } from "./utils/portal";
 
 const propInputCls =
   "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
@@ -26,6 +27,7 @@ export function PropControl({
   onChange: (value: string) => void;
 }) {
   const label = field.label ?? field.name;
+  const { anchorRef, container } = useEditorPortal();
 
   if (field.type === "enum") {
     const items = (field.options ?? []).map((option) => ({ value: option, label: option }));
@@ -38,11 +40,11 @@ export function PropControl({
           value={current}
           onValueChange={(next) => onChange(next as string)}
         >
-          <Select.Trigger className={propSelectCls}>
+          <Select.Trigger ref={anchorRef} className={propSelectCls}>
             <Select.Value />
             <ChevronDown size={13} className="shrink-0 text-fd-muted-foreground" />
           </Select.Trigger>
-          <Select.Portal>
+          <Select.Portal container={container}>
             <Select.Positioner sideOffset={4} alignItemWithTrigger={false}>
               <Select.Popup className={popupCls}>
                 {items.map((item) => (

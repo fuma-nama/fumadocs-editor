@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
+import { useEditorPortal } from "./utils/portal";
 import { NodeSelection } from "@tiptap/pm/state";
 import { COMPONENT_NODE, type MdxAttribute } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
@@ -46,6 +47,7 @@ export function BlockMenu({
 
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const { anchorRef, container } = useEditorPortal();
 
   // place the handle at the active component's top-right corner
   useEffect(() => {
@@ -84,7 +86,10 @@ export function BlockMenu({
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
-        ref={buttonRef}
+        ref={(node: HTMLButtonElement | null) => {
+          buttonRef.current = node;
+          anchorRef(node);
+        }}
         aria-label={`${spec.title ?? spec.name} options`}
         className={`fde-block-handle absolute z-[3] inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground data-[popup-open]:bg-fd-accent ${focusRing}`}
         draggable
@@ -117,7 +122,7 @@ export function BlockMenu({
       >
         <MoreHorizontal size={15} />
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end" className="z-50">
           <Popover.Popup className={`${popupCls} flex w-56 flex-col`}>
             <BlockPanel

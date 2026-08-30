@@ -334,6 +334,7 @@ export function MdxEditor({
 
   return (
     <div
+      data-fde-root=""
       className={cn(
         scoped,
         "flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
