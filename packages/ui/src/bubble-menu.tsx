@@ -34,7 +34,7 @@ import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
 import { Picker } from "./components/picker";
-import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
+import { ghostSelectCls, iconButtonCls, itemCls, popupCls, popupSurfaceCls } from "./components/styles";
 
 type Chain = ReturnType<Editor["chain"]>;
 
@@ -217,7 +217,7 @@ function LinkControl({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="start" className="z-50">
-          <Popover.Popup className={`${popupCls} flex w-64 items-center gap-1.5 p-1.5`}>
+          <Popover.Popup className={`${popupSurfaceCls} flex w-64 items-center gap-2 p-2`}>
             <input
               className={fieldCls}
               placeholder="https://… or ./page.mdx"
