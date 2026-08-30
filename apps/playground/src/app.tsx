@@ -37,7 +37,7 @@ function ThemeToggle() {
       type="button"
       aria-label={`Switch to ${next} theme`}
       onClick={() => setTheme(next)}
-      className="inline-flex size-8 items-center justify-center rounded-lg border border-fd-border bg-fd-card text-fd-muted-foreground transition-colors hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background"
+      className="inline-flex size-8 items-center justify-center rounded-lg border border-fd-border bg-fd-card text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background"
     >
       {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
     </button>
@@ -108,7 +108,15 @@ function Playground() {
       transport,
       path: active,
       getText: () => editorRef.current?.getMarkdown() ?? "",
-      applyRemote: (text) => editorRef.current?.applyExternalMarkdown(text) ?? Promise.resolve([]),
+      applyRemote: async (text) => {
+        const conflicts = (await editorRef.current?.applyExternalMarkdown(text)) ?? [];
+        if (open) {
+          // a clean merge changes no status, so refresh the round-trip badge here
+          setMarkdown(editorRef.current?.getMarkdown() ?? text);
+          setSyncedText(text);
+        }
+        return conflicts;
+      },
       resetToRemote: (text) => void editorRef.current?.setMarkdown(text),
       onStatus: (next) => {
         if (!open) return;
@@ -186,7 +194,7 @@ function Playground() {
               key={path}
               type="button"
               onClick={() => setActive(path)}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${
                 path === active
                   ? "bg-fd-primary/10 font-medium text-fd-primary"
                   : "text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"

@@ -92,7 +92,7 @@ type Mode = "visual" | "source";
  */
 type Stage = "static" | "mounting" | "live";
 
-const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
+const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground hover:bg-fd-background/70 hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
 
 const SYNC_DOT: Record<SyncStatus, string> = {
   synced: "bg-fd-success",
@@ -110,7 +110,7 @@ const SYNC_LABEL: Record<SyncStatus, string> = {
   offline: "Offline",
 };
 
-const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground transition-colors hover:bg-fd-accent ${focusRing}`;
+const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground hover:bg-fd-accent active:bg-fd-border ${focusRing}`;
 
 function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (

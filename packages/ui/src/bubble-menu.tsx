@@ -185,7 +185,7 @@ function MarkButton({
 }
 
 const fieldCls =
-  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none transition-colors placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
+  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
 
 /** URL editor for the link mark; portalled into the bubble's parent. */
 function LinkControl({
@@ -550,7 +550,7 @@ export function EditorBubble({
           <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
             <Popover.Trigger
               aria-label={`${spec.title ?? spec.name} options`}
-              className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-fd-foreground outline-none transition-colors hover:bg-fd-accent data-[popup-open]:bg-fd-accent"
+              className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-fd-foreground outline-none hover:bg-fd-accent data-[popup-open]:bg-fd-accent"
             >
               <span className="inline-flex text-fd-muted-foreground">{spec.icon}</span>
               {spec.title ?? spec.name}

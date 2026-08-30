@@ -379,21 +379,8 @@
   transition: border-color 150ms ease-out;
 }
 
-.fde-block-handle {
-  opacity: 0;
-  animation: fde-handle-in 150ms ease-out forwards;
-}
-
-@keyframes fde-handle-in {
-  from {
-    opacity: 0;
-    translate: 0 -2px;
-  }
-  to {
-    opacity: 1;
-    translate: none;
-  }
-}
+/* the ⋯ handle appears instantly: it comes and goes with every caret move
+ * through components, and repeated fades read as flicker */
 
 /* A freshly inserted component (a new row, step, card) settles into place.
  * Gated behind [data-fde-settled] — set one painted frame after the live
