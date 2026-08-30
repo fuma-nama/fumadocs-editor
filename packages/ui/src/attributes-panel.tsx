@@ -49,10 +49,10 @@ export function PropControl({
               <Select.Popup className={popupCls}>
                 {items.map((item) => (
                   <Select.Item key={item.value} value={item.value} className={itemCls}>
+                    <Select.ItemText>{item.label}</Select.ItemText>
                     <Select.ItemIndicator className={itemIndicatorCls}>
                       <Check size={14} />
                     </Select.ItemIndicator>
-                    <Select.ItemText>{item.label}</Select.ItemText>
                   </Select.Item>
                 ))}
               </Select.Popup>
