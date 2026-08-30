@@ -64,10 +64,13 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
     }).on("all", (event, absolute) => {
       if ((event !== "change" && event !== "add") || !MARKDOWN.test(absolute)) return;
       const relative = path.relative(root, absolute).split(path.sep).join("/");
-      void readState(relative).then((state) => {
-        if (selfWrites.get(relative) === state.version) return;
-        broadcast(relative, JSON.stringify({ type: "change", path: relative, ...state }));
-      }, () => {});
+      void readState(relative).then(
+        (state) => {
+          if (selfWrites.get(relative) === state.version) return;
+          broadcast(relative, JSON.stringify({ type: "change", path: relative, ...state }));
+        },
+        () => {},
+      );
     });
   };
 
@@ -83,7 +86,8 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
     client: WebSocket,
     message: { id?: number; type: string; path?: string; text?: string; baseVersion?: string },
   ): Promise<void> {
-    const reply = (result: unknown) => client.send(JSON.stringify({ id: message.id, ok: true, result }));
+    const reply = (result: unknown) =>
+      client.send(JSON.stringify({ id: message.id, ok: true, result }));
     try {
       switch (message.type) {
         case "list": {
@@ -114,7 +118,11 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
           selfWrites.set(relative, version);
           await writeFile(resolveSafe(relative), text);
           reply({ ok: true, version });
-          broadcast(relative, JSON.stringify({ type: "change", path: relative, text, version }), client);
+          broadcast(
+            relative,
+            JSON.stringify({ type: "change", path: relative, text, version }),
+            client,
+          );
           return;
         }
         case "watch":

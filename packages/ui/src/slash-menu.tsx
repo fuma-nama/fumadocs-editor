@@ -99,7 +99,11 @@ function imageItem(media: MediaProvider | undefined): SlashItem {
       input.click();
       return;
     }
-    e.chain().focus().deleteRange(r).insertContentAt(r.from, { type: "image", attrs: { src: "" } }).run();
+    e.chain()
+      .focus()
+      .deleteRange(r)
+      .insertContentAt(r.from, { type: "image", attrs: { src: "" } })
+      .run();
     e.commands.setNodeSelection(r.from);
   });
 }

@@ -50,9 +50,7 @@ export function mergeRemote(options: {
   const remoteNodes = remote.doc.content ?? [];
 
   const baseNorm = base.blocks.map((block) => blockNormalized(block, base.syntax));
-  const remoteNorm = remote.snapshot.blocks.map((block) =>
-    blockNormalized(block, base.syntax),
-  );
+  const remoteNorm = remote.snapshot.blocks.map((block) => blockNormalized(block, base.syntax));
 
   // which base block each live child still is (null = locally edited/new)
   const localMatch = matchBlocks(localNormalized, base);
@@ -136,9 +134,7 @@ function lcsPairs(a: string[], b: string[]): [number, number][] {
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
       lengths[i][j] =
-        a[i] === b[j]
-          ? lengths[i + 1][j + 1] + 1
-          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+        a[i] === b[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
     }
   }
   const pairs: [number, number][] = [];

@@ -17,10 +17,7 @@ interface ActivePath {
 }
 
 /** the caret sits inside a region a spec declares as a file path */
-function activePath(
-  state: EditorState,
-  specs: Map<string, UiComponentSpec>,
-): ActivePath | null {
+function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): ActivePath | null {
   const { $from, empty } = state.selection;
   if (!empty) return null;
   for (let depth = $from.depth; depth > 1; depth--) {
@@ -42,10 +39,7 @@ function activePath(
  * suggests matching files below it; Enter or a click replaces the region
  * text. Free-form typing is untouched — the popup only appears on matches.
  */
-export function fileSuggest(
-  specs: Map<string, UiComponentSpec>,
-  files: FileProvider,
-): Extension {
+export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProvider): Extension {
   return Extension.create({
     name: "fdeFileSuggest",
     addProseMirrorPlugins() {
@@ -72,16 +66,16 @@ export function fileSuggest(
           .run();
       };
 
-      const popupProps = (view: { coordsAtPos(pos: number): { left: number; top: number; bottom: number } }): PopupProps => ({
-        items: items.map(
-          (path): SlashItem => ({
-            title: path,
-            group: "Files",
-            icon: <FileText size={15} />,
-            mono: true,
-            run: () => apply(path),
-          }),
-        ),
+      const popupProps = (view: {
+        coordsAtPos(pos: number): { left: number; top: number; bottom: number };
+      }): PopupProps => ({
+        items: items.map((path): SlashItem => ({
+          title: path,
+          group: "Files",
+          icon: <FileText size={15} />,
+          mono: true,
+          run: () => apply(path),
+        })),
         selected,
         rect: active ? view.coordsAtPos(active.from) : null,
         onSelect: (index) => apply(items[index]),

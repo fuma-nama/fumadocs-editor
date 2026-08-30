@@ -25,9 +25,7 @@ import { cn } from "./utils/cn";
 
 // the editor runtime (TipTap + ProseMirror + node views + chrome) is its own
 // chunk, fetched at idle or first intent; the static paint never waits on it
-const LiveEditor = lazy(() =>
-  import("./live-editor").then((m) => ({ default: m.LiveEditor })),
-);
+const LiveEditor = lazy(() => import("./live-editor").then((m) => ({ default: m.LiveEditor })));
 
 export interface MdxEditorRef {
   getMarkdown: () => string;
@@ -340,99 +338,99 @@ export function MdxEditor({
 
   return (
     <ProvidersContext.Provider value={providers}>
-    <div
-      data-fde-root=""
-      className={cn(
-        scoped,
-        "flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
-        className,
-      )}
-    >
-      <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
-        <div className="flex items-center justify-between gap-3 border-b border-fd-border bg-fd-card/40 px-2 py-1">
-          {sync ? <SyncIndicator {...sync} /> : <span />}
-          <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
-            <Tabs.Tab className={modeTabCls} value="visual">
-              Visual
-            </Tabs.Tab>
-            <Tabs.Tab className={modeTabCls} value="source">
-              MDX
-            </Tabs.Tab>
-          </Tabs.List>
-        </div>
-      </Tabs.Root>
-      {mode === "visual" ? (
-        <div className="relative">
-          {stage !== "static" && parsed && (
-            <Suspense fallback={null}>
-              <LiveEditor
-                doc={parsed.doc}
-                components={components ?? []}
-                specs={specMap}
-                snapshotRef={snapshotRef}
-                onChangeRef={onChangeRef}
-                hidden={stage !== "live"}
-                media={media}
-                files={files}
-                onReady={(editor, serialize) => {
-                  editorRef.current = editor;
-                  serializeRef.current = serialize;
-                  setStage("live");
+      <div
+        data-fde-root=""
+        className={cn(
+          scoped,
+          "flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
+          className,
+        )}
+      >
+        <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
+          <div className="flex items-center justify-between gap-3 border-b border-fd-border bg-fd-card/40 px-2 py-1">
+            {sync ? <SyncIndicator {...sync} /> : <span />}
+            <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
+              <Tabs.Tab className={modeTabCls} value="visual">
+                Visual
+              </Tabs.Tab>
+              <Tabs.Tab className={modeTabCls} value="source">
+                MDX
+              </Tabs.Tab>
+            </Tabs.List>
+          </div>
+        </Tabs.Root>
+        {mode === "visual" ? (
+          <div className="relative">
+            {stage !== "static" && parsed && (
+              <Suspense fallback={null}>
+                <LiveEditor
+                  doc={parsed.doc}
+                  components={components ?? []}
+                  specs={specMap}
+                  snapshotRef={snapshotRef}
+                  onChangeRef={onChangeRef}
+                  hidden={stage !== "live"}
+                  media={media}
+                  files={files}
+                  onReady={(editor, serialize) => {
+                    editorRef.current = editor;
+                    serializeRef.current = serialize;
+                    setStage("live");
+                  }}
+                />
+              </Suspense>
+            )}
+            {stage !== "live" && (
+              <div
+                className="fde-content cursor-text outline-none"
+                tabIndex={0}
+                onPointerDown={(event) => {
+                  captureRef.current.point = { x: event.clientX, y: event.clientY };
+                  beginLive();
                 }}
-              />
-            </Suspense>
-          )}
-          {stage !== "live" && (
-            <div
-              className="fde-content cursor-text outline-none"
-              tabIndex={0}
-              onPointerDown={(event) => {
-                captureRef.current.point = { x: event.clientX, y: event.clientY };
-                beginLive();
+                onKeyDown={(event) => {
+                  const { key } = event;
+                  if (
+                    !event.metaKey &&
+                    !event.ctrlKey &&
+                    !event.altKey &&
+                    (key.length === 1 || key === "Enter" || key === "Backspace")
+                  ) {
+                    captureRef.current.keys.push(key);
+                    event.preventDefault();
+                  }
+                  beginLive();
+                }}
+                onFocus={beginLive}
+              >
+                {staticFallback ??
+                  (parsed ? (
+                    <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
+                  ) : (
+                    <div className="ProseMirror" aria-hidden />
+                  ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col">
+            {sourceError != null && (
+              <div className="border-b border-fd-border bg-fd-error/10 px-5 py-2.5 font-mono text-[13px] whitespace-pre-wrap text-fd-error">
+                {sourceError}
+              </div>
+            )}
+            <textarea
+              className="min-h-[420px] flex-1 resize-y bg-fd-background px-5 py-4 font-mono text-[13px] leading-relaxed text-fd-foreground outline-none [tab-size:2] focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-fd-ring/40"
+              value={source}
+              spellCheck={false}
+              onChange={(event) => {
+                setSource(event.target.value);
+                onChangeRef.current?.(event.target.value);
               }}
-              onKeyDown={(event) => {
-                const { key } = event;
-                if (
-                  !event.metaKey &&
-                  !event.ctrlKey &&
-                  !event.altKey &&
-                  (key.length === 1 || key === "Enter" || key === "Backspace")
-                ) {
-                  captureRef.current.keys.push(key);
-                  event.preventDefault();
-                }
-                beginLive();
-              }}
-              onFocus={beginLive}
-            >
-              {staticFallback ??
-                (parsed ? (
-                  <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
-                ) : (
-                  <div className="ProseMirror" aria-hidden />
-                ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col">
-          {sourceError != null && (
-            <div className="border-b border-fd-border bg-fd-error/10 px-5 py-2.5 font-mono text-[13px] whitespace-pre-wrap text-fd-error">
-              {sourceError}
-            </div>
-          )}
-          <textarea
-            className="min-h-[420px] flex-1 resize-y bg-fd-background px-5 py-4 font-mono text-[13px] leading-relaxed text-fd-foreground outline-none [tab-size:2] focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-fd-ring/40"
-            value={source}
-            spellCheck={false}
-            onChange={(event) => {
-              setSource(event.target.value);
-              onChangeRef.current?.(event.target.value);
-            }}
-          />
-        </div>
-      )}
-    </div>
+            />
+          </div>
+        )}
+      </div>
     </ProvidersContext.Provider>
   );
 }
