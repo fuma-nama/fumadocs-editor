@@ -359,7 +359,8 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
       next[index][1] = def;
     });
 
-  const headCls = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground";
+  const headCls =
+    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground";
   // the focus wash paints the whole cell, not the input's text box
   const cellCls = "border-t border-fd-border px-3 py-1.5 has-[:focus]:bg-fd-accent/40";
 
@@ -447,9 +448,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
         type="button"
         className="flex w-full cursor-pointer items-center gap-1.5 border-t border-fd-border px-3 py-1.5 text-[12px] text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
         tabIndex={-1}
-        onClick={() =>
-          write((rows) => rows.push([`prop${rows.length + 1}`, { type: "string" }]))
-        }
+        onClick={() => write((rows) => rows.push([`prop${rows.length + 1}`, { type: "string" }]))}
       >
         <Plus size={13} /> Add prop
       </button>
@@ -644,10 +643,10 @@ export const accordionsSpec: UiComponentSpec = {
   }),
 };
 
-const fileInsert = () => ({
+const entryInsert = (name: string, region: string) => () => ({
   type: "mdxComponent",
-  attrs: { name: "File", attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
-  content: [{ type: "mdxInlineRegion", attrs: { region: "file-name" } }],
+  attrs: { name, attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
+  content: [{ type: "mdxInlineRegion", attrs: { region } }],
 });
 
 export const fileSpec: UiComponentSpec = {
@@ -656,7 +655,7 @@ export const fileSpec: UiComponentSpec = {
   icon: <FileIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
   render: File,
-  insert: fileInsert,
+  insert: entryInsert("File", "file-name"),
 };
 
 export const folderSpec: UiComponentSpec = {
@@ -668,11 +667,7 @@ export const folderSpec: UiComponentSpec = {
   childComponent: ["File", "Folder"],
   listLike: true,
   render: Folder,
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: { name: "Folder", attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
-    content: [{ type: "mdxInlineRegion", attrs: { region: "folder-name" } }],
-  }),
+  insert: entryInsert("Folder", "folder-name"),
 };
 
 export const filesSpec: UiComponentSpec = {

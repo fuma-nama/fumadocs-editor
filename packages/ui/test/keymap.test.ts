@@ -228,7 +228,8 @@ after
     editor.commands.setTextSelection({ from, to });
     press(editor, "Backspace");
     const out = serialize();
-    expect(out).toContain('items={["', '"pnpm"');
+    expect(out).toContain('items={["');
+    expect(out).toContain('"pnpm"');
     expect(out).toContain("npm.");
     // still exactly two tabs, each with its own label region
     expect(out.match(/<Tab>/g)).toHaveLength(2);

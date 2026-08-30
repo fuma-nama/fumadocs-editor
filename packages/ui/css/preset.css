@@ -124,11 +124,10 @@
 /* TipTap's injected Selection CSS blanks native ::selection for every
  * descendant while the editor is blurred
  * (`.ProseMirror:not(.ProseMirror-focused) ::selection`) so its decoration
- * can take over — but chrome editables (TypeTable cells, the code title)
- * hold the real selection exactly then: focusing them is what blurs the
- * editor. Win those back with higher specificity. */
-.ProseMirror:not(.ProseMirror-focused)
-  :is(input, textarea, [data-fde-chrome], [data-fde-chrome] *)::selection {
+ * can take over — but chrome inputs (TypeTable cells, the code title) hold
+ * the real selection exactly then: focusing them is what blurs the editor.
+ * Win those back with higher specificity (0,2,2 beats its 0,2,1). */
+.ProseMirror:not(.ProseMirror-focused) :is(input, textarea)::selection {
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 

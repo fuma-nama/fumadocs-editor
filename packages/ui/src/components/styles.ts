@@ -1,7 +1,8 @@
 /*
  * Shared Tailwind class strings for the Base UI popup surfaces (Select, etc.).
  * These live in one place because the toolbar, the props panel and the callout
- * type picker all portal to <body> and must be fully self-styled.
+ * type picker all portal out of their render position (into the editor root)
+ * and must be fully self-styled.
  */
 
 /**
@@ -35,6 +36,16 @@ export const itemIndicatorCls = "ms-auto inline-flex shrink-0 ps-2 text-fd-foreg
  * wash, a toggled mark is a solid primary tint. */
 export const iconButtonCls =
   "inline-flex size-7 items-center justify-center rounded-lg text-fd-muted-foreground outline-none enabled:hover:bg-fd-accent enabled:hover:text-fd-accent-foreground data-[active]:bg-fd-primary/15 data-[active]:text-fd-primary data-[active]:hover:bg-fd-primary/20 disabled:cursor-default disabled:opacity-40";
+
+/** small text input used across the popover panels (link URL, props, anchors) */
+export const fieldCls =
+  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
+
+/** Base UI Switch skin; size via `cn` override (code block uses a denser one) */
+export const switchRootCls = `relative flex h-5 w-8 shrink-0 cursor-pointer rounded-full bg-fd-border p-0.5 transition-colors data-[checked]:bg-fd-primary ${focusRing}`;
+
+export const switchThumbCls =
+  "aspect-square h-full rounded-full bg-fd-background shadow-sm transition-[translate] data-[checked]:translate-x-3";
 
 /** dropdown trigger that looks like plain text until hovered */
 export const ghostSelectCls =
