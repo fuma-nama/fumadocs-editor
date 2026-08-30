@@ -121,12 +121,14 @@
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
-/* TipTap's injected Selection CSS blanks native ::selection while the editor
- * is blurred (`.ProseMirror:not(.ProseMirror-focused) ::selection`) so its
- * decoration can take over — but a chrome island (a TypeTable cell) holds
- * the real selection exactly then. Win it back with higher specificity. */
-.ProseMirror:not(.ProseMirror-focused) [data-fde-chrome]::selection,
-.ProseMirror:not(.ProseMirror-focused) [data-fde-chrome] ::selection {
+/* TipTap's injected Selection CSS blanks native ::selection for every
+ * descendant while the editor is blurred
+ * (`.ProseMirror:not(.ProseMirror-focused) ::selection`) so its decoration
+ * can take over — but chrome editables (TypeTable cells, the code title)
+ * hold the real selection exactly then: focusing them is what blurs the
+ * editor. Win those back with higher specificity. */
+.ProseMirror:not(.ProseMirror-focused)
+  :is(input, textarea, [data-fde-chrome], [data-fde-chrome] *)::selection {
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
@@ -898,18 +900,6 @@
   background: var(--color-fd-background);
   border-top: 1px solid var(--color-fd-border);
   padding: 12px 16px;
-}
-
-/* TypeTable cells: contentEditable chrome islands (native inputs can't show
- * the themed ::selection — Chrome never styles form-control internals) */
-.fde-typecell {
-  min-height: 1.5em;
-}
-
-.fde-typecell:empty::before {
-  content: attr(data-placeholder);
-  color: color-mix(in oklab, var(--color-fd-muted-foreground) 50%, transparent);
-  pointer-events: none;
 }
 
 /* include: the path region fills the chip */
