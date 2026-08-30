@@ -69,7 +69,7 @@ function useMediaQuery(query: string): boolean {
 }
 
 const barButtonCls =
-  "inline-flex h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-fd-muted-foreground transition-colors active:bg-fd-accent disabled:opacity-35 data-[active]:bg-fd-accent data-[active]:text-fd-foreground";
+  "inline-flex h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-fd-muted-foreground active:bg-fd-accent disabled:opacity-35 data-[active]:bg-fd-accent data-[active]:text-fd-foreground";
 
 function BarButton({
   label,

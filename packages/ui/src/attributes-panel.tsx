@@ -6,9 +6,9 @@ import type { MdxAttribute, PropField } from "@fumadocs-editor/core/extensions";
 import { focusRing, itemCls, itemIndicatorCls, popupCls } from "./components/styles";
 
 const propInputCls =
-  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none transition-colors placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
+  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
 
-const propSelectCls = `inline-flex h-7 w-full cursor-pointer items-center justify-between gap-1 rounded-md border border-fd-border bg-fd-background px-2 text-[13px] capitalize text-fd-foreground transition-colors hover:bg-fd-accent ${focusRing}`;
+const propSelectCls = `inline-flex h-7 w-full cursor-pointer items-center justify-between gap-1 rounded-md border border-fd-border bg-fd-background px-2 text-[13px] capitalize text-fd-foreground hover:bg-fd-accent ${focusRing}`;
 
 const switchRootCls = `relative flex h-5 w-8 shrink-0 cursor-pointer rounded-full bg-fd-border p-0.5 transition-colors data-[checked]:bg-fd-primary ${focusRing}`;
 

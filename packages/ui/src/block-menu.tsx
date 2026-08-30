@@ -86,7 +86,7 @@ export function BlockMenu({
       <Popover.Trigger
         ref={buttonRef}
         aria-label={`${spec.title ?? spec.name} options`}
-        className={`fde-block-handle absolute z-[3] inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-foreground data-[popup-open]:bg-fd-accent ${focusRing}`}
+        className={`fde-block-handle absolute z-[3] inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground data-[popup-open]:bg-fd-accent ${focusRing}`}
         draggable
         // the handle lives outside ProseMirror's DOM, so its dragstart never
         // reaches the view: stage the node drag by hand

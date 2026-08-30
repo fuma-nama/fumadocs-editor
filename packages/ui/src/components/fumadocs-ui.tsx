@@ -78,7 +78,7 @@ function CalloutTypeSelect({
         aria-label="Callout type"
         tabIndex={-1}
         className={cn(
-          "-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 outline-none transition-colors hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)",
+          "-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 outline-none hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)",
           isIdea ? "text-(--callout-color)" : "text-fd-card",
         )}
       >

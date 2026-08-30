@@ -87,7 +87,7 @@ const ALIASES: Record<string, string> = {
 };
 
 const selectTriggerCls =
-  "inline-flex h-6 cursor-pointer select-none items-center gap-1 rounded-md px-1.5 text-xs font-medium text-fd-muted-foreground outline-none transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent";
+  "inline-flex h-6 cursor-pointer select-none items-center gap-1 rounded-md px-1.5 text-xs font-medium text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent";
 
 /** Copies the block's text; briefly confirms with a check. Purely chrome: it
  * is `contentEditable={false}` and never mutates the document. */
@@ -97,7 +97,7 @@ function CopyButton({ getText }: { getText: () => string }) {
     <button
       type="button"
       aria-label={copied ? "Copied" : "Copy code"}
-      className="inline-flex size-6 items-center justify-center rounded-md text-fd-muted-foreground outline-none transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
+      className="inline-flex size-6 items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground"
       tabIndex={-1}
       onClick={() => {
         void navigator.clipboard?.writeText(getText());
@@ -164,13 +164,13 @@ function MetaSettings({
       <Popover.Trigger
         aria-label="Code block options"
         tabIndex={-1}
-        className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
+        className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
       >
         <Settings2 size={13} />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner sideOffset={6} align="end">
-          <Popover.Popup className={`${popupCls} flex w-52 flex-col gap-2.5 p-3`}>
+          <Popover.Popup className={`${popupCls} flex w-52 flex-col gap-2.5 p-2.5`}>
             <label className={rowCls}>
               Line numbers
               <Switch.Root
