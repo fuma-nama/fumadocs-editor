@@ -103,6 +103,32 @@ export const caretPolicy = Extension.create({
             view.dispatch(view.state.tr.setSelection(selection));
             return true;
           },
+          // handleClickOn depends on ProseMirror resolving the click to a
+          // position inside the component — on fully non-editable chrome the
+          // hit test often lands in the gap outside it and the click dies.
+          // Fall back to the DOM: the node-view wrapper carries the
+          // component, and a leaf still deserves its menu.
+          handleClick(view, _pos, event) {
+            const target = event.target as Element | null;
+            const dom = target?.closest?.("[data-component]");
+            if (!dom || !view.dom.contains(dom)) return false;
+            let inside: number;
+            try {
+              inside = view.posAtDOM(dom, 0);
+            } catch {
+              return false;
+            }
+            // posAtDOM of the wrapper resolves just inside the node
+            const at = inside - 1;
+            const node = view.state.doc.nodeAt(at);
+            if (!node || node.type.name !== COMPONENT_NODE || node.childCount > 0) return false;
+            view.dispatch(
+              view.state.tr
+                .setSelection(NodeSelection.create(view.state.doc, at))
+                .setMeta(OPEN_COMPONENT_MENU, true),
+            );
+            return true;
+          },
         },
       }),
     ];
