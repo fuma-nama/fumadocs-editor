@@ -16,6 +16,10 @@ export default defineConfig({
         find: /^@fumadocs-editor\/sync$/,
         replacement: fileURLToPath(new URL("../sync/src/index.ts", import.meta.url)),
       },
+      {
+        find: /^@fumadocs-editor\/sync\/merge$/,
+        replacement: fileURLToPath(new URL("../sync/src/merge.ts", import.meta.url)),
+      },
     ],
   },
   test: {

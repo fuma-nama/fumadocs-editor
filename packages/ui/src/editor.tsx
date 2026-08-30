@@ -255,7 +255,7 @@ export function MdxEditor({
     }
 
     const [{ mergeRemote }, { tryNormalize }] = await Promise.all([
-      import("@fumadocs-editor/sync"),
+      import("@fumadocs-editor/sync/merge"),
       import("@fumadocs-editor/core/serialize"),
     ]);
     const { doc } = editor.state;
