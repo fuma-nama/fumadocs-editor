@@ -23,7 +23,9 @@ import { childNames, childOnlyNames, type SpecMap } from "./keymap";
 type Fix =
   | { kind: "retag"; pos: number; attrs: Record<string, unknown> }
   | { kind: "insert"; pos: number; node: PMNode }
-  | { kind: "remove"; pos: number; size: number };
+  | { kind: "remove"; pos: number; size: number }
+  /** move a stray block into a region (append at `target`, a pos inside it) */
+  | { kind: "fold"; pos: number; target: number };
 
 /** missing regions inserted, present ones retagged to the spec's names in order */
 function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap, fixes: Fix[]) {
@@ -97,6 +99,20 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
     if (present.node.attrs.region !== block.region) {
       fixes.push({ kind: "retag", pos: present.pos, attrs: { region: block.region } });
     }
+    // a component with a body region owns ALL its block content through it
+    // (that's what childrenRegion folding means at parse time): a bare block
+    // that lands directly in the component — a cross-region selection typed
+    // over, a native edit — is folded into the body, never left floating
+    node.forEach((child, offset) => {
+      const at = pos + 1 + offset;
+      if (
+        child.type.name === INLINE_REGION_NODE ||
+        child.type.name === BLOCK_REGION_NODE ||
+        at === present.pos
+      )
+        return;
+      fixes.push({ kind: "fold", pos: at, target: present.pos + present.node.nodeSize - 1 });
+    });
     return;
   }
   // after the inline regions, before any child component
@@ -119,6 +135,12 @@ function applyFixes(state: EditorState, fixes: Fix[]): Transaction | null {
       tr.setNodeMarkup(tr.mapping.map(fix.pos), undefined, fix.attrs);
     } else if (fix.kind === "insert") {
       tr.insert(tr.mapping.map(fix.pos), fix.node);
+    } else if (fix.kind === "fold") {
+      const from = tr.mapping.map(fix.pos);
+      const stray = tr.doc.nodeAt(from);
+      if (!stray) continue;
+      tr.delete(from, from + stray.nodeSize);
+      tr.insert(tr.mapping.map(fix.target), stray);
     } else {
       const from = tr.mapping.map(fix.pos);
       const to = tr.mapping.map(fix.pos + fix.size);

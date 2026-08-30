@@ -16,7 +16,6 @@ import {
   Link as LinkIcon,
   ListOrdered,
   ListTree,
-  Megaphone,
   PanelTop,
   Plus,
   Rows3,
@@ -26,6 +25,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { Checkbox } from "@base-ui/react/checkbox";
 import { Select } from "@base-ui/react/select";
 import type { CSSProperties } from "react";
 import { cn } from "../utils/cn";
@@ -291,8 +291,7 @@ function typeTableRows(value: unknown): TypeTableRows | null {
   return value as TypeTableRows;
 }
 
-const typeCellCls =
-  "w-full bg-transparent outline-none placeholder:text-fd-muted-foreground/50 focus-visible:bg-fd-accent/50";
+const typeCellCls = "w-full bg-transparent outline-none placeholder:text-fd-muted-foreground/50";
 
 /** one editable cell of the type table */
 function TypeCell({
@@ -361,7 +360,8 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
     });
 
   const headCls = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground";
-  const cellCls = "border-t border-fd-border px-3 py-1.5";
+  // the focus wash paints the whole cell, not the input's text box
+  const cellCls = "border-t border-fd-border px-3 py-1.5 has-[:focus]:bg-fd-accent/40";
 
   return (
     <div
@@ -415,15 +415,18 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => patch(index, "description", next)}
                 />
               </td>
-              <td className={cn(cellCls, "text-center")}>
-                <input
-                  type="checkbox"
+              <td className={cellCls}>
+                <Checkbox.Root
                   aria-label={`${name} required`}
-                  className="size-3.5 cursor-pointer accent-fd-primary"
                   tabIndex={-1}
                   checked={def.required === true}
-                  onChange={(event) => patch(index, "required", event.target.checked)}
-                />
+                  onCheckedChange={(on) => patch(index, "required", on === true)}
+                  className="mx-auto flex size-4 cursor-pointer items-center justify-center rounded border border-fd-border bg-fd-background text-fd-primary-foreground data-[checked]:border-fd-primary data-[checked]:bg-fd-primary"
+                >
+                  <Checkbox.Indicator className="flex">
+                    <Check size={11} strokeWidth={3} />
+                  </Checkbox.Indicator>
+                </Checkbox.Root>
               </td>
               <td className={cn(cellCls, "pr-2 pl-0")}>
                 <button
@@ -467,17 +470,6 @@ function GithubInfoBox({ props }: ComponentRenderProps) {
         </p>
         <p className="text-[12px] text-fd-muted-foreground">GitHub repository</p>
       </div>
-    </div>
-  );
-}
-
-function Banner({ props, children }: ComponentRenderProps) {
-  return (
-    <div
-      className="fde-banner rounded-xl px-4 py-3 text-center text-sm font-medium"
-      data-variant={props.variant ?? "normal"}
-    >
-      {children}
     </div>
   );
 }
@@ -851,30 +843,9 @@ export const githubInfoSpec: UiComponentSpec = {
   insert: () => ({ type: "mdxComponent", attrs: { name: "GithubInfo", attributes: [] } }),
 };
 
-export const bannerSpec: UiComponentSpec = {
-  name: "Banner",
-  title: "Banner",
-  icon: <Megaphone size={13} />,
-  childrenRegion: { region: "body", placeholder: "Announcement…" },
-  props: [
-    {
-      name: "variant",
-      label: "Variant",
-      type: "enum",
-      options: ["normal", "rainbow"],
-      default: "normal",
-    },
-    { name: "id", label: "Dismiss id", type: "string", placeholder: "release-1" },
-  ],
-  render: Banner,
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: { name: "Banner", attributes: [] },
-    content: [
-      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
-    ],
-  }),
-};
+// Banner is deliberately absent: it is a site-layout component (mounted in
+// the app shell), not document content. In a doc it stays on the lossless
+// generic fallback.
 
 export const inlineTocSpec: UiComponentSpec = {
   name: "InlineTOC",
@@ -925,6 +896,5 @@ export const fumadocsUiComponents: UiComponentSpec[] = [
   includeSpec,
   typeTableSpec,
   githubInfoSpec,
-  bannerSpec,
   inlineTocSpec,
 ];

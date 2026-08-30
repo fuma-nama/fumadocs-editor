@@ -1,6 +1,7 @@
 import { Extension } from "@tiptap/core";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
 /*
  * Caret and selection policy: the caret rests in editable text, a component is
@@ -25,17 +26,34 @@ export const caretPolicy = Extension.create({
   },
 
   addProseMirrorPlugins() {
+    const editor = this.editor;
     return [
       new Plugin({
         props: {
           // typing never replaces a selected component or atom; deleting or
           // Enter-to-drill-in stay explicit gestures
-          handleTextInput(view) {
+          handleTextInput(view, _from, _to, text) {
             const selection = view.state.selection;
-            return (
+            if (
               selection instanceof NodeSelection &&
               (selection.node.type.name === COMPONENT_NODE || selection.node.isAtom)
-            );
+            ) {
+              return true;
+            }
+            // type-over of a region-crossing selection: clear it in place
+            // (never a structural replace), then type at the caret
+            if (crossesRegion(view.state) && deleteAcrossRegions(editor)) {
+              editor.view.dispatch(editor.state.tr.insertText(text).scrollIntoView());
+              return true;
+            }
+            return false;
+          },
+          // same rule for paste: clear per-block, insert the plain text
+          handlePaste(view, _event, slice) {
+            if (!crossesRegion(view.state) || !deleteAcrossRegions(editor)) return false;
+            const text = slice.content.textBetween(0, slice.content.size, "\n");
+            if (text) editor.view.dispatch(editor.state.tr.insertText(text).scrollIntoView());
+            return true;
           },
           // Double-click at or past the end of an inline region's text selects
           // the whole name. The default word selection there has no word to

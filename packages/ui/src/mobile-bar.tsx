@@ -265,7 +265,7 @@ export function MobileBar({
       <Dialog.Root open={sheet != null} onOpenChange={(next) => !next && setSheet(null)}>
         <Dialog.Portal container={container}>
           <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 transition-opacity duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-          <Dialog.Popup className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]">
+          <Dialog.Popup data-fde-popup="" className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]">
             {sheet === "turn-into" &&
               TURN_INTO.map((item) => (
                 <button
