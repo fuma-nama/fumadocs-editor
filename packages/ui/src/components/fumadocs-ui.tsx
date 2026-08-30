@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@base-ui/react/checkbox";
 import { Select } from "@base-ui/react/select";
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { cn } from "../utils/cn";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 import { useEditorPortal } from "../utils/portal";
@@ -291,9 +291,14 @@ function typeTableRows(value: unknown): TypeTableRows | null {
   return value as TypeTableRows;
 }
 
-const typeCellCls = "w-full bg-transparent outline-none placeholder:text-fd-muted-foreground/50";
+const typeCellCls = "w-full cursor-text outline-none";
 
-/** one editable cell of the type table */
+/**
+ * One editable cell of the type table. A contentEditable island, not an
+ * `<input>`: Chrome never applies `::selection` inside form controls (UA
+ * shadow DOM), so input cells can't show the themed selection tint.
+ * `data-fde-chrome` keeps its keystrokes away from the editor keymap.
+ */
 function TypeCell({
   value,
   placeholder,
@@ -305,14 +310,32 @@ function TypeCell({
   mono?: boolean;
   onChange: (value: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const text = typeof value === "string" ? value : (value?.toString() ?? "");
+  // imperative content: rewriting a focused cell would throw the caret away
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && el.textContent !== text && document.activeElement !== el) el.textContent = text;
+  }, [text]);
   return (
-    <input
-      className={cn(typeCellCls, mono && "font-mono text-[12px]")}
-      value={typeof value === "string" ? value : (value?.toString() ?? "")}
-      placeholder={placeholder}
+    <div
+      ref={ref}
+      contentEditable
+      role="textbox"
+      data-fde-chrome=""
+      data-placeholder={placeholder}
       spellCheck={false}
       tabIndex={-1}
-      onChange={(event) => onChange(event.target.value)}
+      className={cn(typeCellCls, "fde-typecell", mono && "font-mono text-[12px]")}
+      onInput={(event) => onChange(event.currentTarget.textContent ?? "")}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.preventDefault();
+      }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const plain = event.clipboardData.getData("text/plain").replace(/\s*\n\s*/g, " ");
+        document.execCommand("insertText", false, plain);
+      }}
     />
   );
 }
