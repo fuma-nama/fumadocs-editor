@@ -28,12 +28,12 @@ const COMPONENT = "mdxComponent";
  * TipTap's default `stopEvent` swallows any event whose target
  * `isContentEditable`, which silences keydowns from editable areas nested in
  * renderer chrome before ProseMirror sees them. Stop only events on real
- * controls and explicitly marked chrome.
+ * controls.
  */
 function stopEvent({ event }: { event: Event }): boolean {
   return (
     event.target instanceof Element &&
-    event.target.closest("input, button, select, textarea, [data-fde-chrome]") !== null
+    event.target.closest("input, button, select, textarea") !== null
   );
 }
 
@@ -139,7 +139,9 @@ function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
       map.set(`${spec.name}:${spec.contentRegion.region}`, spec.contentRegion.placeholder);
     }
     if (spec.itemsAttribute?.placeholder && spec.childComponent) {
-      const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+      const names = Array.isArray(spec.childComponent)
+        ? spec.childComponent
+        : [spec.childComponent];
       for (const name of names) {
         map.set(`${name}:${spec.itemsAttribute.childRegion}`, spec.itemsAttribute.placeholder);
       }

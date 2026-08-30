@@ -4,13 +4,18 @@ import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { useEditorPortal } from "./utils/portal";
 import { NodeSelection } from "@tiptap/pm/state";
-import { COMPONENT_NODE, type MdxAttribute } from "@fumadocs-editor/core";
+import type { MdxAttribute } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
 import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import { childInsertContext, focusAt, moveComponentAt } from "./components/keymap";
 import { PropControl } from "./attributes-panel";
-import { readPropValue, setComponentAttributes, setPropValue } from "./components/attributes";
+import {
+  activeComponent,
+  readPropValue,
+  setComponentAttributes,
+  setPropValue,
+} from "./components/attributes";
 import { focusRing, itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
@@ -29,33 +34,7 @@ export function BlockMenu({
 }) {
   const active = useEditorState({
     editor,
-    // `attributes` is rendered by the panel: without it in the snapshot,
-    // attribute edits don't re-render and React resets the controlled
-    // inputs' caret on every keystroke
-    selector: ({ editor: current }) => {
-      if (!current) return null;
-      const selection = current.state.selection;
-      if (selection instanceof NodeSelection) {
-        if (selection.node.type.name !== COMPONENT_NODE) return null;
-        return {
-          pos: selection.from,
-          name: selection.node.attrs.name as string,
-          attributes: selection.node.attrs.attributes as MdxAttribute[],
-        };
-      }
-      const { $from } = selection;
-      for (let depth = $from.depth; depth > 0; depth--) {
-        const node = $from.node(depth);
-        if (node.type.name === COMPONENT_NODE) {
-          return {
-            pos: $from.before(depth),
-            name: node.attrs.name as string,
-            attributes: node.attrs.attributes as MdxAttribute[],
-          };
-        }
-      }
-      return null;
-    },
+    selector: ({ editor: current }) => (current ? activeComponent(current.state) : null),
   });
 
   const [open, setOpen] = useState(false);
@@ -163,14 +142,13 @@ export function BlockPanel({
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
-  active: { pos: number; name: string };
+  active: { pos: number; name: string; attributes: MdxAttribute[] };
   onDone: () => void;
 }) {
   const spec = specs.get(active.name);
   if (!spec) return null;
 
-  const node = editor.state.doc.nodeAt(active.pos);
-  const attributes = (node?.attrs.attributes ?? []) as MdxAttribute[];
+  const attributes = active.attributes;
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
 

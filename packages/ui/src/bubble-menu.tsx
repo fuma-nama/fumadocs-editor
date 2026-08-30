@@ -12,7 +12,7 @@ import {
   type EditorState,
   type Transaction as PMTransaction,
 } from "@tiptap/pm/state";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { COMPONENT_NODE, INLINE_REGION_NODE, type MdxAttribute } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
@@ -22,7 +22,6 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  ImageIcon,
   Italic,
   Link2,
   List,
@@ -43,7 +42,7 @@ import { updateAtomAttributes } from "./components/attributes";
 import { OPEN_COMPONENT_MENU } from "./components/caret-policy";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
-import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
+import { fieldCls, ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
 type Chain = ReturnType<Editor["chain"]>;
@@ -189,9 +188,6 @@ function MarkButton({
     </button>
   );
 }
-
-const fieldCls =
-  "h-7 w-full rounded-md border border-fd-border bg-fd-background px-2 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60 focus-visible:border-fd-ring";
 
 /**
  * URL editor for the link mark; portalled into the bubble's parent. With a
@@ -439,7 +435,10 @@ export function EditorBubble({
   // `view.dom.parentElement`, so that exact element satisfies all three —
   // resolved directly from the editor, never derived through refs (a
   // ref-timing miss silently fell back to a body portal).
-  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+  // an object ref, not a callback: BubbleMenu assigns its ref during render,
+  // where a state-setter callback would be a cross-component setState. The
+  // element is created eagerly and never replaced, so mount effects see it.
+  const menuRef = useRef<HTMLDivElement>(null);
   const panelContainer = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
     editor,
@@ -458,7 +457,9 @@ export function EditorBubble({
         // the panels render these: without them in the snapshot, attribute
         // edits don't re-render and React resets the controlled inputs'
         // caret on every keystroke
-        componentAttrs: bubble.active ? (doc.nodeAt(bubble.active.pos)?.attrs.attributes ?? null) : null,
+        componentAttrs: bubble.active
+          ? ((doc.nodeAt(bubble.active.pos)?.attrs.attributes ?? []) as MdxAttribute[])
+          : null,
         atomAttrs: bubble.atom ? (doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
       };
@@ -490,14 +491,14 @@ export function EditorBubble({
   // and never again when its size changes (chip ↔ full toolbar). Re-anchor
   // through the plugin's own updatePosition hook whenever the element resizes.
   useEffect(() => {
-    const el = portalEl?.parentElement;
+    const el = menuRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "updatePosition"));
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [portalEl, editor]);
+  }, [editor]);
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
     fn(editor.chain().focus()).run();
@@ -507,6 +508,7 @@ export function EditorBubble({
 
   return (
     <BubbleMenu
+      ref={menuRef}
       editor={editor}
       updateDelay={150}
       options={{ placement: "bottom", offset: 6 }}
@@ -617,7 +619,7 @@ export function EditorBubble({
                   <BlockPanel
                     editor={editor}
                     specs={specs}
-                    active={active}
+                    active={{ ...active, attributes: state?.componentAttrs ?? [] }}
                     onDone={() => setPanelOpen(false)}
                   />
                 </Popover.Popup>
@@ -626,9 +628,6 @@ export function EditorBubble({
           </Popover.Root>
         </>
       )}
-      {/* layout-inert anchor: only exists to resolve the bubble's parent for
-       * portals — as a flex item it would add a phantom trailing gap */}
-      <span ref={setPortalEl} className="hidden" />
     </BubbleMenu>
   );
 }

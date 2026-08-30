@@ -6,8 +6,7 @@ import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { useEditorPortal } from "./utils/portal";
 import { redoDepth, undoDepth } from "@tiptap/pm/history";
-import { NodeSelection } from "@tiptap/pm/state";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Dialog } from "@base-ui/react/dialog";
 import {
   Bold,
@@ -32,6 +31,7 @@ import {
   toggleEntryType,
   type SpecMap,
 } from "./components/keymap";
+import { activeComponent } from "./components/attributes";
 import { BlockPanel } from "./block-menu";
 import { TURN_INTO } from "./bubble-menu";
 import { insertItems } from "./slash-menu";
@@ -135,23 +135,14 @@ export function MobileBar({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const selection = current.state.selection;
-      const { $from } = selection;
+      const { $from } = current.state.selection;
       let inInlineRegion = false;
-      let active: { pos: number; name: string } | null = null;
-      if (selection instanceof NodeSelection && selection.node.type.name === COMPONENT_NODE) {
-        active = { pos: selection.from, name: selection.node.attrs.name as string };
-      }
       for (let depth = $from.depth; depth > 0; depth--) {
-        const name = $from.node(depth).type.name;
-        if (name === INLINE_REGION_NODE) inInlineRegion = true;
-        if (!active && name === COMPONENT_NODE) {
-          active = { pos: $from.before(depth), name: $from.node(depth).attrs.name as string };
-        }
+        if ($from.node(depth).type.name === INLINE_REGION_NODE) inInlineRegion = true;
       }
       return {
         inInlineRegion,
-        active,
+        active: activeComponent(current.state),
         listEntry: listEntryDepth($from, specs as SpecMap) !== -1,
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
@@ -265,7 +256,10 @@ export function MobileBar({
       <Dialog.Root open={sheet != null} onOpenChange={(next) => !next && setSheet(null)}>
         <Dialog.Portal container={container}>
           <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 transition-opacity duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-          <Dialog.Popup data-fde-popup="" className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]">
+          <Dialog.Popup
+            data-fde-popup=""
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]"
+          >
             {sheet === "turn-into" &&
               TURN_INTO.map((item) => (
                 <button

@@ -11,7 +11,6 @@ import type {
 import type {
   MdxJsxAttribute as MdastJsxAttribute,
   MdxJsxExpressionAttribute as MdastJsxExpressionAttribute,
-  MdxJsxFlowElement,
 } from "mdast-util-mdx-jsx";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
 import type { Syntax, ComponentSpec } from "../components/spec";
@@ -161,11 +160,7 @@ export function inlineToPhrasing(nodes: JSONContent[] = []): PhrasingContent[] {
   return convertRun(nodes.map((node) => ({ node, marks: [...(node.marks ?? [])] as PMMark[] })));
 }
 
-function listItemsToMdast(
-  node: JSONContent,
-  task: boolean,
-  syntax: Syntax,
-): ListItem[] {
+function listItemsToMdast(node: JSONContent, task: boolean, syntax: Syntax): ListItem[] {
   return (node.content ?? []).map((item) => ({
     type: "listItem",
     spread: false,
@@ -197,10 +192,7 @@ function tableToMdast(node: JSONContent): RootContent {
   };
 }
 
-export function nodeToMdastBlock(
-  node: JSONContent,
-  syntax: Syntax = EMPTY_SYNTAX,
-): RootContent {
+export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTAX): RootContent {
   switch (node.type) {
     case "paragraph":
       return { type: "paragraph", children: inlineToPhrasing(node.content) };

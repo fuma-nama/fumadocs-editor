@@ -13,7 +13,7 @@ import { Switch } from "@base-ui/react/switch";
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
-import { popupCls } from "./styles";
+import { popupCls, switchRootCls, switchThumbCls } from "./styles";
 import { cn } from "../utils/cn";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
@@ -151,10 +151,7 @@ function MetaSettings({
 }) {
   const { anchorRef, container } = useEditorPortal();
   const rowCls = "flex items-center justify-between gap-3 text-[12.5px] text-fd-foreground";
-  const switchRootCls =
-    "relative flex h-4.5 w-7.5 shrink-0 cursor-pointer rounded-full bg-fd-border p-0.5 transition-colors data-[checked]:bg-fd-primary";
-  const switchThumbCls =
-    "aspect-square h-full rounded-full bg-fd-background shadow-sm transition-[translate] data-[checked]:translate-x-3";
+  const denseSwitchCls = cn(switchRootCls, "h-4.5 w-7.5");
   return (
     <Popover.Root>
       <Popover.Trigger
@@ -171,7 +168,7 @@ function MetaSettings({
             <label className={rowCls}>
               Line numbers
               <Switch.Root
-                className={switchRootCls}
+                className={denseSwitchCls}
                 checked={meta.lineNumbers !== false}
                 onCheckedChange={(on) => onChange({ ...meta, lineNumbers: on })}
               >
@@ -196,7 +193,7 @@ function MetaSettings({
             <label className={rowCls}>
               Copy button
               <Switch.Root
-                className={switchRootCls}
+                className={denseSwitchCls}
                 checked={!meta.noCopy}
                 onCheckedChange={(on) => onChange({ ...meta, noCopy: !on })}
               >
