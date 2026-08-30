@@ -1,9 +1,9 @@
-import type { JSONContent } from '@tiptap/core';
-import { parseMdx } from './mdast/parse';
-import { blockToNode } from './mdast/from-mdast';
-import { nodeToMdastBlock } from './mdast/to-mdast';
-import { stringifyBlock } from './mdast/stringify';
-import { createRegistry, type ComponentRegistry } from './components/spec';
+import type { JSONContent } from "@tiptap/core";
+import { parseMdx } from "./mdast/parse";
+import { blockToNode } from "./mdast/from-mdast";
+import { nodeToMdastBlock } from "./mdast/to-mdast";
+import { stringifyBlock } from "./mdast/stringify";
+import { createRegistry, type ComponentRegistry } from "./components/spec";
 
 const EMPTY_REGISTRY = createRegistry();
 
@@ -82,14 +82,14 @@ export function parseMdxToDoc(
 
   return {
     doc: {
-      type: 'doc',
-      content: content.length > 0 ? content : [{ type: 'paragraph' }],
+      type: "doc",
+      content: content.length > 0 ? content : [{ type: "paragraph" }],
     },
     snapshot: {
       blocks,
       gaps,
       leading: first ? source.slice(0, first.position?.start.offset ?? 0) : source,
-      trailing: last ? source.slice(last.position?.end.offset ?? source.length) : '',
+      trailing: last ? source.slice(last.position?.end.offset ?? source.length) : "",
     },
   };
 }
@@ -122,16 +122,14 @@ export function serializeDocToMdx(
     try {
       normalized = stringifyBlock(nodeToMdastBlock(node, registry));
     } catch {
-      normalized = '';
+      normalized = "";
     }
 
     const candidates = (byNormalized.get(normalized) ?? []).filter((i) => !used.has(i));
     // prefer the block that originally followed the previous match, so
     // original inter-block whitespace can be reused
     const pick =
-      candidates.find((i) => prevMatch != null && i === prevMatch + 1) ??
-      candidates[0] ??
-      null;
+      candidates.find((i) => prevMatch != null && i === prevMatch + 1) ?? candidates[0] ?? null;
 
     if (pick != null) {
       used.add(pick);
@@ -143,12 +141,11 @@ export function serializeDocToMdx(
     }
   }
 
-  const filtered = parts.filter((part) => part.text !== '');
+  const filtered = parts.filter((part) => part.text !== "");
 
-  if (filtered.length === 0) return snapshot?.blocks.length === 0 ? snapshot.leading : '';
+  if (filtered.length === 0) return snapshot?.blocks.length === 0 ? snapshot.leading : "";
 
-  let out =
-    snapshot && filtered[0].index === 0 ? snapshot.leading : '';
+  let out = snapshot && filtered[0].index === 0 ? snapshot.leading : "";
 
   for (let i = 0; i < filtered.length; i++) {
     out += filtered[i].text;
@@ -158,15 +155,15 @@ export function serializeDocToMdx(
       if (snapshot && current != null && next === current + 1) {
         out += snapshot.gaps[current];
       } else {
-        out += '\n\n';
+        out += "\n\n";
       }
     }
   }
 
   if (snapshot && filtered[filtered.length - 1].index === snapshot.blocks.length - 1) {
     out += snapshot.trailing;
-  } else if (!out.endsWith('\n')) {
-    out += '\n';
+  } else if (!out.endsWith("\n")) {
+    out += "\n";
   }
 
   return out;

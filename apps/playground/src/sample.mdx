@@ -5,18 +5,18 @@ description: MDX components rendered as real components with editable regions
 
 # Editing MDX components
 
-Registered components render as the **real component** — each editable area
-is a proper region, not a generic code block.
+Registered components render as the real component, and each editable area
+is a proper region. Type `/` on an empty line to insert blocks and components.
 
 <Callout type="warn" title="Heads up">
-  This callout's title and body are both editable. Try changing the **type**
-  from the toolbar that appears on hover.
+  This callout's title and body are both editable. Click the icon to change its **type**, or press
+  `Cmd-.` to open the options behind the ⋯ handle.
 </Callout>
 
 Code fences highlight as you type, and the language is one click away:
 
 ```ts title="editor.ts"
-import { MdxEditor } from '@fumadocs-editor/ui';
+import { MdxEditor } from "@fumadocs-editor/ui";
 
 export function render(value: string) {
   const editor = new MdxEditor({ defaultValue: value });
@@ -24,30 +24,38 @@ export function render(value: string) {
 }
 ```
 
-Cards decompose into structured, editable items. Open the **Attributes**
-popover on a card to edit its link and other props:
+Cards decompose into structured, editable items. Select some text to get the
+formatting bubble; its component chip edits the card's link and other props:
 
 <Cards>
-  <Card title="Getting Started" href="/docs">Set up your first project.</Card>
-  <Card title="Components" href="/docs/components">Browse the component library.</Card>
+  <Card title="Getting Started" href="/docs">
+    Set up your first project.
+  </Card>
+  <Card title="Components" href="/docs/components">
+    Browse the component library.
+  </Card>
 </Cards>
 
-Multi-part components port 1:1 too — Steps keep their numbered rail:
+Multi-part components port 1:1 too. Steps keep their numbered rail, and
+`Cmd-Enter` starts the next one mid-thought:
 
 <Steps>
   <Step>
     ### Install the package
 
     Add `@fumadocs-editor/ui` to your project.
+
   </Step>
   <Step>
     ### Mount the editor
 
     Drop `<MdxEditor />` into any client component.
+
   </Step>
 </Steps>
 
-File trees nest folders and files, each name editable in place:
+File trees are built like a list: `Enter` adds a row, `Tab` toggles it into a
+folder, `Alt-arrows` reorder, and the icons are drag handles:
 
 <Files>
   <Folder name="app">
@@ -61,7 +69,7 @@ And Accordions render every panel open, so the answers stay editable:
 
 <Accordions>
   <Accordion title="Does it round-trip losslessly?">
-    Yes — unedited blocks serialize back byte-for-byte.
+    Yes. Unedited blocks serialize back byte-for-byte.
   </Accordion>
   <Accordion title="Can I add my own components?">
     Register a spec and a renderer, and it becomes a first-class node.

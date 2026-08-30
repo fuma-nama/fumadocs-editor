@@ -1,10 +1,10 @@
-import type { ComponentSpec } from '@fumadocs-editor/core';
-import type { FC, ReactNode } from 'react';
+import type { ComponentSpec } from "@fumadocs-editor/core";
+import type { FC, ReactNode } from "react";
 
 export interface ComponentRenderProps {
   /** plain-string JSX attributes (e.g. Callout `type`) */
   props: Record<string, string>;
-  /** the editable regions — render this where content should appear */
+  /** the editable regions: render this where content should appear */
   children: ReactNode;
   /** update a string attribute in place (for controls the renderer owns) */
   setProp: (name: string, value: string) => void;

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import {
   createContext,
   useCallback,
@@ -7,11 +7,11 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import { cn } from './utils/cn';
+} from "react";
+import { cn } from "./utils/cn";
 
-export type EditorTheme = 'light' | 'dark' | 'system';
-export type ResolvedTheme = 'light' | 'dark';
+export type EditorTheme = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
 interface ThemeContextValue {
   /** the requested theme, including `system` */
@@ -25,21 +25,21 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /** Read the OS colour-scheme preference; SSR-safe (falls back to `light`). */
 function systemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined' || !window.matchMedia) return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  if (typeof window === "undefined" || !window.matchMedia) return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 /**
  * Self-contained theme context for the editor. Fumadocs sites already toggle a
  * `.dark` class (via `next-themes`) that the editor's tokens key off, so inside
- * a real site you don't need this. It exists for standalone usage — a plain
- * React app, Storybook, the playground — where there's no ambient theme: it
+ * a real site you don't need this. It exists for standalone usage: a plain
+ * React app, Storybook, the playground: where there's no ambient theme: it
  * tracks a `light | dark | system` choice, persists it, and applies the class
  * on a wrapper element so every `fd-*` token below it resolves correctly.
  */
 export function EditorThemeProvider({
-  defaultTheme = 'system',
-  storageKey = 'fde-theme',
+  defaultTheme = "system",
+  storageKey = "fde-theme",
   children,
   className,
 }: {
@@ -50,23 +50,23 @@ export function EditorThemeProvider({
   className?: string;
 }) {
   const [theme, setThemeState] = useState<EditorTheme>(defaultTheme);
-  const [system, setSystem] = useState<ResolvedTheme>('light');
+  const [system, setSystem] = useState<ResolvedTheme>("light");
 
   // hydrate from storage after mount (avoids an SSR mismatch)
   useEffect(() => {
     setSystem(systemTheme());
     if (!storageKey) return;
     const stored = window.localStorage.getItem(storageKey) as EditorTheme | null;
-    if (stored === 'light' || stored === 'dark' || stored === 'system') setThemeState(stored);
+    if (stored === "light" || stored === "dark" || stored === "system") setThemeState(stored);
   }, [storageKey]);
 
   // keep `system` in sync with the OS while the resolved theme follows it
   useEffect(() => {
-    if (theme !== 'system' || !window.matchMedia) return;
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setSystem(mql.matches ? 'dark' : 'light');
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
+    if (theme !== "system" || !window.matchMedia) return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setSystem(mql.matches ? "dark" : "light");
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
   }, [theme]);
 
   const setTheme = useCallback(
@@ -77,7 +77,7 @@ export function EditorThemeProvider({
     [storageKey],
   );
 
-  const resolvedTheme = theme === 'system' ? system : theme;
+  const resolvedTheme = theme === "system" ? system : theme;
   const value = useMemo<ThemeContextValue>(
     () => ({ theme, resolvedTheme, setTheme }),
     [theme, resolvedTheme, setTheme],
@@ -93,14 +93,14 @@ export function EditorThemeProvider({
 }
 
 /**
- * Access the editor theme. Safe to call outside an {@link EditorThemeProvider} —
+ * Access the editor theme. Safe to call outside an {@link EditorThemeProvider};
  * it then reports `system` and `setTheme` is a no-op, so the editor simply
  * inherits whatever ambient theme (`next-themes`, OS) is in effect.
  */
 export function useEditorTheme(): ThemeContextValue {
   return (
     useContext(ThemeContext) ?? {
-      theme: 'system',
+      theme: "system",
       resolvedTheme: systemTheme(),
       setTheme: () => {},
     }

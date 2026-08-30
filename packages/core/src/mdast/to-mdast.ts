@@ -1,4 +1,4 @@
-import type { JSONContent } from '@tiptap/core';
+import type { JSONContent } from "@tiptap/core";
 import type {
   BlockContent,
   DefinitionContent,
@@ -7,16 +7,16 @@ import type {
   Root,
   RootContent,
   TableRow,
-} from 'mdast';
+} from "mdast";
 import type {
   MdxJsxAttribute as MdastJsxAttribute,
   MdxJsxExpressionAttribute as MdastJsxExpressionAttribute,
   MdxJsxFlowElement,
-} from 'mdast-util-mdx-jsx';
-import type { MdxAttribute } from '../extensions/mdx-nodes';
-import type { ComponentRegistry, ComponentSpec } from '../components/spec';
-import { createRegistry } from '../components/spec';
-import type { RawNode } from './stringify';
+} from "mdast-util-mdx-jsx";
+import type { MdxAttribute } from "../extensions/mdx-nodes";
+import type { ComponentRegistry, ComponentSpec } from "../components/spec";
+import { createRegistry } from "../components/spec";
+import type { RawNode } from "./stringify";
 
 const EMPTY_REGISTRY = createRegistry();
 
@@ -26,11 +26,11 @@ interface PMMark {
 }
 
 /** outer to inner; code is always innermost since it terminates recursion */
-const MARK_PRIORITY = ['link', 'bold', 'italic', 'strike', 'code'];
+const MARK_PRIORITY = ["link", "bold", "italic", "strike", "code"];
 
 function markEquals(a: PMMark, b: PMMark): boolean {
   if (a.type !== b.type) return false;
-  if (a.type === 'link') {
+  if (a.type === "link") {
     return (
       (a.attrs?.href ?? null) === (b.attrs?.href ?? null) &&
       (a.attrs?.title ?? null) === (b.attrs?.title ?? null)
@@ -53,52 +53,52 @@ interface InlineItem {
 }
 
 function textOf(node: JSONContent): string {
-  if (node.type === 'text') return node.text ?? '';
-  return (node.content ?? []).map(textOf).join('');
+  if (node.type === "text") return node.text ?? "";
+  return (node.content ?? []).map(textOf).join("");
 }
 
 export function attributesToMdast(
   attrs: MdxAttribute[] = [],
 ): (MdastJsxAttribute | MdastJsxExpressionAttribute)[] {
   return attrs.map((attr) => {
-    if (attr.type === 'mdxJsxExpressionAttribute') {
-      return { type: 'mdxJsxExpressionAttribute', value: attr.value };
+    if (attr.type === "mdxJsxExpressionAttribute") {
+      return { type: "mdxJsxExpressionAttribute", value: attr.value };
     }
     return {
-      type: 'mdxJsxAttribute',
+      type: "mdxJsxAttribute",
       name: attr.name,
       value:
-        attr.value == null || typeof attr.value === 'string'
+        attr.value == null || typeof attr.value === "string"
           ? attr.value
-          : { type: 'mdxJsxAttributeValueExpression', value: attr.value.value },
+          : { type: "mdxJsxAttributeValueExpression", value: attr.value.value },
     };
   });
 }
 
 function leafToPhrasing(node: JSONContent): PhrasingContent {
   switch (node.type) {
-    case 'text':
-      return { type: 'text', value: node.text ?? '' };
-    case 'hardBreak':
-      return { type: 'break' };
-    case 'image':
+    case "text":
+      return { type: "text", value: node.text ?? "" };
+    case "hardBreak":
+      return { type: "break" };
+    case "image":
       return {
-        type: 'image',
-        url: String(node.attrs?.src ?? ''),
+        type: "image",
+        url: String(node.attrs?.src ?? ""),
         alt: (node.attrs?.alt as string | null) ?? null,
         title: (node.attrs?.title as string | null) ?? null,
       };
-    case 'mdxTextExpression':
-      return { type: 'mdxTextExpression', value: String(node.attrs?.value ?? '') };
-    case 'mdxJsxTextElement':
+    case "mdxTextExpression":
+      return { type: "mdxTextExpression", value: String(node.attrs?.value ?? "") };
+    case "mdxJsxTextElement":
       return {
-        type: 'mdxJsxTextElement',
+        type: "mdxJsxTextElement",
         name: (node.attrs?.name as string | null) ?? null,
         attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
         children: inlineToPhrasing(node.content),
       };
-    case 'verbatimInline':
-      return { type: 'raw', value: String(node.attrs?.value ?? '') } as unknown as PhrasingContent;
+    case "verbatimInline":
+      return { type: "raw", value: String(node.attrs?.value ?? "") } as unknown as PhrasingContent;
     default:
       throw new Error(`Cannot serialize inline node: ${node.type}`);
   }
@@ -122,26 +122,26 @@ function convertRun(items: InlineItem[]): PhrasingContent[] {
     while (j < items.length && items[j].marks.some((m) => markEquals(m, mark))) j += 1;
     const run = items.slice(i, j);
 
-    if (mark.type === 'code') {
-      out.push({ type: 'inlineCode', value: run.map((r) => textOf(r.node)).join('') });
+    if (mark.type === "code") {
+      out.push({ type: "inlineCode", value: run.map((r) => textOf(r.node)).join("") });
     } else {
       const inner = convertRun(
         run.map((r) => ({ node: r.node, marks: r.marks.filter((m) => !markEquals(m, mark)) })),
       );
       switch (mark.type) {
-        case 'bold':
-          out.push({ type: 'strong', children: inner });
+        case "bold":
+          out.push({ type: "strong", children: inner });
           break;
-        case 'italic':
-          out.push({ type: 'emphasis', children: inner });
+        case "italic":
+          out.push({ type: "emphasis", children: inner });
           break;
-        case 'strike':
-          out.push({ type: 'delete', children: inner });
+        case "strike":
+          out.push({ type: "delete", children: inner });
           break;
-        case 'link':
+        case "link":
           out.push({
-            type: 'link',
-            url: String(mark.attrs?.href ?? ''),
+            type: "link",
+            url: String(mark.attrs?.href ?? ""),
             title: (mark.attrs?.title as string | null) ?? null,
             children: inner,
           });
@@ -167,7 +167,7 @@ function listItemsToMdast(
   registry: ComponentRegistry,
 ): ListItem[] {
   return (node.content ?? []).map((item) => ({
-    type: 'listItem',
+    type: "listItem",
     spread: false,
     checked: task ? item.attrs?.checked === true : null,
     children: (item.content ?? []).map(
@@ -178,21 +178,21 @@ function listItemsToMdast(
 
 function tableToMdast(node: JSONContent): RootContent {
   const rows: TableRow[] = (node.content ?? []).map((row) => ({
-    type: 'tableRow',
+    type: "tableRow",
     children: (row.content ?? []).map((cell) => {
-      const paragraphs = (cell.content ?? []).filter((child) => child.type === 'paragraph');
+      const paragraphs = (cell.content ?? []).filter((child) => child.type === "paragraph");
       const children: PhrasingContent[] = [];
       paragraphs.forEach((paragraph, index) => {
-        if (index > 0) children.push({ type: 'text', value: ' ' });
+        if (index > 0) children.push({ type: "text", value: " " });
         children.push(...inlineToPhrasing(paragraph.content));
       });
-      return { type: 'tableCell', children };
+      return { type: "tableCell", children };
     }),
   }));
 
   return {
-    type: 'table',
-    align: (node.attrs?.align as ('left' | 'right' | 'center' | null)[] | null) ?? null,
+    type: "table",
+    align: (node.attrs?.align as ("left" | "right" | "center" | null)[] | null) ?? null,
     children: rows,
   };
 }
@@ -202,71 +202,81 @@ export function nodeToMdastBlock(
   registry: ComponentRegistry = EMPTY_REGISTRY,
 ): RootContent {
   switch (node.type) {
-    case 'paragraph':
-      return { type: 'paragraph', children: inlineToPhrasing(node.content) };
-    case 'heading':
+    case "paragraph":
+      return { type: "paragraph", children: inlineToPhrasing(node.content) };
+    case "heading":
       return {
-        type: 'heading',
+        type: "heading",
         depth: Math.min(6, Math.max(1, Number(node.attrs?.level ?? 1))) as 1 | 2 | 3 | 4 | 5 | 6,
         children: inlineToPhrasing(node.content),
       };
-    case 'blockquote':
+    case "blockquote":
       return {
-        type: 'blockquote',
+        type: "blockquote",
         children: (node.content ?? []).map(
           (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
         ),
       };
-    case 'bulletList':
-      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, false, registry) };
-    case 'orderedList':
+    case "bulletList":
       return {
-        type: 'list',
+        type: "list",
+        ordered: false,
+        spread: false,
+        children: listItemsToMdast(node, false, registry),
+      };
+    case "orderedList":
+      return {
+        type: "list",
         ordered: true,
         start: Number(node.attrs?.start ?? 1),
         spread: false,
         children: listItemsToMdast(node, false, registry),
       };
-    case 'taskList':
-      return { type: 'list', ordered: false, spread: false, children: listItemsToMdast(node, true, registry) };
-    case 'codeBlock':
+    case "taskList":
       return {
-        type: 'code',
+        type: "list",
+        ordered: false,
+        spread: false,
+        children: listItemsToMdast(node, true, registry),
+      };
+    case "codeBlock":
+      return {
+        type: "code",
         lang: (node.attrs?.language as string | null) || null,
         meta: (node.attrs?.meta as string | null) || null,
         value: textOf(node),
       };
-    case 'horizontalRule':
-      return { type: 'thematicBreak' };
-    case 'table':
+    case "horizontalRule":
+      return { type: "thematicBreak" };
+    case "table":
       return tableToMdast(node);
-    case 'mdxJsxFlowElement':
+    case "mdxJsxFlowElement":
       return {
-        type: 'mdxJsxFlowElement',
+        type: "mdxJsxFlowElement",
         name: (node.attrs?.name as string | null) ?? null,
         attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
         children: (node.content ?? []).map(
           (child) => nodeToMdastBlock(child, registry) as BlockContent | DefinitionContent,
         ),
       };
-    case 'mdxComponent':
+    case "mdxComponent":
       return componentToMdast(node, registry);
-    case 'mdxFlowExpression':
-      return { type: 'mdxFlowExpression', value: String(node.attrs?.value ?? '') };
-    case 'mdxjsEsm':
-      return { type: 'mdxjsEsm', value: String(node.attrs?.value ?? '') };
-    case 'frontmatter':
-      return { type: 'yaml', value: String(node.attrs?.value ?? '') };
-    case 'verbatim':
-      return { type: 'raw', value: String(node.attrs?.value ?? '') } as unknown as RootContent;
+    case "mdxFlowExpression":
+      return { type: "mdxFlowExpression", value: String(node.attrs?.value ?? "") };
+    case "mdxjsEsm":
+      return { type: "mdxjsEsm", value: String(node.attrs?.value ?? "") };
+    case "frontmatter":
+      return { type: "yaml", value: String(node.attrs?.value ?? "") };
+    case "verbatim":
+      return { type: "raw", value: String(node.attrs?.value ?? "") } as unknown as RootContent;
     default:
       throw new Error(`Cannot serialize block node: ${node.type}`);
   }
 }
 
 function regionText(node: JSONContent | undefined): string {
-  if (!node) return '';
-  return (node.content ?? []).map(textOf).join('');
+  if (!node) return "";
+  return (node.content ?? []).map(textOf).join("");
 }
 
 function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJsxFlowElement {
@@ -277,7 +287,7 @@ function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJs
 
   if (!spec) {
     return {
-      type: 'mdxJsxFlowElement',
+      type: "mdxJsxFlowElement",
       name,
       attributes,
       children: children.map(
@@ -288,34 +298,37 @@ function componentToMdast(node: JSONContent, registry: ComponentRegistry): MdxJs
 
   // write inline-region text back into its backing attribute
   for (const { attribute, region } of spec.attributeRegions ?? []) {
-    const value = regionText(children.find((c) => c.type === 'mdxInlineRegion' && c.attrs?.region === region));
+    const value = regionText(
+      children.find((c) => c.type === "mdxInlineRegion" && c.attrs?.region === region),
+    );
     const existing = attributes.find(
-      (attr): attr is MdastJsxAttribute => attr.type === 'mdxJsxAttribute' && attr.name === attribute,
+      (attr): attr is MdastJsxAttribute =>
+        attr.type === "mdxJsxAttribute" && attr.name === attribute,
     );
     if (existing) existing.value = value;
-    else if (value) attributes.push({ type: 'mdxJsxAttribute', name: attribute, value });
+    else if (value) attributes.push({ type: "mdxJsxAttribute", name: attribute, value });
   }
 
   let mdChildren: (BlockContent | DefinitionContent)[] = [];
   if (spec.childComponent) {
     mdChildren = children
-      .filter((c) => c.type === 'mdxComponent')
+      .filter((c) => c.type === "mdxComponent")
       .map((c) => componentToMdast(c, registry) as BlockContent);
   } else if (spec.childrenRegion) {
     const body = children.find(
-      (c) => c.type === 'mdxBlockRegion' && c.attrs?.region === spec.childrenRegion!.region,
+      (c) => c.type === "mdxBlockRegion" && c.attrs?.region === spec.childrenRegion!.region,
     );
     mdChildren = (body?.content ?? []).map(
       (c) => nodeToMdastBlock(c, registry) as BlockContent | DefinitionContent,
     );
   }
 
-  return { type: 'mdxJsxFlowElement', name, attributes, children: mdChildren };
+  return { type: "mdxJsxFlowElement", name, attributes, children: mdChildren };
 }
 
 export function docToMdast(doc: JSONContent, registry: ComponentRegistry = EMPTY_REGISTRY): Root {
   return {
-    type: 'root',
+    type: "root",
     children: (doc.content ?? []).map((node) => nodeToMdastBlock(node, registry)),
   };
 }

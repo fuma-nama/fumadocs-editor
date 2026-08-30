@@ -3,46 +3,51 @@
   "version": "0.0.0",
   "description": "MDX editor for Fumadocs: React component with Base UI chrome",
   "license": "MIT",
-  "type": "module",
   "files": [
     "dist",
     "css"
   ],
+  "type": "module",
   "exports": {
     ".": "./dist/index.js",
     "./css/preset.css": "./css/preset.css",
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "types:check": "tsc --noEmit"
+    "types:check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@fumadocs-editor/core": "workspace:*",
     "@tiptap/core": "^3.27.3",
+    "@tiptap/extension-bubble-menu": "^3.27.3",
     "@tiptap/extension-code-block-lowlight": "^3.27.3",
     "@tiptap/extension-list": "^3.27.3",
     "@tiptap/pm": "^3.27.3",
     "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
+    "@tiptap/suggestion": "^3.27.3",
     "cnfast": "^0.0.8",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.23.0"
   },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
   "devDependencies": {
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "jsdom": "^26.1.0",
     "tsdown": "^0.22.4",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
   },
-  "publishConfig": {
-    "access": "public"
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   }
 }
