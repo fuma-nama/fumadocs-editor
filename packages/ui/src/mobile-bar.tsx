@@ -36,6 +36,7 @@ import { BlockPanel } from "./block-menu";
 import { TURN_INTO } from "./bubble-menu";
 import { insertItems } from "./slash-menu";
 import { itemCls } from "./components/styles";
+import { cn } from "./utils/cn";
 
 /** distance the virtual keyboard covers at the bottom of the layout viewport */
 function useKeyboardInset(): number {
@@ -270,7 +271,7 @@ export function MobileBar({
                 <button
                   key={item.value}
                   type="button"
-                  className={`${itemCls} h-11 shrink-0`}
+                  className={cn(itemCls, "h-11 shrink-0")}
                   onClick={() => {
                     item.run(editor.chain().focus()).run();
                     setSheet(null);
@@ -287,7 +288,7 @@ export function MobileBar({
                 <button
                   key={item.title}
                   type="button"
-                  className={`${itemCls} h-11 shrink-0`}
+                  className={cn(itemCls, "h-11 shrink-0")}
                   onClick={() => {
                     const { from } = editor.state.selection;
                     item.run(editor, { from, to: from });

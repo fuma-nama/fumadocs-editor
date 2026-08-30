@@ -4,6 +4,7 @@ import { Switch } from "@base-ui/react/switch";
 import { Check, ChevronDown } from "lucide-react";
 import type { MdxAttribute, PropField } from "@fumadocs-editor/core/extensions";
 import { focusRing, itemCls, itemIndicatorCls, popupCls } from "./components/styles";
+import { cn } from "./utils/cn";
 import { useEditorPortal } from "./utils/portal";
 
 const propInputCls =
@@ -84,7 +85,7 @@ export function PropControl({
       <label className="flex flex-col gap-1">
         <span className="text-[11px] font-medium text-fd-muted-foreground">{label}</span>
         <input
-          className={`${propInputCls} font-mono text-[12px]`}
+          className={cn(propInputCls, "font-mono text-[12px]")}
           value={value}
           spellCheck={false}
           placeholder={field.placeholder ?? "{…}"}

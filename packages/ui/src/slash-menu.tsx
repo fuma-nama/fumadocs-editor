@@ -31,6 +31,7 @@ import {
 } from "./components/keymap";
 import "@tiptap/extension-table";
 import { itemCls, popupCls } from "./components/styles";
+import { cn } from "./utils/cn";
 import { insertImages } from "./components/image-view";
 import type { MediaProvider } from "./components/media";
 
@@ -146,7 +147,7 @@ function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   }, [selected]);
 
   return (
-    <div ref={ref} className={`${popupCls} fixed z-50 max-h-72 w-52 overflow-y-auto`}>
+    <div ref={ref} className={cn(popupCls, "fixed z-50 max-h-72 w-52 overflow-y-auto")}>
       {items.length === 0 && (
         <p className="px-2 py-1.5 text-[13px] text-fd-muted-foreground">No results</p>
       )}
@@ -160,7 +161,7 @@ function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
           <button
             type="button"
             data-index={index}
-            className={`${itemCls} w-full`}
+            className={cn(itemCls, "w-full")}
             data-highlighted={index === selected || undefined}
             // preserve the editor selection; select on mouseup like a menu item
             onMouseDown={(event) => event.preventDefault()}

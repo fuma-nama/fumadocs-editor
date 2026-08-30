@@ -2,7 +2,8 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
-import { itemCls, itemIndicatorCls, popupSurfaceCls } from "./styles";
+import { itemCls, itemIndicatorCls, popupCls } from "./styles";
+import { cn } from "../utils/cn";
 import { useEditorPortal } from "../utils/portal";
 
 export interface PickerItem {
@@ -71,7 +72,7 @@ export function Picker<T extends PickerItem>({
       </Combobox.Trigger>
       <Combobox.Portal container={container ?? portal.container}>
         <Combobox.Positioner sideOffset={6} align={align} className="z-50">
-          <Combobox.Popup className={`${popupSurfaceCls} w-52 overflow-hidden`}>
+          <Combobox.Popup className={cn(popupCls, "w-52 overflow-hidden p-0")}>
             {/* px-3 puts the input text on the item labels' left edge (list
              * p-1 + item px-2); Empty stays mounted while there are matches,
              * so it must collapse (`empty:hidden`) or it reads as padding */}

@@ -12,6 +12,7 @@ import { childInsertContext, focusAt, moveComponentAt } from "./components/keyma
 import { PropControl } from "./attributes-panel";
 import { readPropValue, setPropValue } from "./components/attributes";
 import { focusRing, itemCls, popupCls } from "./components/styles";
+import { cn } from "./utils/cn";
 
 /**
  * A quiet ⋯ handle at the active component's top-right corner: the resting
@@ -124,7 +125,7 @@ export function BlockMenu({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end" className="z-50">
-          <Popover.Popup className={`${popupCls} flex w-56 flex-col`}>
+          <Popover.Popup className={cn(popupCls, "flex w-56 flex-col")}>
             <BlockPanel
               editor={editor}
               specs={specs}
@@ -230,7 +231,7 @@ export function BlockPanel({
       ))}
       <button
         type="button"
-        className={`${itemCls} text-fd-muted-foreground hover:text-fd-error`}
+        className={cn(itemCls, "text-fd-muted-foreground hover:text-fd-error")}
         onClick={() => {
           const current = editor.state.doc.nodeAt(active.pos);
           if (!current) return;
