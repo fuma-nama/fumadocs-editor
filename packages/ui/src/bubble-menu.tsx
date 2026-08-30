@@ -301,7 +301,7 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex items-center gap-1.5 p-0.5">
+    <div className="flex items-center gap-1.5">
       <input
         className={cn(fieldCls, "w-52")}
         placeholder="Image source…"
@@ -523,11 +523,7 @@ export function EditorBubble({
         </>
       )}
       {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
-      {state?.atom?.kind === "frontmatter" && (
-        <div className="p-0.5">
-          <FrontmatterPanel editor={editor} />
-        </div>
-      )}
+      {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
       {active && spec && (
         <>
           {state?.format && <span className="mx-0.5 h-4 w-px bg-fd-border" />}
@@ -555,7 +551,9 @@ export function EditorBubble({
           </Popover.Root>
         </>
       )}
-      <span ref={setPortalEl} />
+      {/* layout-inert anchor: only exists to resolve the bubble's parent for
+       * portals — as a flex item it would add a phantom trailing gap */}
+      <span ref={setPortalEl} className="hidden" />
     </BubbleMenu>
   );
 }
