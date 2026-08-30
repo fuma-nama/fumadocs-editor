@@ -20,14 +20,15 @@ export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
 export { serializeDocToMdx, blockNormalized, matchBlocks, tryNormalize } from "./serialize";
 export { createIncrementalSerializer } from "./incremental";
 export {
-  createRegistry,
+  createSyntax,
   COMPONENT_NODE,
   INLINE_REGION_NODE,
   BLOCK_REGION_NODE,
 } from "./components/spec";
 export type {
   ComponentSpec,
-  ComponentRegistry,
+  Syntax,
+  SyntaxOptions,
   PropField,
   AttributeRegion,
 } from "./components/spec";

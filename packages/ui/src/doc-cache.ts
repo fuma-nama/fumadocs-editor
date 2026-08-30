@@ -40,8 +40,8 @@ export async function parseDocCached(
       return hit.parsed;
     }
   }
-  const { parseMdxToDoc, createRegistry } = await loadParse();
-  const parsed = parseMdxToDoc(source, createRegistry(components));
+  const { parseMdxToDoc, createSyntax } = await loadParse();
+  const parsed = parseMdxToDoc(source, createSyntax(components));
   if (key !== undefined) {
     cache.delete(key);
     cache.set(key, { source, components, parsed });

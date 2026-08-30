@@ -1,14 +1,14 @@
 import type { JSONContent } from "@tiptap/core";
 import { nodeToMdastBlock } from "./mdast/to-mdast";
 import { stringifyBlock } from "./mdast/stringify";
-import { createRegistry, type ComponentRegistry } from "./components/spec";
+import { createSyntax, type Syntax } from "./components/spec";
 import type { DocSnapshot, SnapshotBlock } from "./document";
 
-const EMPTY_REGISTRY = createRegistry();
+const EMPTY_SYNTAX = createSyntax();
 
 /** a snapshot block's lossless-round-trip serialization, computed once */
-export function blockNormalized(block: SnapshotBlock, registry: ComponentRegistry): string {
-  return (block._normalized ??= tryNormalize(block.node, registry) ?? block.source);
+export function blockNormalized(block: SnapshotBlock, syntax: Syntax): string {
+  return (block._normalized ??= tryNormalize(block.node, syntax) ?? block.source);
 }
 
 /**
@@ -20,7 +20,7 @@ export function blockNormalized(block: SnapshotBlock, registry: ComponentRegistr
 export function matchBlocks(normalized: string[], snapshot: DocSnapshot): (number | null)[] {
   const byNormalized = new Map<string, number[]>();
   snapshot.blocks.forEach((block, index) => {
-    const key = blockNormalized(block, snapshot.registry);
+    const key = blockNormalized(block, snapshot.syntax);
     const list = byNormalized.get(key);
     if (list) list.push(index);
     else byNormalized.set(key, [index]);
@@ -44,10 +44,10 @@ export function matchBlocks(normalized: string[], snapshot: DocSnapshot): (numbe
 
 export function tryNormalize(
   node: JSONContent,
-  registry: ComponentRegistry,
+  syntax: Syntax,
 ): string | undefined {
   try {
-    return stringifyBlock(nodeToMdastBlock(node, registry));
+    return stringifyBlock(nodeToMdastBlock(node, syntax));
   } catch {
     return undefined;
   }
@@ -61,11 +61,11 @@ export function tryNormalize(
 export function serializeDocToMdx(
   doc: JSONContent,
   snapshot?: DocSnapshot,
-  registry: ComponentRegistry = EMPTY_REGISTRY,
+  syntax: Syntax = EMPTY_SYNTAX,
 ): string {
   const normalized: string[] = [];
   for (const node of doc.content ?? []) {
-    normalized.push(tryNormalize(node, registry) ?? "");
+    normalized.push(tryNormalize(node, syntax) ?? "");
   }
   return assembleMdx(normalized, snapshot);
 }

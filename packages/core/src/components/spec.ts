@@ -7,7 +7,7 @@ import type { JSONContent } from "@tiptap/core";
 export interface PropField {
   name: string;
   label?: string;
-  type: "string" | "enum" | "boolean" | "number";
+  type: "string" | "enum" | "boolean" | "number" | "expression";
   /** for `type: 'enum'` */
   options?: string[];
   default?: string | number | boolean;
@@ -33,6 +33,9 @@ export interface AttributeRegion {
  * Structural description of an MDX component: how its attributes and children
  * map to editable regions and editable props. This is the *content-layer*
  * concern: no rendering. The UI layer extends this with a node renderer.
+ *
+ * A spec with no regions at all is a leaf component (e.g. GithubInfo): it has
+ * no editable content, only props.
  */
 export interface ComponentSpec {
   /** JSX tag name, e.g. "Callout" */
@@ -41,6 +44,12 @@ export interface ComponentSpec {
   title?: string;
   /** string attributes shown as inline editable regions (e.g. Callout title) */
   attributeRegions?: AttributeRegion[];
+  /**
+   * The element's *text content* edited as an inline region — for elements
+   * whose payload is their text child, like fumadocs `<include>./path.mdx</include>`.
+   * Mutually exclusive with `childrenRegion` / `childComponent`.
+   */
+  contentRegion?: { region: string; placeholder?: string; label?: string };
   /**
    * Element children become a single block editable region. `fromAttribute`
    * folds a string attribute that renders into the same visual slot as the
@@ -62,16 +71,47 @@ export interface ComponentSpec {
    * keep plain editing, where Enter moves between a component's own regions.
    */
   listLike?: boolean;
+  /**
+   * A parent attribute that is derived data: rebuilt on save as an array
+   * expression of each child's given string attribute, and dropped from the
+   * editable attributes on parse (fumadocs `Tabs`' `items` mirrors the child
+   * `Tab` `value`s).
+   */
+  itemsAttribute?: { attribute: string; fromChildAttribute: string };
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
   /** default document fragment inserted by the slash menu */
   insert?: () => JSONContent;
 }
 
-export type ComponentRegistry = Map<string, ComponentSpec>;
+/**
+ * Parse-level feature switches. Everything the syntax does not understand
+ * still round-trips byte-for-byte through the verbatim safety net — disabling
+ * a feature only means its construct stops being structurally editable.
+ */
+export interface SyntaxOptions {
+  /**
+   * Parse fumadocs heading suffixes — `## Title [#custom-id]`, `[!toc]`,
+   * `[toc]` — into heading attributes instead of literal text. Default true.
+   */
+  headingSuffixes?: boolean;
+}
 
-export function createRegistry(specs: ComponentSpec[] = []): ComponentRegistry {
-  return new Map(specs.map((spec) => [spec.name, spec]));
+/**
+ * Everything the editor understands: the registered MDX components plus the
+ * parse-level feature switches. One `Syntax` drives parsing, serialization
+ * and (with renderers layered on top) the UI.
+ */
+export interface Syntax {
+  components: Map<string, ComponentSpec>;
+  options: SyntaxOptions;
+}
+
+export function createSyntax(
+  components: ComponentSpec[] = [],
+  options: SyntaxOptions = {},
+): Syntax {
+  return { components: new Map(components.map((spec) => [spec.name, spec])), options };
 }
 
 /** The three shared node type names produced for registered components. */

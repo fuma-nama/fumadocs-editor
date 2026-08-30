@@ -2,10 +2,10 @@ import { describe, expect, test } from "vitest";
 import type { JSONContent } from "@tiptap/core";
 import { parseMdxToDoc } from "@fumadocs-editor/core/parse";
 import { serializeDocToMdx, tryNormalize } from "@fumadocs-editor/core/serialize";
-import { createRegistry } from "@fumadocs-editor/core";
+import { createSyntax } from "@fumadocs-editor/core";
 import { mergeRemote, type MergeOp } from "../src/merge";
 
-const registry = createRegistry();
+const syntax = createSyntax();
 
 const baseText = `# Title
 
@@ -18,7 +18,7 @@ Para three.
 
 function normalized(doc: JSONContent): string[] {
   const out: string[] = [];
-  for (const node of doc.content ?? []) out.push(tryNormalize(node, registry) ?? "");
+  for (const node of doc.content ?? []) out.push(tryNormalize(node, syntax) ?? "");
   return out;
 }
 
@@ -52,7 +52,7 @@ function editText(doc: JSONContent, childIndex: number, text: string): JSONConte
 
 describe("mergeRemote", () => {
   test("remote-only change applies cleanly; result serializes to the disk text", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const remoteText = baseText.replace("Para two.", "Para two, edited on disk.");
 
     const result = mergeRemote({
@@ -69,7 +69,7 @@ describe("mergeRemote", () => {
   });
 
   test("disjoint edits merge: local block kept, remote block taken", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const local = editText(base.doc, 1, "Para one, edited locally.");
     const remoteText = baseText.replace("Para three.", "Para three, from disk.");
 
@@ -89,7 +89,7 @@ describe("mergeRemote", () => {
   });
 
   test("same-block edits conflict and keep the local version", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const local = editText(base.doc, 2, "Para two, local.");
     const remoteText = baseText.replace("Para two.", "Para two, disk.");
 
@@ -107,7 +107,7 @@ describe("mergeRemote", () => {
   });
 
   test("remote insert and delete around an untouched local edit", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const local = editText(base.doc, 1, "Para one, local.");
     // disk: delete "Para three.", insert a block after "Para two."
     const remoteText = baseText.replace("Para three.\n", "A brand new block.\n");
@@ -129,7 +129,7 @@ describe("mergeRemote", () => {
   });
 
   test("remote deletion of a locally edited block is a conflict", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const local = editText(base.doc, 2, "Para two, local.");
     const remoteText = baseText.replace("Para two.\n\n", "");
 
@@ -146,7 +146,7 @@ describe("mergeRemote", () => {
   });
 
   test("identical texts produce no ops", () => {
-    const base = parseMdxToDoc(baseText, registry);
+    const base = parseMdxToDoc(baseText, syntax);
     const result = mergeRemote({
       base: base.snapshot,
       localNormalized: normalized(base.doc),

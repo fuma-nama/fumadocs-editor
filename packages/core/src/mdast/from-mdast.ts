@@ -16,11 +16,11 @@ import type {
   MdxJsxTextElement,
 } from "mdast-util-mdx-jsx";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
-import type { ComponentRegistry, ComponentSpec } from "../components/spec";
+import type { Syntax, ComponentSpec } from "../components/spec";
 
 export interface FromMdastContext {
   source: string;
-  registry: ComponentRegistry;
+  syntax: Syntax;
 }
 
 interface PMMark {
@@ -254,7 +254,7 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "table":
       return tableToNode(node, ctx);
     case "mdxJsxFlowElement": {
-      const spec = node.name ? ctx.registry.get(node.name) : undefined;
+      const spec = node.name ? ctx.syntax.components.get(node.name) : undefined;
       if (spec) return componentToNode(node, spec, ctx);
       return {
         type: "mdxJsxFlowElement",
@@ -325,7 +325,7 @@ function componentToNode(
   if (spec.childComponent) {
     const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
     for (const child of collectChildElements(node.children, names)) {
-      const childSpec = child.name != null ? ctx.registry.get(child.name) : undefined;
+      const childSpec = child.name != null ? ctx.syntax.components.get(child.name) : undefined;
       if (childSpec) regions.push(componentToNode(child, childSpec, ctx));
     }
   } else if (spec.childrenRegion) {

@@ -261,7 +261,7 @@ export function MdxEditor({
     const { doc } = editor.state;
     const localNormalized: string[] = [];
     for (let i = 0; i < doc.childCount; i++) {
-      localNormalized.push(tryNormalize(doc.child(i).toJSON(), snapshot.registry) ?? "");
+      localNormalized.push(tryNormalize(doc.child(i).toJSON(), snapshot.syntax) ?? "");
     }
     const result = mergeRemote({ base: snapshot, localNormalized, remoteText: text });
 
