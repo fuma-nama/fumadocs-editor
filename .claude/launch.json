@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/playground", "dev", "--port", "5173"],
       "port": 5173
+    },
+    {
+      "name": "playground-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/playground", "exec", "vite", "preview", "--port", "4173"],
+      "port": 4173
     }
   ]
 }

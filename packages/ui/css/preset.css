@@ -1,5 +1,5 @@
 /*
- * @fumadocs-editor/ui — Tailwind v4 preset.
+ * @fumadocs-editor/ui: Tailwind v4 preset.
  *
  * Registers the fumadocs `--color-fd-*` design tokens (so the `fd-*` utilities
  * used across the editor components are generated) and styles the ProseMirror
@@ -43,7 +43,7 @@
 
 /* Explicit light scope. `@theme` already sets these at `:root`, but a nested
  * `.light` (from the theme provider or `<MdxEditor theme="light">`) must be able
- * to override an ancestor `.dark` — or the OS override below — so it re-declares
+ * to override an ancestor `.dark`: or the OS override below, so it re-declares
  * the light values authoritatively. */
 .light {
   --color-fd-background: hsl(0 0% 96%);
@@ -64,7 +64,7 @@
   --color-fd-ring: hsl(0 0% 63.9%);
 }
 
-/* Dark theme — via a `.dark` class (fumadocs / next-themes) … */
+/* Dark theme: via a `.dark` class (fumadocs / next-themes) … */
 .dark {
   --color-fd-background: hsl(0 0% 7.04%);
   --color-fd-foreground: hsl(0 0% 92%);
@@ -107,7 +107,7 @@
 }
 
 /* =========================================================================
- * Editor content — the ProseMirror document. TipTap owns this DOM, so it is
+ * Editor content: the ProseMirror document. TipTap owns this DOM, so it is
  * styled here rather than with utility classes.
  * ====================================================================== */
 
@@ -163,7 +163,7 @@
   border-radius: 5px;
   padding: 0.1em 0.35em;
   font-size: 0.875em;
-  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace);
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
 }
 
 .fde-content pre {
@@ -210,22 +210,22 @@
   margin-top: 0.4em;
 }
 
-.fde-content ul[data-type='taskList'] {
+.fde-content ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0.2em;
 }
 
-.fde-content ul[data-type='taskList'] li {
+.fde-content ul[data-type="taskList"] li {
   display: flex;
   gap: 8px;
 }
 
-.fde-content ul[data-type='taskList'] li > label {
+.fde-content ul[data-type="taskList"] li > label {
   flex-shrink: 0;
   margin-top: 0.3em;
 }
 
-.fde-content ul[data-type='taskList'] li > div {
+.fde-content ul[data-type="taskList"] li > div {
   flex: 1;
 }
 
@@ -269,11 +269,11 @@
 }
 
 .fde-content [data-mdx-flow]::before {
-  content: '<' attr(data-component) '>';
+  content: "<" attr(data-component) ">";
   position: absolute;
   top: 6px;
   left: 12px;
-  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace);
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 11px;
   color: var(--color-fd-muted-foreground);
 }
@@ -301,9 +301,15 @@
   color: var(--color-fd-muted-foreground);
 }
 
-/* registered components draw their own selection outline (data-selected on the
- * node view wrapper) — exclude them here so they don't get two rings at once */
-.fde-content .ProseMirror-selectednode:not(.node-mdxComponent) {
+/* Registered components draw their own selection outline (data-selected on the
+ * node view wrapper) and regions never draw one: TipTap marks every node view
+ * covered by the selection, so without these exclusions one selected card
+ * would stack rings on itself, its regions and its children. This rule is for
+ * selected block atoms (frontmatter, ESM, dividers, images). */
+.fde-content
+  .ProseMirror-selectednode:not(.node-mdxComponent):not(.node-mdxInlineRegion):not(
+    .node-mdxBlockRegion
+  ) {
   outline: 2px solid var(--color-fd-ring);
   outline-offset: 2px;
   border-radius: 4px;
@@ -311,6 +317,34 @@
 
 .fde-content .ProseMirror-gapcursor:after {
   border-top: 1px solid var(--color-fd-foreground);
+}
+
+/* the Selection extension marks the blurred editor's selection with this
+ * class, slightly more muted than the live native highlight */
+.fde-content .ProseMirror .selection {
+  background: color-mix(in oklab, var(--color-fd-primary) 25%, transparent);
+  border-radius: 2px;
+}
+
+/* drag preview line, placed by the drop-indicator plugin at the real target */
+.fde-drop-indicator {
+  position: fixed;
+  z-index: 50;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-fd-primary);
+  pointer-events: none;
+}
+
+/* the Placeholder extension's ghost hint on the current empty paragraph */
+.fde-content .ProseMirror > p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--color-fd-muted-foreground);
+  opacity: 0.5;
+  animation: fde-fade-in 80ms ease-out;
 }
 
 /* =========================================================================
@@ -325,65 +359,51 @@
   outline: none;
 }
 
-/* ---- component control bar ----
- * Never hover-only (that's unreachable by keyboard/touch). Leaf components
- * reveal their bar on focus or selection always, and additionally on hover
- * where hover is a real pointer. Container (potential-parent) components keep
- * their bar visible at all times so "add child" / delete is always reachable. */
+/* chrome never participates in text selection or drags: a drag or shift-arrow
+ * sweeping past a component must highlight content only, never its frame */
+.fde-content [contenteditable="false"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
 
-.fde-component-bar {
+/* ---- the quiet chrome ----
+ * The only signals while writing: a warm border on the component the caret is
+ * in (the activeComponent decoration lands on the `.react-renderer` wrapper),
+ * one ⋯ handle at its corner, and the bubble for selections. */
+
+.fde-content .react-renderer[data-active] > [data-component] {
+  border-color: color-mix(in oklab, var(--color-fd-ring) 45%, var(--color-fd-border));
+  transition: border-color 150ms ease-out;
+}
+
+.fde-block-handle {
   opacity: 0;
-  pointer-events: none;
-  transform: translateY(2px);
-  transition:
-    opacity 150ms,
-    transform 150ms;
+  animation: fde-handle-in 150ms ease-out forwards;
 }
 
-/* focus + selection + active (caret inside): reachable by keyboard and touch.
- * The single contenteditable means `:focus-within` can't reach these wrappers,
- * so the activeComponent plugin decorates the caret's innermost component — the
- * decoration lands on the `.react-renderer` node wrapper. */
-.fde-content [data-component]:focus-within > .fde-component-bar,
-.fde-content [data-component][data-selected] > .fde-component-bar,
-.fde-content .react-renderer[data-active] > [data-component] > .fde-component-bar {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-}
-
-/* hover reveal only where a real hover pointer exists */
-@media (hover: hover) {
-  .fde-content [data-component]:hover > .fde-component-bar {
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-  /* …but not when a nested component is the actual hover target */
-  .fde-content [data-component]:has([data-component]:hover) > .fde-component-bar {
+@keyframes fde-handle-in {
+  from {
     opacity: 0;
-    pointer-events: none;
+    translate: 0 -2px;
+  }
+  to {
+    opacity: 1;
+    translate: none;
   }
 }
 
-/* Top-level containers always show their bar so add-child / delete are always
- * reachable. Scoped to top level (a direct doc child) so a nested container —
- * a Folder inside Files — doesn't collide with its parent's always-on bar; it
- * falls back to the leaf hover/focus rules above. */
-.fde-content .ProseMirror > .react-renderer > [data-component][data-container] > .fde-component-bar {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
+/* a freshly inserted component (a new row, step, card) settles into place */
+.fde-content .react-renderer.node-mdxComponent {
+  @starting-style {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+  transition:
+    opacity 120ms cubic-bezier(0.2, 0, 0, 1),
+    translate 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* keep any bar up while one of its popovers is open */
-.fde-content .fde-component-bar:has([data-popup-open]) {
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  transform: none !important;
-}
-
-.fde-region[data-empty][data-placeholder]:not([data-placeholder=''])::before {
+.fde-region[data-empty][data-placeholder]:not([data-placeholder=""])::before {
   content: attr(data-placeholder);
   position: absolute;
   inset-inline-start: 0;
@@ -391,30 +411,37 @@
   color: var(--color-fd-muted-foreground);
   opacity: 0.6;
   pointer-events: none;
+  animation: fde-fade-in 80ms ease-out;
 }
 
-.fde-region-block[data-region='body'] > * + * {
+@keyframes fde-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.fde-region-block[data-region="body"] > * + * {
   margin-top: 0.5em;
 }
 
 /* Callout regions */
-.fde-callout .fde-region-inline[data-region='title'] {
+.fde-callout .fde-region-inline[data-region="title"] {
   font-weight: 500;
   line-height: 1.4;
 }
 
-.fde-callout .fde-region-block[data-region='body'] {
+.fde-callout .fde-region-block[data-region="body"] {
   margin-top: 6px;
   color: var(--color-fd-muted-foreground);
 }
 
-/* Card regions — a title line and a multi-line body */
-.fde-card .fde-region-inline[data-region='title'] {
+/* Card regions: a title line and a multi-line body */
+.fde-card .fde-region-inline[data-region="title"] {
   font-size: 0.95em;
   font-weight: 500;
 }
 
-.fde-card .fde-region-block[data-region='body'] {
+.fde-card .fde-region-block[data-region="body"] {
   margin-top: 6px;
   font-size: 0.9em;
   color: var(--color-fd-muted-foreground);
@@ -459,7 +486,7 @@
   line-height: 1.6;
 }
 
-/* highlight.js token palette — github-light, darkened a touch so it keeps
+/* highlight.js token palette: github-light, darkened a touch so it keeps
  * >4.5:1 contrast on the muted `fd-card` surface (not pure white). */
 .fde-codeblock .hljs-comment,
 .fde-codeblock .hljs-quote {
@@ -561,7 +588,7 @@
 }
 
 /* =========================================================================
- * Steps — mirrors the fumadocs `fd-steps` / `fd-step` utilities.
+ * Steps: mirrors the fumadocs `fd-steps` / `fd-step` utilities.
  * ====================================================================== */
 
 .fde-content .fde-steps {
@@ -592,7 +619,7 @@
 }
 
 /* Each step is wrapped in its own positioned node-view element, so the number
- * resolves against the step — not `.fde-steps` as in stock fumadocs. Offset it
+ * resolves against the step: not `.fde-steps` as in stock fumadocs. Offset it
  * back across the gutter (+ the 1px rail + half its own width) so it lands
  * centred on the rail instead of on the step's text. */
 .fde-content .fde-step::before {
@@ -613,12 +640,12 @@
   line-height: 1.25rem;
 }
 
-.fde-content .fde-step .fde-region-block[data-region='body'] > :first-child {
+.fde-content .fde-step .fde-region-block[data-region="body"] > :first-child {
   margin-top: 0;
 }
 
 /* =========================================================================
- * Accordions — mirrors the fumadocs `Accordions`/`Accordion`: a chevron that
+ * Accordions: mirrors the fumadocs `Accordions`/`Accordion`: a chevron that
  * leads the title row and rotates open, with the panel below. The chevron is
  * the collapse toggle (the title stays editable); the editor opens items by
  * default so their body can be edited.
@@ -653,102 +680,124 @@
   color: var(--color-fd-muted-foreground);
 }
 
-.fde-content .fde-accordion .fde-region-inline[data-region='title'] {
+.fde-content .fde-accordion .fde-region-inline[data-region="title"] {
   font-weight: 500;
   padding: 0.625rem 2.5rem 0.625rem 2.25rem;
 }
 
-.fde-content .fde-accordion .fde-region-inline[data-region='title']::before {
+.fde-content .fde-accordion .fde-region-inline[data-region="title"]::before {
   inset-inline-start: 2.25rem;
   top: 0.625rem;
 }
 
-.fde-content .fde-accordion .fde-region-block[data-region='body'] {
+.fde-content .fde-accordion .fde-region-block[data-region="body"] {
   padding: 0 1rem 0.75rem 2.25rem;
   font-size: 0.9375rem;
   color: var(--color-fd-muted-foreground);
 }
 
-.fde-content .fde-accordion .fde-region-block[data-region='body']::before {
+.fde-content .fde-accordion .fde-region-block[data-region="body"]::before {
   inset-inline-start: 2.25rem;
 }
 
 /* collapsed: the panel is hidden, mirroring the closed accordion */
-.fde-content .fde-accordion:not([data-open]) .fde-region-block[data-region='body'] {
+.fde-content .fde-accordion:not([data-open]) .fde-region-block[data-region="body"] {
   display: none;
 }
 
-.fde-content .fde-accordion .fde-region-block[data-region='body'] > :first-child {
+.fde-content .fde-accordion .fde-region-block[data-region="body"] > :first-child {
   margin-top: 0;
 }
 
 /* the `divide-y` on the container can't cross the dissolved (display:contents)
  * node-view wrappers, so draw the rule between item wrappers directly */
-.fde-content .fde-accordions > .fde-component-content > [data-node-view-content-react] > .react-renderer + .react-renderer {
+.fde-content
+  .fde-accordions
+  > .fde-component-content
+  > [data-node-view-content-react]
+  > .react-renderer
+  + .react-renderer {
   border-top: 1px solid var(--color-fd-border);
 }
 
 /* =========================================================================
- * Files — a file tree mirroring the fumadocs `Files` / `File` / `Folder`.
+ * Files: a file tree mirroring the fumadocs `Files` / `File` / `Folder`.
  * Only the plural `.fde-files` container is dissolved (so its entries are its
  * direct children); each `.fde-folder` keeps its content wrapper, so nested
- * entries and the folder name are reached one level down — mirroring how the
+ * entries and the folder name are reached one level down: mirroring how the
  * accordions are structured.
  * ====================================================================== */
 
 /* Each entry's node view is wrapped in a `.react-renderer.node-mdxComponent`
- * div by TipTap — that wrapper, not `[data-component]`, is the direct child of
+ * div by TipTap: that wrapper, not `[data-component]`, is the direct child of
  * the (dissolved) content hole, so the tree rules target it. */
-.fde-content .fde-files > .fde-component-content > [data-node-view-content-react] > .react-renderer + .react-renderer {
+.fde-content
+  .fde-files
+  > .fde-component-content
+  > [data-node-view-content-react]
+  > .react-renderer
+  + .react-renderer {
   margin-top: 2px;
 }
 
-/* File name: the icon is a flex sibling, so the name fills the rest of the row
- * and needs no icon inset — just its own hover pill. */
-.fde-content .fde-file > .fde-component-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.fde-content .fde-file .fde-region-inline[data-region='file-name'] {
-  padding: 0.3rem 0.5rem;
+/* File and Folder rows share one geometry: the icon sits absolutely at the
+ * pill's start, the name is inset past it. */
+.fde-content .fde-file .fde-region-inline[data-region="file-name"],
+.fde-content .fde-folder .fde-region-inline[data-region="folder-name"] {
+  padding: 0.3rem 0.5rem 0.3rem 1.875rem;
   border-radius: 0.375rem;
   transition: background-color 150ms;
 }
 
-/* Folder name sits to the right of an absolutely-positioned icon, so it keeps
- * a left inset that clears it. */
-.fde-content .fde-folder .fde-region-inline[data-region='folder-name'] {
-  padding: 0.3rem 0.5rem 0.3rem 1.75rem;
-  border-radius: 0.375rem;
-  transition: background-color 150ms;
-}
-
-.fde-content .fde-file:hover .fde-region-inline[data-region='file-name'],
-.fde-content .fde-region-inline[data-region='folder-name']:hover {
+.fde-content .fde-file .fde-region-inline[data-region="file-name"]:hover,
+.fde-content .fde-folder .fde-region-inline[data-region="folder-name"]:hover {
   background-color: var(--color-fd-accent);
   color: var(--color-fd-accent-foreground);
 }
 
 /* The placeholder is absolutely positioned at the region's padding-box origin;
  * nudge it in/down to line up with the padded caret instead of the icon. */
-.fde-content .fde-file .fde-region-inline[data-region='file-name']::before {
-  inset-inline-start: 0.5rem;
-  top: 0.3rem;
-}
-
-.fde-content .fde-folder .fde-region-inline[data-region='folder-name']::before {
-  inset-inline-start: 1.75rem;
+.fde-content .fde-file .fde-region-inline[data-region="file-name"]::before,
+.fde-content .fde-folder .fde-region-inline[data-region="folder-name"]::before {
+  inset-inline-start: 1.875rem;
   top: 0.3rem;
 }
 
 /* nested entries indent under their folder, tracing a guide rail */
-.fde-content .fde-folder > .fde-component-content > [data-node-view-content-react] > .react-renderer.node-mdxComponent {
+.fde-content
+  .fde-folder
+  > .fde-component-content
+  > [data-node-view-content-react]
+  > .react-renderer.node-mdxComponent {
   margin-inline-start: 1rem;
   padding-inline-start: 0.5rem;
   border-inline-start: 1px solid var(--color-fd-border);
 }
 
-.fde-content .fde-folder > .fde-component-content > [data-node-view-content-react] > .react-renderer.node-mdxComponent + .react-renderer.node-mdxComponent {
+.fde-content
+  .fde-folder
+  > .fde-component-content
+  > [data-node-view-content-react]
+  > .react-renderer.node-mdxComponent
+  + .react-renderer.node-mdxComponent {
   margin-top: 2px;
+}
+
+/* =========================================================================
+ * Reduced motion
+ * ====================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .fde-content * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
+/* room for the mobile bar so the caret never hides beneath it */
+@media (pointer: coarse) {
+  .fde-content .ProseMirror {
+    padding-bottom: 108px;
+    scroll-padding-bottom: 108px;
+  }
 }

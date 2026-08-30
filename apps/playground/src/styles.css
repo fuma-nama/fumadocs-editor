@@ -1,12 +1,19 @@
-@import 'tailwindcss';
-@import '@fumadocs-editor/ui/css/preset.css';
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+@import "@fumadocs-editor/ui/css/preset.css";
+
+@theme {
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
 
 /* consume workspace source directly, so component class names are discovered */
 @source '../../../packages/ui/src/**/*.{ts,tsx}';
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   background: var(--color-fd-background);
   color: var(--color-fd-foreground);
   -webkit-font-smoothing: antialiased;

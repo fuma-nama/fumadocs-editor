@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
   useEditorTheme,
   fumadocsUiComponents,
-} from '@fumadocs-editor/ui';
-import { Moon, Sun } from 'lucide-react';
-import sample from './sample.mdx?raw';
+} from "@fumadocs-editor/ui";
+import { Moon, Sun } from "lucide-react";
+import sample from "./sample.mdx?raw";
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useEditorTheme();
-  const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+  const next = resolvedTheme === "dark" ? "light" : "dark";
   return (
     <button
       type="button"
@@ -18,7 +18,7 @@ function ThemeToggle() {
       onClick={() => setTheme(next)}
       className="inline-flex size-8 items-center justify-center rounded-lg border border-fd-border bg-fd-card text-fd-muted-foreground transition-colors hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background"
     >
-      {resolvedTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+      {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   );
 }
@@ -40,11 +40,11 @@ function Playground() {
           <span
             className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
               identical
-                ? 'border-fd-success/30 bg-fd-success/15 text-fd-success'
-                : 'border-fd-warning/30 bg-fd-warning/15 text-fd-warning'
+                ? "border-fd-success/30 bg-fd-success/15 text-fd-success"
+                : "border-fd-warning/30 bg-fd-warning/15 text-fd-warning"
             }`}
           >
-            {identical ? 'round-trip: byte-identical' : 'modified'}
+            {identical ? "round-trip: byte-identical" : "modified"}
           </span>
           <ThemeToggle />
         </div>

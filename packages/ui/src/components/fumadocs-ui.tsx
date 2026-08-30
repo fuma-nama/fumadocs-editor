@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import {
   Check,
   ChevronRight,
@@ -16,16 +16,16 @@ import {
   SquareStack,
   TriangleAlert,
   type LucideIcon,
-} from 'lucide-react';
-import { Select } from '@base-ui/react/select';
-import type { CSSProperties } from 'react';
-import { cn } from '../utils/cn';
-import { focusRing, itemCls, popupCls } from './styles';
-import type { ComponentRenderProps, UiComponentSpec } from './spec';
+} from "lucide-react";
+import { Select } from "@base-ui/react/select";
+import type { CSSProperties } from "react";
+import { cn } from "../utils/cn";
+import { itemCls, popupCls } from "./styles";
+import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
  * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
- * component's markup — same Tailwind utilities, same `fd-*` tokens — so the
+ * component's markup: same Tailwind utilities, same `fd-*` tokens, so the
  * editor is genuinely WYSIWYG. In a fumadocs-ui consumer these renderers would
  * import the actual components and drop `<NodeViewContent>` into their editable
  * slots. The editable regions arrive as `children`, in document order.
@@ -41,15 +41,15 @@ const CALLOUT_ICONS: Record<string, LucideIcon> = {
 };
 
 const CALLOUT_TYPES = [
-  { value: 'info', label: 'Info' },
-  { value: 'warn', label: 'Warning' },
-  { value: 'error', label: 'Error' },
-  { value: 'success', label: 'Success' },
-  { value: 'idea', label: 'Idea' },
+  { value: "info", label: "Info" },
+  { value: "warn", label: "Warning" },
+  { value: "error", label: "Error" },
+  { value: "success", label: "Success" },
+  { value: "idea", label: "Idea" },
 ];
 
 /** map the JSX alias to the token/icon key */
-const colorKey = (type: string) => (type === 'warn' ? 'warning' : type);
+const colorKey = (type: string) => (type === "warn" ? "warning" : type);
 
 /** The callout icon doubles as an in-place picker for the callout `type`. */
 function CalloutTypeSelect({
@@ -60,7 +60,7 @@ function CalloutTypeSelect({
   onChange: (value: string) => void;
 }) {
   const Current = CALLOUT_ICONS[value] ?? Info;
-  const isIdea = value === 'idea';
+  const isIdea = value === "idea";
   return (
     <Select.Root
       items={CALLOUT_TYPES}
@@ -69,15 +69,16 @@ function CalloutTypeSelect({
     >
       <Select.Trigger
         aria-label="Callout type"
+        tabIndex={-1}
         className={cn(
-          '-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 transition-colors hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)',
-          isIdea ? 'text-(--callout-color)' : 'text-fd-card',
+          "-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 outline-none transition-colors hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)",
+          isIdea ? "text-(--callout-color)" : "text-fd-card",
         )}
       >
         <Current size={20} strokeWidth={2} />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Positioner sideOffset={6} align="start">
+        <Select.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
           <Select.Popup className={popupCls}>
             {CALLOUT_TYPES.map((item) => {
               const Icon = CALLOUT_ICONS[item.value] ?? Info;
@@ -103,20 +104,22 @@ function CalloutTypeSelect({
 }
 
 function Callout({ props, children, setProp }: ComponentRenderProps) {
-  const type = props.type ?? 'info';
+  const type = props.type ?? "info";
   return (
     <div
       className="fde-callout flex items-start gap-2 rounded-xl border border-fd-border bg-fd-card p-3 ps-1 text-[0.925em] text-fd-card-foreground shadow-md"
-      style={{ '--callout-color': `var(--color-fd-${colorKey(type)})` } as CSSProperties}
+      style={{ "--callout-color": `var(--color-fd-${colorKey(type)})` } as CSSProperties}
       data-type={type}
-      contentEditable={false}
     >
-      <div role="none" className="w-0.5 self-stretch rounded-sm bg-(--callout-color)/50" />
-      <CalloutTypeSelect value={type} onChange={(value) => setProp('type', value)} />
-      {/* nested editable island; without outline-none it gets the UA focus ring */}
-      <div className="min-w-0 flex-1 outline-none" contentEditable suppressContentEditableWarning>
-        {children}
-      </div>
+      <div
+        role="none"
+        className="w-0.5 self-stretch rounded-sm bg-(--callout-color)/50"
+        contentEditable={false}
+      />
+      <span className="contents" contentEditable={false}>
+        <CalloutTypeSelect value={type} onChange={(value) => setProp("type", value)} />
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -125,10 +128,10 @@ function Card({ props, children }: ComponentRenderProps) {
   return (
     <div
       className={cn(
-        'fde-card rounded-xl border border-fd-border bg-fd-card p-4 text-fd-card-foreground transition-colors',
-        props.href && 'hover:bg-fd-accent/80',
+        "fde-card rounded-xl border border-fd-border bg-fd-card p-4 text-fd-card-foreground transition-colors",
+        props.href && "hover:bg-fd-accent/80",
       )}
-      data-has-href={props.href ? '' : undefined}
+      data-has-href={props.href ? "" : undefined}
     >
       {children}
     </div>
@@ -163,10 +166,18 @@ function Files({ children }: ComponentRenderProps) {
   );
 }
 
+/**
+ * File and Folder rows share one geometry; the icon doubles as the drag grip.
+ * `z-[1]` lifts it above the name region (`position: relative`, later in DOM
+ * order), which would otherwise swallow every pointer event aimed at it.
+ */
+const entryIconCls =
+  "absolute start-2 top-2 z-[1] cursor-grab text-fd-muted-foreground active:cursor-grabbing";
+
 function File({ children }: ComponentRenderProps) {
   return (
-    <div className="fde-file flex items-center gap-2">
-      <span className="shrink-0 text-fd-muted-foreground" contentEditable={false}>
+    <div className="fde-file relative">
+      <span className={entryIconCls} contentEditable={false} draggable data-drag-handle>
         <FileIcon size={15} />
       </span>
       {children}
@@ -177,10 +188,7 @@ function File({ children }: ComponentRenderProps) {
 function Folder({ children }: ComponentRenderProps) {
   return (
     <div className="fde-folder relative">
-      <span
-        className="pointer-events-none absolute start-2 top-[0.5rem] text-fd-muted-foreground"
-        contentEditable={false}
-      >
+      <span className={entryIconCls} contentEditable={false} draggable data-drag-handle>
         <FolderIcon size={15} />
       </span>
       {children}
@@ -192,7 +200,7 @@ function Accordion({ props, children }: ComponentRenderProps) {
   // Editor renders every item open so its body stays editable; the chevron is a
   // real collapse toggle (mirrors the component) rather than the whole header,
   // so clicking the title still places the caret. Open state is a DOM attribute
-  // toggled imperatively — node-view renderers can't hold React hook state
+  // toggled imperatively: node-view renderers can't hold React hook state
   // reliably, and "reopens on edit" is the right default for an editor anyway.
   const anchor = props.id;
   return (
@@ -200,14 +208,15 @@ function Accordion({ props, children }: ComponentRenderProps) {
       <button
         type="button"
         aria-label="Toggle"
+        tabIndex={-1}
         contentEditable={false}
         onMouseDown={(event) => event.preventDefault()}
         onClick={(event) => {
-          const item = event.currentTarget.closest('.fde-accordion');
-          if (item?.hasAttribute('data-open')) item.removeAttribute('data-open');
-          else item?.setAttribute('data-open', '');
+          const item = event.currentTarget.closest(".fde-accordion");
+          if (item?.hasAttribute("data-open")) item.removeAttribute("data-open");
+          else item?.setAttribute("data-open", "");
         }}
-        className={`fde-accordion-chevron ${focusRing}`}
+        className="fde-accordion-chevron outline-none"
       >
         <ChevronRight size={16} />
       </button>
@@ -227,102 +236,113 @@ function Accordion({ props, children }: ComponentRenderProps) {
 }
 
 export const calloutSpec: UiComponentSpec = {
-  name: 'Callout',
-  title: 'Callout',
+  name: "Callout",
+  title: "Callout",
   icon: <Info size={13} />,
-  attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Title…' }],
-  childrenRegion: { region: 'body', placeholder: 'Write the callout…' },
+  attributeRegions: [{ attribute: "title", region: "title", placeholder: "Title…" }],
+  childrenRegion: { region: "body", placeholder: "Write the callout…" },
   props: [
     {
-      name: 'type',
-      label: 'Type',
-      type: 'enum',
-      options: ['info', 'warn', 'error', 'success', 'idea'],
-      default: 'info',
+      name: "type",
+      label: "Type",
+      type: "enum",
+      options: ["info", "warn", "error", "success", "idea"],
+      default: "info",
       // edited in place by clicking the callout icon
       inline: true,
     },
   ],
   render: Callout,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Callout', attributes: [{ type: 'mdxJsxAttribute', name: 'type', value: 'info' }] },
+    type: "mdxComponent",
+    attrs: {
+      name: "Callout",
+      attributes: [{ type: "mdxJsxAttribute", name: "type", value: "info" }],
+    },
     content: [
-      { type: 'mdxInlineRegion', attrs: { region: 'title' } },
-      { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+      { type: "mdxInlineRegion", attrs: { region: "title" } },
+      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
     ],
   }),
 };
 
 const cardInsert = () => ({
-  type: 'mdxComponent',
-  attrs: { name: 'Card', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
+  type: "mdxComponent",
+  attrs: { name: "Card", attributes: [{ type: "mdxJsxAttribute", name: "title", value: "" }] },
   content: [
-    { type: 'mdxInlineRegion', attrs: { region: 'title' } },
-    { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+    { type: "mdxInlineRegion", attrs: { region: "title" } },
+    { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
   ],
 });
 
 export const cardSpec: UiComponentSpec = {
-  name: 'Card',
-  title: 'Card',
+  name: "Card",
+  title: "Card",
   icon: <SquareStack size={13} />,
   // title is edited inline; the multi-line body is the block region below it.
   // `description` and children render into the same slot in fumadocs-ui, so a
   // `description` attribute is folded into the body rather than shown separately.
-  attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Card title…' }],
-  childrenRegion: { region: 'body', placeholder: 'Write the card…', fromAttribute: 'description' },
+  attributeRegions: [{ attribute: "title", region: "title", placeholder: "Card title…" }],
+  childrenRegion: { region: "body", placeholder: "Write the card…", fromAttribute: "description" },
   props: [
-    { name: 'href', label: 'Link', type: 'string', placeholder: '/docs/…' },
-    { name: 'external', label: 'Open in new tab', type: 'boolean' },
+    { name: "href", label: "Link", type: "string", placeholder: "/docs/…" },
+    { name: "external", label: "Open in new tab", type: "boolean" },
   ],
   render: Card,
   insert: cardInsert,
 };
 
 export const cardsSpec: UiComponentSpec = {
-  name: 'Cards',
-  title: 'Cards',
+  name: "Cards",
+  title: "Cards",
   icon: <LayoutGrid size={13} />,
-  childComponent: 'Card',
+  childComponent: "Card",
   render: Cards,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Cards', attributes: [] },
+    type: "mdxComponent",
+    attrs: { name: "Cards", attributes: [] },
     content: [cardInsert()],
   }),
 };
 
 export const stepSpec: UiComponentSpec = {
-  name: 'Step',
-  title: 'Step',
-  childrenRegion: { region: 'body', placeholder: 'Describe this step…' },
+  name: "Step",
+  title: "Step",
+  childrenRegion: { region: "body", placeholder: "Describe this step…" },
   render: Step,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Step', attributes: [] },
-    content: [{ type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] }],
+    type: "mdxComponent",
+    attrs: { name: "Step", attributes: [] },
+    content: [
+      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
+    ],
   }),
 };
 
 export const stepsSpec: UiComponentSpec = {
-  name: 'Steps',
-  title: 'Steps',
+  name: "Steps",
+  title: "Steps",
   icon: <ListOrdered size={13} />,
-  childComponent: 'Step',
+  childComponent: "Step",
   render: Steps,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Steps', attributes: [] },
+    type: "mdxComponent",
+    attrs: { name: "Steps", attributes: [] },
     content: [
       {
-        type: 'mdxComponent',
-        attrs: { name: 'Step', attributes: [] },
+        type: "mdxComponent",
+        attrs: { name: "Step", attributes: [] },
         content: [
           {
-            type: 'mdxBlockRegion',
-            attrs: { region: 'body' },
-            content: [{ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Step one' }] }],
+            type: "mdxBlockRegion",
+            attrs: { region: "body" },
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: "Step one" }],
+              },
+            ],
           },
         ],
       },
@@ -331,107 +351,132 @@ export const stepsSpec: UiComponentSpec = {
 };
 
 const accordionInsert = () => ({
-  type: 'mdxComponent',
-  attrs: { name: 'Accordion', attributes: [{ type: 'mdxJsxAttribute', name: 'title', value: '' }] },
+  type: "mdxComponent",
+  attrs: { name: "Accordion", attributes: [{ type: "mdxJsxAttribute", name: "title", value: "" }] },
   content: [
-    { type: 'mdxInlineRegion', attrs: { region: 'title' } },
-    { type: 'mdxBlockRegion', attrs: { region: 'body' }, content: [{ type: 'paragraph' }] },
+    { type: "mdxInlineRegion", attrs: { region: "title" } },
+    { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
   ],
 });
 
 export const accordionSpec: UiComponentSpec = {
-  name: 'Accordion',
-  title: 'Accordion',
-  attributeRegions: [{ attribute: 'title', region: 'title', placeholder: 'Question…' }],
-  childrenRegion: { region: 'body', placeholder: 'Answer…' },
+  name: "Accordion",
+  title: "Accordion",
+  attributeRegions: [{ attribute: "title", region: "title", placeholder: "Question…" }],
+  childrenRegion: { region: "body", placeholder: "Answer…" },
   props: [
     // the `id` attribute is the accordion's anchor (deep-link target)
-    { name: 'id', label: 'Anchor (id)', type: 'string', placeholder: 'section-id' },
+    { name: "id", label: "Anchor (id)", type: "string", placeholder: "section-id" },
   ],
   render: Accordion,
   insert: accordionInsert,
 };
 
 export const accordionsSpec: UiComponentSpec = {
-  name: 'Accordions',
-  title: 'Accordions',
+  name: "Accordions",
+  title: "Accordions",
   icon: <Rows3 size={13} />,
-  childComponent: 'Accordion',
+  childComponent: "Accordion",
   props: [
     {
-      name: 'type',
-      label: 'Selection',
-      type: 'enum',
-      options: ['single', 'multiple'],
-      default: 'single',
+      name: "type",
+      label: "Selection",
+      type: "enum",
+      options: ["single", "multiple"],
+      default: "single",
     },
   ],
   render: Accordions,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Accordions', attributes: [] },
+    type: "mdxComponent",
+    attrs: { name: "Accordions", attributes: [] },
     content: [accordionInsert()],
   }),
 };
 
 const fileInsert = () => ({
-  type: 'mdxComponent',
-  attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: '' }] },
-  content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' } }],
+  type: "mdxComponent",
+  attrs: { name: "File", attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
+  content: [{ type: "mdxInlineRegion", attrs: { region: "file-name" } }],
 });
 
 export const fileSpec: UiComponentSpec = {
-  name: 'File',
-  title: 'File',
+  name: "File",
+  title: "File",
   icon: <FileIcon size={13} />,
-  attributeRegions: [{ attribute: 'name', region: 'file-name', placeholder: 'file name…' }],
+  attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
   render: File,
   insert: fileInsert,
 };
 
 export const folderSpec: UiComponentSpec = {
-  name: 'Folder',
-  title: 'Folder',
+  name: "Folder",
+  title: "Folder",
   icon: <FolderIcon size={13} />,
-  attributeRegions: [{ attribute: 'name', region: 'folder-name', placeholder: 'folder name…' }],
-  // a folder holds files and further folders — needs the array child form
-  childComponent: ['File', 'Folder'],
+  attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
+  // a folder holds files and further folders: needs the array child form
+  childComponent: ["File", "Folder"],
   listLike: true,
   render: Folder,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Folder', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: '' }] },
-    content: [{ type: 'mdxInlineRegion', attrs: { region: 'folder-name' } }],
+    type: "mdxComponent",
+    attrs: { name: "Folder", attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
+    content: [{ type: "mdxInlineRegion", attrs: { region: "folder-name" } }],
   }),
 };
 
 export const filesSpec: UiComponentSpec = {
-  name: 'Files',
-  title: 'Files',
+  name: "Files",
+  title: "Files",
   icon: <FolderTree size={13} />,
-  childComponent: ['File', 'Folder'],
+  childComponent: ["File", "Folder"],
   listLike: true,
   render: Files,
   insert: () => ({
-    type: 'mdxComponent',
-    attrs: { name: 'Files', attributes: [] },
+    type: "mdxComponent",
+    attrs: { name: "Files", attributes: [] },
     content: [
       {
-        type: 'mdxComponent',
-        attrs: { name: 'Folder', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'app' }] },
+        type: "mdxComponent",
+        attrs: {
+          name: "Folder",
+          attributes: [{ type: "mdxJsxAttribute", name: "name", value: "app" }],
+        },
         content: [
-          { type: 'mdxInlineRegion', attrs: { region: 'folder-name' }, content: [{ type: 'text', text: 'app' }] },
           {
-            type: 'mdxComponent',
-            attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'page.tsx' }] },
-            content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' }, content: [{ type: 'text', text: 'page.tsx' }] }],
+            type: "mdxInlineRegion",
+            attrs: { region: "folder-name" },
+            content: [{ type: "text", text: "app" }],
+          },
+          {
+            type: "mdxComponent",
+            attrs: {
+              name: "File",
+              attributes: [{ type: "mdxJsxAttribute", name: "name", value: "page.tsx" }],
+            },
+            content: [
+              {
+                type: "mdxInlineRegion",
+                attrs: { region: "file-name" },
+                content: [{ type: "text", text: "page.tsx" }],
+              },
+            ],
           },
         ],
       },
       {
-        type: 'mdxComponent',
-        attrs: { name: 'File', attributes: [{ type: 'mdxJsxAttribute', name: 'name', value: 'package.json' }] },
-        content: [{ type: 'mdxInlineRegion', attrs: { region: 'file-name' }, content: [{ type: 'text', text: 'package.json' }] }],
+        type: "mdxComponent",
+        attrs: {
+          name: "File",
+          attributes: [{ type: "mdxJsxAttribute", name: "name", value: "package.json" }],
+        },
+        content: [
+          {
+            type: "mdxInlineRegion",
+            attrs: { region: "file-name" },
+            content: [{ type: "text", text: "package.json" }],
+          },
+        ],
       },
     ],
   }),

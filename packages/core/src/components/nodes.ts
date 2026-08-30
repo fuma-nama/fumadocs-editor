@@ -1,5 +1,5 @@
-import { Node } from '@tiptap/core';
-import type { MdxAttribute } from '../extensions/mdx-nodes';
+import { Node } from "@tiptap/core";
+import type { MdxAttribute } from "../extensions/mdx-nodes";
 
 /**
  * A registered MDX component instance. Holds the original JSX attributes
@@ -7,21 +7,22 @@ import type { MdxAttribute } from '../extensions/mdx-nodes';
  * (inline/block regions and nested component instances).
  */
 export const MdxComponent = Node.create({
-  name: 'mdxComponent',
-  group: 'block',
-  content: '(mdxInlineRegion | mdxBlockRegion | mdxComponent)*',
+  name: "mdxComponent",
+  group: "block",
+  content: "(mdxInlineRegion | mdxBlockRegion | mdxComponent)*",
   defining: true,
   isolating: true,
   selectable: true,
+  draggable: true,
   addAttributes: () => ({
     name: { default: null as string | null },
     attributes: { default: [] as MdxAttribute[] },
   }),
-  parseHTML: () => [{ tag: 'div[data-mdx-component]' }],
+  parseHTML: () => [{ tag: "div[data-mdx-component]" }],
   renderHTML({ node }) {
     return [
-      'div',
-      { 'data-mdx-component': '', 'data-component': node.attrs.name ?? 'Component' },
+      "div",
+      { "data-mdx-component": "", "data-component": node.attrs.name ?? "Component" },
       0,
     ];
   },
@@ -30,31 +31,33 @@ export const MdxComponent = Node.create({
 /**
  * An inline, plain-text editable region backed by a JSX attribute. The backing
  * attribute is a plain string, so the region admits no marks, hard breaks or
- * inline atoms — that also keeps names/titles single-line by construction.
+ * inline atoms: that also keeps names/titles single-line by construction.
  */
 export const MdxInlineRegion = Node.create({
-  name: 'mdxInlineRegion',
-  content: 'text*',
-  marks: '',
+  name: "mdxInlineRegion",
+  content: "text*",
+  marks: "",
   selectable: false,
   defining: true,
+  isolating: true,
   addAttributes: () => ({ region: { default: null as string | null } }),
-  parseHTML: () => [{ tag: 'div[data-mdx-region-inline]' }],
+  parseHTML: () => [{ tag: "div[data-mdx-region-inline]" }],
   renderHTML({ node }) {
-    return ['div', { 'data-mdx-region-inline': '', 'data-region': node.attrs.region ?? '' }, 0];
+    return ["div", { "data-mdx-region-inline": "", "data-region": node.attrs.region ?? "" }, 0];
   },
 });
 
 /** A block editable region backed by element children. */
 export const MdxBlockRegion = Node.create({
-  name: 'mdxBlockRegion',
-  content: 'block*',
+  name: "mdxBlockRegion",
+  content: "block*",
   selectable: false,
   defining: true,
+  isolating: true,
   addAttributes: () => ({ region: { default: null as string | null } }),
-  parseHTML: () => [{ tag: 'div[data-mdx-region-block]' }],
+  parseHTML: () => [{ tag: "div[data-mdx-region-block]" }],
   renderHTML({ node }) {
-    return ['div', { 'data-mdx-region-block': '', 'data-region': node.attrs.region ?? '' }, 0];
+    return ["div", { "data-mdx-region-block": "", "data-region": node.attrs.region ?? "" }, 0];
   },
 });
 

@@ -3,13 +3,16 @@
   "version": "0.0.0",
   "description": "Headless MDX editor engine for Fumadocs: TipTap schema + lossless MDX round-trip",
   "license": "MIT",
-  "type": "module",
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     ".": "./dist/index.js",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsdown",
@@ -24,6 +27,7 @@
     "@tiptap/extension-link": "^3.27.3",
     "@tiptap/extension-list": "^3.27.3",
     "@tiptap/extension-table": "^3.27.3",
+    "@tiptap/extensions": "^3.27.3",
     "@tiptap/pm": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
     "mdast-util-from-markdown": "^2.0.3",
@@ -42,8 +46,5 @@
     "tsdown": "^0.22.4",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

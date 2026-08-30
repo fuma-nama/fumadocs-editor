@@ -1,4 +1,4 @@
-import type { JSONContent } from '@tiptap/core';
+import type { JSONContent } from "@tiptap/core";
 
 /**
  * A non-region attribute, edited through the component's props panel rather
@@ -7,7 +7,7 @@ import type { JSONContent } from '@tiptap/core';
 export interface PropField {
   name: string;
   label?: string;
-  type: 'string' | 'enum' | 'boolean' | 'number';
+  type: "string" | "enum" | "boolean" | "number";
   /** for `type: 'enum'` */
   options?: string[];
   default?: string | number | boolean;
@@ -32,7 +32,7 @@ export interface AttributeRegion {
 /**
  * Structural description of an MDX component: how its attributes and children
  * map to editable regions and editable props. This is the *content-layer*
- * concern — no rendering. The UI layer extends this with a node renderer.
+ * concern: no rendering. The UI layer extends this with a node renderer.
  */
 export interface ComponentSpec {
   /** JSX tag name, e.g. "Callout" */
@@ -51,14 +51,14 @@ export interface ComponentSpec {
   childrenRegion?: { region: string; placeholder?: string; label?: string; fromAttribute?: string };
   /**
    * Repeated child elements become nested component instances (e.g. Cards →
-   * Card). Pass an array to accept more than one child tag — e.g. Files accepts
+   * Card). Pass an array to accept more than one child tag: e.g. Files accepts
    * both `File` and `Folder`. Mutually exclusive with `childrenRegion`.
    */
   childComponent?: string | string[];
   /**
    * Treat the children as an editable list: pressing Enter in a child's name
    * inserts a fresh sibling and Backspace in an empty child removes it (a file
-   * tree). Off by default — grid/step containers (Cards, Steps, Accordions)
+   * tree). Off by default: grid/step containers (Cards, Steps, Accordions)
    * keep plain editing, where Enter moves between a component's own regions.
    */
   listLike?: boolean;
@@ -75,6 +75,6 @@ export function createRegistry(specs: ComponentSpec[] = []): ComponentRegistry {
 }
 
 /** The three shared node type names produced for registered components. */
-export const COMPONENT_NODE = 'mdxComponent';
-export const INLINE_REGION_NODE = 'mdxInlineRegion';
-export const BLOCK_REGION_NODE = 'mdxBlockRegion';
+export const COMPONENT_NODE = "mdxComponent";
+export const INLINE_REGION_NODE = "mdxInlineRegion";
+export const BLOCK_REGION_NODE = "mdxBlockRegion";
