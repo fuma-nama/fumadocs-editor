@@ -44,6 +44,10 @@ export default defineConfig({
         find: /^@fumadocs-editor\/core\/(parse|serialize|extensions)$/,
         replacement: path.resolve(dir, "../../packages/core/src/$1.ts"),
       },
+      {
+        find: /^@fumadocs-editor\/sync$/,
+        replacement: path.resolve(dir, "../../packages/sync/src/index.ts"),
+      },
     ],
   },
 });

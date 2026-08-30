@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
-import { MdxEditor, type MdxEditorProps } from "../src/editor";
+import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,6 +32,8 @@ async function hydrate() {
   await settle(); // parse chunk → static content
   act(() => void vi.advanceTimersByTime(250)); // idle fallback → mounting
   await settle(); // editor-runtime chunk → live
+  act(() => void vi.advanceTimersByTime(50)); // deferred editor create/onCreate
+  await settle();
   let dom: (HTMLElement & { editor?: Editor }) | undefined;
   for (const el of host!.querySelectorAll<HTMLElement & { editor?: Editor }>(".ProseMirror")) {
     if (el.editor) dom = el as HTMLElement & { editor: Editor };
@@ -103,6 +105,58 @@ test("the static view paints first and captures keystrokes for replay", async ()
 
   act(() => void vi.advanceTimersByTime(300));
   expect(onChange.mock.calls.at(-1)?.[0]).toContain("HiHello.");
+});
+
+test("applyExternalMarkdown merges a disk change without touching the caret", async () => {
+  vi.useFakeTimers();
+  const source = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n";
+  const editorRef = { current: null as MdxEditorRef | null };
+  const { editor } = await mount({ defaultValue: source, ref: editorRef });
+
+  // type into the first paragraph, leaving the caret there
+  act(() => {
+    editor.commands.setTextSelection(6);
+    editor.commands.insertContent("LOCAL ");
+  });
+  const before = editor.state.selection.from;
+
+  // disk edits the third paragraph meanwhile
+  const remote = source.replace("Third paragraph.", "Third paragraph, from disk.");
+  let conflicts: number[] = [];
+  await act(async () => {
+    conflicts = await editorRef.current!.applyExternalMarkdown(remote);
+  });
+
+  expect(conflicts).toEqual([]);
+  expect(editor.state.doc.textContent).toContain("LOCAL");
+  expect(editor.state.doc.textContent).toContain("Third paragraph, from disk.");
+  expect(editor.state.selection.from).toBe(before);
+
+  // the merged doc serializes with the local edit woven into the disk text
+  const out = editorRef.current!.getMarkdown();
+  expect(out).toContain("FirstLOCAL  paragraph.");
+  expect(out).toContain("Third paragraph, from disk.");
+});
+
+test("applyExternalMarkdown reports a conflict for a block edited on both sides", async () => {
+  vi.useFakeTimers();
+  const source = "First paragraph.\n\nSecond paragraph.\n";
+  const editorRef = { current: null as MdxEditorRef | null };
+  const { editor } = await mount({ defaultValue: source, ref: editorRef });
+
+  act(() => {
+    editor.commands.setTextSelection(3);
+    editor.commands.insertContent("LOCAL ");
+  });
+  const remote = source.replace("First paragraph.", "First paragraph, disk.");
+  let conflicts: number[] = [];
+  await act(async () => {
+    conflicts = await editorRef.current!.applyExternalMarkdown(remote);
+  });
+
+  expect(conflicts).toEqual([0]);
+  expect(editor.state.doc.textContent).toContain("LOCAL");
+  expect(editor.state.doc.textContent).not.toContain("disk");
 });
 
 test("unedited document round-trips byte-identical through the debounce", async () => {

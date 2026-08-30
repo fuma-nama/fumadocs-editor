@@ -29,6 +29,14 @@ const LiveEditor = lazy(() =>
 
 export interface MdxEditorRef {
   getMarkdown: () => string;
+  /**
+   * Merge new on-disk markdown into the live document. Remote-only block
+   * changes apply as one non-undoable transaction that replaces just those
+   * top-level blocks — the caret is untouched. Blocks edited on both sides
+   * keep the local version; their local child indices are returned as
+   * conflicts (-1 = whole document, e.g. while in raw-source mode).
+   */
+  applyExternalMarkdown: (text: string) => Promise<number[]>;
 }
 
 export interface MdxEditorProps {
@@ -179,7 +187,61 @@ export function MdxEditor({
     return editor && serialize ? serialize(editor.state.doc, snapshotRef.current) : defaultValue;
   };
 
-  useImperativeHandle(ref, () => ({ getMarkdown }));
+  const applyExternalMarkdown = async (text: string): Promise<number[]> => {
+    // raw-source mode edits the whole file at once: any external change is a
+    // whole-document conflict for the session layer to resolve
+    if (mode === "source") return [-1];
+
+    const editor = editorRef.current;
+    const snapshot = snapshotRef.current;
+    if (!editor || !snapshot) {
+      // nothing live yet: the disk text simply becomes the document
+      const result = await parseDocCached(undefined, text, components ?? []);
+      snapshotRef.current = result.snapshot;
+      setParsed(result);
+      return [];
+    }
+
+    const [{ mergeRemote }, { tryNormalize }] = await Promise.all([
+      import("@fumadocs-editor/sync"),
+      import("@fumadocs-editor/core/serialize"),
+    ]);
+    const { doc } = editor.state;
+    const localNormalized: string[] = [];
+    for (let i = 0; i < doc.childCount; i++) {
+      localNormalized.push(tryNormalize(doc.child(i).toJSON(), snapshot.registry) ?? "");
+    }
+    const result = mergeRemote({ base: snapshot, localNormalized, remoteText: text });
+
+    if (result.ops.length > 0) {
+      const starts: number[] = [];
+      const ends: number[] = [];
+      doc.forEach((child, offset) => {
+        starts.push(offset);
+        ends.push(offset + child.nodeSize);
+      });
+      // pre-merge positions resolved through the mapping; bias 1 on inserts
+      // keeps successive inserts at one anchor in document order
+      const tr = editor.state.tr;
+      for (const op of result.ops) {
+        if (op.type === "insert") {
+          const at = tr.mapping.map(op.after < 0 ? 0 : ends[op.after], 1);
+          tr.insert(at, editor.schema.nodeFromJSON(op.node));
+        } else {
+          const from = tr.mapping.map(starts[op.local], 1);
+          const to = tr.mapping.map(ends[op.local], -1);
+          if (op.type === "replace") tr.replaceWith(from, to, editor.schema.nodeFromJSON(op.node));
+          else tr.delete(from, to);
+        }
+      }
+      tr.setMeta("addToHistory", false);
+      editor.view.dispatch(tr);
+    }
+    snapshotRef.current = result.remote.snapshot;
+    return result.conflicts;
+  };
+
+  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown }));
 
   function switchMode(next: Mode) {
     if (next === mode) return;

@@ -17,7 +17,7 @@ export type {
 } from "./extensions/mdx-nodes";
 export { parseMdxToDoc } from "./document";
 export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
-export { serializeDocToMdx } from "./serialize";
+export { serializeDocToMdx, blockNormalized, matchBlocks, tryNormalize } from "./serialize";
 export { createIncrementalSerializer } from "./incremental";
 export {
   createRegistry,

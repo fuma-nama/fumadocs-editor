@@ -1,0 +1,40 @@
+{
+  "name": "@fumadocs-editor/sync",
+  "version": "0.0.0",
+  "description": "Filesystem mirror for the Fumadocs MDX editor: sync transport, dev server, block-level three-way merge",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./node": "./dist/node.js",
+    "./vite": "./dist/vite.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fumadocs-editor/core": "workspace:*",
+    "@tiptap/core": "^3.27.3",
+    "chokidar": "^4.0.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/ws": "^8.18.1",
+    "tsdown": "^0.22.4",
+    "typescript": "^5.9.2",
+    "vite": "^8.1.3",
+    "vitest": "^4.1.10"
+  }
+}

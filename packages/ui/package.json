@@ -26,6 +26,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@fumadocs-editor/core": "workspace:*",
+    "@fumadocs-editor/sync": "workspace:*",
     "@tiptap/core": "^3.27.3",
     "@tiptap/extension-bubble-menu": "^3.27.3",
     "@tiptap/extension-code-block-lowlight": "^3.27.3",
