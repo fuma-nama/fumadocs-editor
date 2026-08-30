@@ -8,7 +8,8 @@ import { Popover } from "@base-ui/react/popover";
 import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import { childInsertContext, focusAt, moveComponentAt } from "./components/keymap";
-import { PropControl, readStringProps, setStringProp } from "./attributes-panel";
+import { PropControl } from "./attributes-panel";
+import { readStringProps, setStringProp } from "./components/attributes";
 import { focusRing, itemCls, popupCls } from "./components/styles";
 
 /**

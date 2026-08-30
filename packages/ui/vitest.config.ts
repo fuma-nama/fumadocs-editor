@@ -3,9 +3,16 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@fumadocs-editor/core": fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
-    },
+    alias: [
+      {
+        find: /^@fumadocs-editor\/core$/,
+        replacement: fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
+      },
+      {
+        find: /^@fumadocs-editor\/core\/(parse|serialize|extensions)$/,
+        replacement: fileURLToPath(new URL("../core/src/$1.ts", import.meta.url)),
+      },
+    ],
   },
   test: {
     environment: "jsdom",

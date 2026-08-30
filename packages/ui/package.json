@@ -8,6 +8,7 @@
     "css"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
     "./css/preset.css": "./css/preset.css",

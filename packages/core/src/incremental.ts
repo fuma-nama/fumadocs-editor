@@ -1,5 +1,6 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { assembleMdx, tryNormalize, type DocSnapshot } from "./document";
+import { assembleMdx, tryNormalize } from "./serialize";
+import type { DocSnapshot } from "./document";
 import { createRegistry, type ComponentRegistry } from "./components/spec";
 
 const EMPTY_REGISTRY = createRegistry();
