@@ -127,6 +127,15 @@ function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
     if (spec.childrenRegion?.placeholder) {
       map.set(`${spec.name}:${spec.childrenRegion.region}`, spec.childrenRegion.placeholder);
     }
+    if (spec.contentRegion?.placeholder) {
+      map.set(`${spec.name}:${spec.contentRegion.region}`, spec.contentRegion.placeholder);
+    }
+    if (spec.itemsAttribute?.placeholder && spec.childComponent) {
+      const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+      for (const name of names) {
+        map.set(`${name}:${spec.itemsAttribute.childRegion}`, spec.itemsAttribute.placeholder);
+      }
+    }
   }
   return map;
 }

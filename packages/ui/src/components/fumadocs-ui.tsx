@@ -1,19 +1,26 @@
 "use client";
 import {
   Check,
+  ChevronDown,
   ChevronRight,
   CircleCheck,
   CircleX,
   File as FileIcon,
+  FileInput,
   Folder as FolderIcon,
   FolderTree,
+  GitBranch,
   Info,
   Lightbulb,
   LayoutGrid,
   Link as LinkIcon,
   ListOrdered,
+  ListTree,
+  Megaphone,
+  PanelTop,
   Rows3,
   SquareStack,
+  Table2,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -230,6 +237,96 @@ function Accordion({ props, children }: ComponentRenderProps) {
           <LinkIcon size={13} />
         </span>
       ) : null}
+      {children}
+    </div>
+  );
+}
+
+function Tabs({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-tabs flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-secondary">
+      {children}
+    </div>
+  );
+}
+
+function Tab({ children }: ComponentRenderProps) {
+  return <div className="fde-tab">{children}</div>;
+}
+
+function Include({ props, children }: ComponentRenderProps) {
+  return (
+    <div className="fde-include flex items-center gap-2 rounded-xl border border-dashed border-fd-border bg-fd-card px-3 py-2 text-[0.9em]">
+      <span className="flex shrink-0 items-center gap-2" contentEditable={false}>
+        <FileInput size={15} className="text-fd-muted-foreground" />
+        <span className="font-mono text-[11px] font-semibold tracking-wide text-fd-muted-foreground">
+          include
+        </span>
+      </span>
+      {children}
+      {props.lang ? (
+        <span
+          className="shrink-0 rounded-md border border-fd-border bg-fd-muted px-1.5 py-0.5 font-mono text-[11px] text-fd-muted-foreground"
+          contentEditable={false}
+        >
+          {props.lang}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function TypeTable({ props }: ComponentRenderProps) {
+  return (
+    <div
+      className="fde-typetable flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
+      contentEditable={false}
+    >
+      <Table2 size={16} className="shrink-0 text-fd-muted-foreground" />
+      <div className="min-w-0">
+        <p className="font-medium">TypeTable</p>
+        <p className="truncate font-mono text-[12px] text-fd-muted-foreground">
+          {props.type ? "type={…}" : "no type set — edit via the ⋯ menu"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function GithubInfoBox({ props }: ComponentRenderProps) {
+  return (
+    <div
+      className="fde-github flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
+      contentEditable={false}
+    >
+      <GitBranch size={16} className="shrink-0 text-fd-muted-foreground" />
+      <div className="min-w-0">
+        <p className="truncate font-medium">
+          {props.owner || "owner"}/{props.repo || "repo"}
+        </p>
+        <p className="text-[12px] text-fd-muted-foreground">GitHub repository</p>
+      </div>
+    </div>
+  );
+}
+
+function Banner({ props, children }: ComponentRenderProps) {
+  return (
+    <div
+      className="fde-banner rounded-xl px-4 py-3 text-center text-sm font-medium"
+      data-variant={props.variant ?? "normal"}
+    >
+      {children}
+    </div>
+  );
+}
+
+function InlineTOC({ children }: ComponentRenderProps) {
+  return (
+    <div className="fde-inline-toc rounded-xl border border-fd-border bg-fd-card px-4 py-3 text-sm">
+      <span className="float-right ms-2 text-fd-muted-foreground" contentEditable={false}>
+        <ChevronDown size={16} />
+      </span>
       {children}
     </div>
   );
@@ -482,6 +579,168 @@ export const filesSpec: UiComponentSpec = {
   }),
 };
 
+const tabInsert = () => ({
+  type: "mdxComponent",
+  attrs: { name: "Tab", attributes: [] },
+  content: [
+    { type: "mdxInlineRegion", attrs: { region: "label" } },
+    { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
+  ],
+});
+
+export const tabSpec: UiComponentSpec = {
+  name: "Tab",
+  title: "Tab",
+  childrenRegion: { region: "body", placeholder: "Tab content…" },
+  props: [
+    { name: "value", label: "Value", type: "string", placeholder: "derived from label" },
+    { name: "id", label: "Anchor (id)", type: "string", placeholder: "tab-id" },
+  ],
+  render: Tab,
+  insert: tabInsert,
+};
+
+export const tabsSpec: UiComponentSpec = {
+  name: "Tabs",
+  title: "Tabs",
+  icon: <PanelTop size={13} />,
+  childComponent: "Tab",
+  listLike: true,
+  itemsAttribute: { attribute: "items", childRegion: "label", placeholder: "Tab label…" },
+  props: [
+    { name: "groupId", label: "Group id", type: "string", placeholder: "shared-group" },
+    { name: "persist", label: "Persist selection", type: "boolean" },
+    { name: "updateAnchor", label: "Update URL hash", type: "boolean" },
+  ],
+  render: Tabs,
+  insert: () => ({
+    type: "mdxComponent",
+    attrs: { name: "Tabs", attributes: [] },
+    content: ["Tab 1", "Tab 2"].map((label) => ({
+      type: "mdxComponent",
+      attrs: { name: "Tab", attributes: [] },
+      content: [
+        {
+          type: "mdxInlineRegion",
+          attrs: { region: "label" },
+          content: [{ type: "text", text: label }],
+        },
+        { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
+      ],
+    })),
+  }),
+};
+
+export const includeSpec: UiComponentSpec = {
+  name: "include",
+  title: "Include",
+  icon: <FileInput size={13} />,
+  contentRegion: { region: "path", placeholder: "./path/to/file.mdx" },
+  props: [
+    { name: "lang", label: "Language", type: "string", placeholder: "auto" },
+    { name: "meta", label: "Code meta", type: "string", placeholder: 'title="…"' },
+    { name: "cwd", label: "Resolve from project root", type: "boolean" },
+  ],
+  render: Include,
+  insert: () => ({
+    type: "mdxComponent",
+    attrs: { name: "include", attributes: [] },
+    content: [{ type: "mdxInlineRegion", attrs: { region: "path" } }],
+  }),
+};
+
+export const typeTableSpec: UiComponentSpec = {
+  name: "TypeTable",
+  title: "Type table",
+  icon: <Table2 size={13} />,
+  props: [
+    {
+      name: "type",
+      label: "Type definition",
+      type: "expression",
+      placeholder: '{{ prop: { type: "string" } }}',
+    },
+  ],
+  render: TypeTable,
+  insert: () => ({
+    type: "mdxComponent",
+    attrs: {
+      name: "TypeTable",
+      attributes: [
+        {
+          type: "mdxJsxAttribute",
+          name: "type",
+          value: { type: "mdxJsxAttributeValueExpression", value: "{}" },
+        },
+      ],
+    },
+  }),
+};
+
+export const githubInfoSpec: UiComponentSpec = {
+  name: "GithubInfo",
+  title: "GitHub info",
+  icon: <GitBranch size={13} />,
+  props: [
+    { name: "owner", label: "Owner", type: "string", placeholder: "fuma-nama" },
+    { name: "repo", label: "Repository", type: "string", placeholder: "fumadocs" },
+  ],
+  render: GithubInfoBox,
+  insert: () => ({ type: "mdxComponent", attrs: { name: "GithubInfo", attributes: [] } }),
+};
+
+export const bannerSpec: UiComponentSpec = {
+  name: "Banner",
+  title: "Banner",
+  icon: <Megaphone size={13} />,
+  childrenRegion: { region: "body", placeholder: "Announcement…" },
+  props: [
+    {
+      name: "variant",
+      label: "Variant",
+      type: "enum",
+      options: ["normal", "rainbow"],
+      default: "normal",
+    },
+    { name: "id", label: "Dismiss id", type: "string", placeholder: "release-1" },
+  ],
+  render: Banner,
+  insert: () => ({
+    type: "mdxComponent",
+    attrs: { name: "Banner", attributes: [] },
+    content: [
+      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
+    ],
+  }),
+};
+
+export const inlineTocSpec: UiComponentSpec = {
+  name: "InlineTOC",
+  title: "Inline TOC",
+  icon: <ListTree size={13} />,
+  childrenRegion: { region: "body", placeholder: "Table of Contents" },
+  props: [
+    { name: "items", label: "Items", type: "expression", placeholder: "{toc}", default: "toc" },
+  ],
+  render: InlineTOC,
+  insert: () => ({
+    type: "mdxComponent",
+    attrs: {
+      name: "InlineTOC",
+      attributes: [
+        {
+          type: "mdxJsxAttribute",
+          name: "items",
+          value: { type: "mdxJsxAttributeValueExpression", value: "toc" },
+        },
+      ],
+    },
+    content: [
+      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
+    ],
+  }),
+};
+
 /**
  * All built-in fumadocs-ui component specs. Child-only specs ({@link cardSpec},
  * {@link stepSpec}, {@link accordionSpec}, {@link fileSpec}, {@link folderSpec})
@@ -492,6 +751,8 @@ export const fumadocsUiComponents: UiComponentSpec[] = [
   calloutSpec,
   cardSpec,
   cardsSpec,
+  tabSpec,
+  tabsSpec,
   stepSpec,
   stepsSpec,
   accordionSpec,
@@ -499,4 +760,9 @@ export const fumadocsUiComponents: UiComponentSpec[] = [
   fileSpec,
   folderSpec,
   filesSpec,
+  includeSpec,
+  typeTableSpec,
+  githubInfoSpec,
+  bannerSpec,
+  inlineTocSpec,
 ];

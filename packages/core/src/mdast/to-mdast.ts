@@ -279,7 +279,19 @@ function regionText(node: JSONContent | undefined): string {
   return (node.content ?? []).map(textOf).join("");
 }
 
-function componentToMdast(node: JSONContent, syntax: Syntax): MdxJsxFlowElement {
+/** JSX attribute exactly as an author writes it */
+function jsxAttrSource(attr: MdastJsxAttribute | MdastJsxExpressionAttribute): string {
+  if (attr.type === "mdxJsxExpressionAttribute") return `{${attr.value}}`;
+  if (attr.value == null) return attr.name;
+  if (typeof attr.value === "string") {
+    return attr.value.includes('"')
+      ? `${attr.name}='${attr.value.replaceAll("'", "&#39;")}'`
+      : `${attr.name}="${attr.value}"`;
+  }
+  return `${attr.name}={${attr.value.value}}`;
+}
+
+function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
   const name = (node.attrs?.name as string | null) ?? null;
   const spec = name ? syntax.components.get(name) : undefined;
   const attributes = attributesToMdast(node.attrs?.attributes as MdxAttribute[]);
@@ -309,11 +321,45 @@ function componentToMdast(node: JSONContent, syntax: Syntax): MdxJsxFlowElement 
     else if (value) attributes.push({ type: "mdxJsxAttribute", name: attribute, value });
   }
 
+  // an element whose payload is its text content serializes back to the
+  // tight inline form authors write — raw, so a path like `./page.mdx`
+  // never grows markdown escapes
+  if (spec.contentRegion) {
+    const value = regionText(
+      children.find(
+        (c) => c.type === "mdxInlineRegion" && c.attrs?.region === spec.contentRegion!.region,
+      ),
+    );
+    const attrText = attributes.map(jsxAttrSource).join(" ");
+    const open = attrText ? `<${name} ${attrText}>` : `<${name}>`;
+    return { type: "raw", value: `${open}${value}</${name}>` } as unknown as RootContent;
+  }
+
   let mdChildren: (BlockContent | DefinitionContent)[] = [];
   if (spec.childComponent) {
-    mdChildren = children
-      .filter((c) => c.type === "mdxComponent")
-      .map((c) => componentToMdast(c, syntax) as BlockContent);
+    const components = children.filter((c) => c.type === "mdxComponent");
+    mdChildren = components.map((c) => componentToMdast(c, syntax) as BlockContent);
+    // the derived items attribute mirrors each child's label region
+    if (spec.itemsAttribute) {
+      const { attribute, childRegion } = spec.itemsAttribute;
+      const labels = components.map((c) =>
+        regionText(
+          ((c.content ?? []) as JSONContent[]).find(
+            (r) => r.type === "mdxInlineRegion" && r.attrs?.region === childRegion,
+          ),
+        ),
+      );
+      const value = {
+        type: "mdxJsxAttributeValueExpression" as const,
+        value: `[${labels.map((label) => JSON.stringify(label)).join(", ")}]`,
+      };
+      const existing = attributes.find(
+        (attr): attr is MdastJsxAttribute =>
+          attr.type === "mdxJsxAttribute" && attr.name === attribute,
+      );
+      if (existing) existing.value = value;
+      else attributes.unshift({ type: "mdxJsxAttribute", name: attribute, value });
+    }
   } else if (spec.childrenRegion) {
     const body = children.find(
       (c) => c.type === "mdxBlockRegion" && c.attrs?.region === spec.childrenRegion!.region,

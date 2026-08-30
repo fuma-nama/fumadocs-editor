@@ -29,14 +29,40 @@ type Fix =
 function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap, fixes: Fix[]) {
   const spec = specs.get(node.attrs.name as string);
   if (!spec) return;
-  const inline = spec.attributeRegions ?? [];
+  const inline: { region: string }[] = [
+    ...(spec.attributeRegions ?? []),
+    ...(spec.contentRegion ? [spec.contentRegion] : []),
+  ];
   const block = spec.childrenRegion;
 
   // a container with no regions of its own (Files, Cards, Steps) has no
-  // editable surface once its last child goes: it dies with it
-  if (inline.length === 0 && !block && node.childCount === 0) {
+  // editable surface once its last child goes: it dies with it. A leaf
+  // component (no childComponent either) is legitimately empty.
+  if (spec.childComponent && inline.length === 0 && !block && node.childCount === 0) {
     fixes.push({ kind: "remove", pos, size: node.nodeSize });
     return;
+  }
+
+  // children of an items-carrying container (Tabs) each own a label region
+  // injected by the parent; keep it first and correctly tagged
+  if (spec.itemsAttribute) {
+    const region = spec.itemsAttribute.childRegion;
+    node.forEach((child, offset) => {
+      if (child.type.name !== COMPONENT_NODE) return;
+      const at = pos + 1 + offset;
+      const first = child.firstChild;
+      if (first?.type.name === INLINE_REGION_NODE) {
+        if (first.attrs.region !== region) {
+          fixes.push({ kind: "retag", pos: at + 1, attrs: { region } });
+        }
+      } else {
+        fixes.push({
+          kind: "insert",
+          pos: at + 1,
+          node: state.schema.nodes[INLINE_REGION_NODE].create({ region }),
+        });
+      }
+    });
   }
 
   const inlinePresent: { pos: number; node: PMNode }[] = [];

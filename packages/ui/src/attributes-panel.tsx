@@ -77,6 +77,21 @@ export function PropControl({
     );
   }
 
+  if (field.type === "expression") {
+    return (
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] font-medium text-fd-muted-foreground">{label}</span>
+        <input
+          className={`${propInputCls} font-mono text-[12px]`}
+          value={value}
+          spellCheck={false}
+          placeholder={field.placeholder ?? "{…}"}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    );
+  }
+
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] font-medium text-fd-muted-foreground">{label}</span>

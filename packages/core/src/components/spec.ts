@@ -72,12 +72,12 @@ export interface ComponentSpec {
    */
   listLike?: boolean;
   /**
-   * A parent attribute that is derived data: rebuilt on save as an array
-   * expression of each child's given string attribute, and dropped from the
-   * editable attributes on parse (fumadocs `Tabs`' `items` mirrors the child
-   * `Tab` `value`s).
+   * A parent attribute that is derived data: a string-array expression whose
+   * entries are edited as an inline region injected into each child, and
+   * rebuilt on save from those regions (fumadocs `Tabs`' `items` holds the
+   * labels of its `Tab` children). Requires `childComponent`.
    */
-  itemsAttribute?: { attribute: string; fromChildAttribute: string };
+  itemsAttribute?: { attribute: string; childRegion: string; placeholder?: string };
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
   /** default document fragment inserted by the slash menu */

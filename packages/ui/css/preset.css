@@ -810,3 +810,56 @@
     scroll-padding-bottom: 108px;
   }
 }
+
+/* =========================================================================
+ * Tabs. Children stack (like Accordions, every panel stays editable): the
+ * label region reads as the active trigger, the body as its panel.
+ * ====================================================================== */
+
+.fde-tabs > .fde-component-content,
+.fde-tabs > .fde-component-content > [data-node-view-content-react] {
+  display: contents;
+}
+
+.fde-tab .fde-region-inline[data-region="label"] {
+  display: inline-block;
+  margin: 8px 16px 0;
+  padding-bottom: 5px;
+  min-width: 4ch;
+  font-size: 0.875em;
+  font-weight: 500;
+  color: var(--color-fd-primary);
+  border-bottom: 2px solid var(--color-fd-primary);
+}
+
+.fde-tab .fde-region-block[data-region="body"] {
+  background: var(--color-fd-background);
+  border-top: 1px solid var(--color-fd-border);
+  padding: 12px 16px;
+}
+
+/* include: the path region fills the chip */
+.fde-include > .fde-component-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.fde-include .fde-region-inline[data-region="path"] {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 0.875em;
+}
+
+/* Banner variants */
+.fde-banner[data-variant="normal"] {
+  background: var(--color-fd-secondary);
+  color: var(--color-fd-secondary-foreground);
+}
+
+.fde-banner[data-variant="rainbow"] {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-fd-primary) 25%, var(--color-fd-secondary)),
+    color-mix(in oklab, #f0abfc 35%, var(--color-fd-secondary))
+  );
+  color: var(--color-fd-secondary-foreground);
+}
