@@ -68,7 +68,10 @@ function phrasingToInline(
   for (const node of nodes) {
     switch (node.type) {
       case "text":
-        if (node.value) out.push(withMarks({ type: "text", text: node.value }, marks));
+        // a soft line wrap is whitespace, not content: fold it to a space so
+        // the editor's DOM read-back never upgrades it to a hard break (`\`)
+        if (node.value)
+          out.push(withMarks({ type: "text", text: node.value.replace(/ *\n */g, " ") }, marks));
         break;
       case "strong":
         out.push(...phrasingToInline(node.children, [...marks, { type: "bold" }], ctx));

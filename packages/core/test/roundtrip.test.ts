@@ -27,6 +27,16 @@ describe("fixtures", () => {
   }
 });
 
+test("soft line wraps parse as spaces, not literal newlines", () => {
+  // a "\n" left in a text node renders as a line break under pre-wrap, and
+  // the editor's DOM read-back would then upgrade it to a hardBreak (`\`)
+  const { doc, snapshot } = parseMdxToDoc("one line\nwrapped soft\n");
+  const paragraph = doc.content!.find((node) => node.type === "paragraph")!;
+  expect(paragraph.content).toEqual([{ type: "text", text: "one line wrapped soft" }]);
+  // the untouched block still round-trips with its original wrap
+  expect(serializeDocToMdx(doc, snapshot)).toBe("one line\nwrapped soft\n");
+});
+
 test("editing one block only rewrites that block", () => {
   const source = readFileSync(path.join(fixturesDir, "kitchen-sink.mdx"), "utf-8");
   const { doc, snapshot } = parseMdxToDoc(source);
