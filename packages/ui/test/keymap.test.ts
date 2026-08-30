@@ -552,3 +552,24 @@ After.
     expect(editor.state.selection.$from.parent.textContent).toBe("Body text.");
   });
 });
+
+describe("leaf component click", () => {
+  test("selects the component and flags its menu to open", () => {
+    const { editor } = makeEditor('<GithubInfo owner="fuma-nama" repo="fumadocs" />\n');
+    let pos = -1;
+    let leaf: import("@tiptap/pm/model").Node | null = null;
+    editor.state.doc.descendants((node, at) => {
+      if (node.type.name === "mdxComponent") {
+        pos = at;
+        leaf = node;
+      }
+    });
+    const handled = editor.view.someProp("handleClickOn", (f) =>
+      f(editor.view, pos + 1, leaf!, pos, new MouseEvent("click"), true),
+    );
+    expect(handled).toBe(true);
+    const selection = editor.state.selection;
+    expect(selection).toBeInstanceOf(NodeSelection);
+    expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
+  });
+});
