@@ -14,7 +14,8 @@ import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
-import type { MediaProvider } from "./components/media";
+import { fileSuggest } from "./components/file-suggest";
+import type { FileProvider, MediaProvider } from "./components/media";
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 
@@ -29,6 +30,7 @@ export interface LiveEditorProps {
   /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
   media?: MediaProvider;
+  files?: FileProvider;
 }
 
 /**
@@ -46,6 +48,7 @@ export function LiveEditor({
   onReady,
   hidden,
   media,
+  files,
 }: LiveEditorProps) {
   const extensions = useMemo(
     () => [
@@ -54,8 +57,9 @@ export function LiveEditor({
       imageExtension(media),
       ...componentExtensions(components),
       slashMenu(components, media),
+      ...(files ? [fileSuggest(specs, files)] : []),
     ],
-    [components, media],
+    [components, media, files, specs],
   );
   const serialize = useMemo(
     () => createIncrementalSerializer(createSyntax(components)),

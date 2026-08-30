@@ -373,6 +373,7 @@ export function MdxEditor({
                 onChangeRef={onChangeRef}
                 hidden={stage !== "live"}
                 media={media}
+                files={files}
                 onReady={(editor, serialize) => {
                   editorRef.current = editor;
                   serializeRef.current = serialize;
