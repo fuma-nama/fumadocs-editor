@@ -15,10 +15,12 @@ export type {
   MdxJsxAttribute,
   MdxJsxExpressionAttribute,
 } from "./extensions/mdx-nodes";
-export { parseMdxToDoc } from "./document";
-export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
-export { serializeDocToMdx } from "./serialize";
-export { createIncrementalSerializer } from "./incremental";
+export {
+  mdxComponentNodes,
+  MdxComponent,
+  MdxInlineRegion,
+  MdxBlockRegion,
+} from "./components/nodes";
 export {
   createRegistry,
   COMPONENT_NODE,
@@ -31,13 +33,3 @@ export type {
   PropField,
   AttributeRegion,
 } from "./components/spec";
-export {
-  mdxComponentNodes,
-  MdxComponent,
-  MdxInlineRegion,
-  MdxBlockRegion,
-} from "./components/nodes";
-export { parseMdx } from "./mdast/parse";
-export { docToMdast, nodeToMdastBlock } from "./mdast/to-mdast";
-export { blockToNode } from "./mdast/from-mdast";
-export { stringifyRoot, stringifyBlock } from "./mdast/stringify";

@@ -9,8 +9,12 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./parse": "./dist/parse.js",
+    "./serialize": "./dist/serialize.js",
+    "./extensions": "./dist/extensions.js",
     "./package.json": "./package.json"
   },
+  "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
@@ -18,6 +22,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run",
+    "bench": "vitest bench --run",
     "types:check": "tsc --noEmit"
   },
   "dependencies": {

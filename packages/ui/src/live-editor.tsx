@@ -1,6 +1,8 @@
 "use client";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { editorExtensions, type DocSnapshot } from "@fumadocs-editor/core";
+import { createRegistry, editorExtensions } from "@fumadocs-editor/core/extensions";
+import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
+import type { DocSnapshot } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
@@ -12,15 +14,16 @@ import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
 
+export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
+
 export interface LiveEditorProps {
   doc: JSONContent;
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
-  serialize: (doc: PMNode, snapshot?: DocSnapshot) => string;
   snapshotRef: RefObject<DocSnapshot | undefined>;
   onChangeRef: RefObject<((markdown: string) => void) | undefined>;
   /** fires once the editor exists and its view is mounted */
-  onReady: (editor: Editor) => void;
+  onReady: (editor: Editor, serialize: SerializeFn) => void;
   /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
 }
@@ -35,7 +38,6 @@ export function LiveEditor({
   doc,
   components,
   specs,
-  serialize,
   snapshotRef,
   onChangeRef,
   onReady,
@@ -48,6 +50,10 @@ export function LiveEditor({
       ...componentExtensions(components),
       slashMenu(components),
     ],
+    [components],
+  );
+  const serialize = useMemo(
+    () => createIncrementalSerializer(createRegistry(components)),
     [components],
   );
 
@@ -67,7 +73,7 @@ export function LiveEditor({
       attributes: { spellcheck: "false", autocorrect: "off", autocapitalize: "off" },
     },
     onCreate({ editor }) {
-      onReady(editor);
+      onReady(editor, serialize);
     },
     onUpdate({ editor }) {
       if (!onChangeRef.current) return;

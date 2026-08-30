@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build && node scripts/check-size.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

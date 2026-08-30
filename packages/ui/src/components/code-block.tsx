@@ -8,21 +8,10 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { createLowlight } from "lowlight";
-import bash from "highlight.js/lib/languages/bash";
-import css from "highlight.js/lib/languages/css";
-import go from "highlight.js/lib/languages/go";
-import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
-import markdown from "highlight.js/lib/languages/markdown";
-import python from "highlight.js/lib/languages/python";
-import rust from "highlight.js/lib/languages/rust";
-import sql from "highlight.js/lib/languages/sql";
-import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml";
-import yaml from "highlight.js/lib/languages/yaml";
 import { Select } from "@base-ui/react/select";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, SquareCode } from "lucide-react";
+import type { Editor } from "@tiptap/core";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 
 /**
@@ -32,31 +21,32 @@ import { itemCls, itemIndicatorCls, popupCls } from "./styles";
  * `CodeBlock` figure: same `shiki`-flavoured card, border and title bar, so a
  * highlighted block reads the same in the editor as it will on the site.
  *
- * A curated grammar set (rather than lowlight's ~40-language `common` bundle)
- * keeps the editor bundle small; fences in an unregistered language simply
- * render unhighlighted and still round-trip.
+ * The instance starts with no grammars: the highlight.js chunk loads only
+ * when a code block first renders, then registers into this same (mutable)
+ * instance and re-decorates.
  */
-const lowlight = createLowlight({
-  bash,
-  css,
-  go,
-  javascript,
-  json,
-  markdown,
-  python,
-  rust,
-  sql,
-  typescript,
-  xml,
-  yaml,
-});
-// map the editor's info-string tokens onto their nearest registered grammar
-lowlight.registerAlias({
-  javascript: ["jsx", "mjs", "cjs"],
-  typescript: ["tsx"],
-  xml: ["html"],
-  markdown: ["mdx"],
-});
+const lowlight = createLowlight();
+
+let grammars: Promise<void> | undefined;
+const rehighlighted = new WeakSet<Editor>();
+
+function ensureGrammars(editor: Editor) {
+  grammars ??= import("./code-languages").then(({ registerLanguages }) =>
+    registerLanguages(lowlight),
+  );
+  void grammars.then(() => {
+    if (editor.isDestroyed || rehighlighted.has(editor)) return;
+    rehighlighted.add(editor);
+    // the lowlight plugin only re-decorates blocks a transaction touched, so
+    // touch every code block without changing it (and without an undo step)
+    const { state, view } = editor;
+    const tr = state.tr;
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "codeBlock") tr.setNodeMarkup(pos, undefined, { ...node.attrs });
+    });
+    if (tr.steps.length > 0) view.dispatch(tr.setMeta("addToHistory", false));
+  });
+}
 
 /** Info-string language token → menu label. Order is the menu order. */
 const LANGUAGES: { value: string; label: string }[] = [
@@ -151,8 +141,9 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
   );
 }
 
-function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
+function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
   const language = (node.attrs.language as string | null) ?? null;
+  useEffect(() => ensureGrammars(editor), [editor]);
 
   return (
     <NodeViewWrapper
