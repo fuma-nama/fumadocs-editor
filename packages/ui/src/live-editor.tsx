@@ -13,7 +13,8 @@ import { EditorBubble } from "./bubble-menu";
 import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
-import { imageExtension, type MediaProvider } from "./components/media";
+import { imageExtension } from "./components/image-view";
+import type { MediaProvider } from "./components/media";
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 

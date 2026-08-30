@@ -31,7 +31,8 @@ import {
 } from "./components/keymap";
 import "@tiptap/extension-table";
 import { itemCls, popupCls } from "./components/styles";
-import { insertImages, type MediaProvider } from "./components/media";
+import { insertImages } from "./components/image-view";
+import type { MediaProvider } from "./components/media";
 
 export interface SlashItem {
   title: string;
