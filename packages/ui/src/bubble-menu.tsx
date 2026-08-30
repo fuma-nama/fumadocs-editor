@@ -6,7 +6,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
+import {
+  NodeSelection,
+  TextSelection,
+  type EditorState,
+  type Transaction as PMTransaction,
+} from "@tiptap/pm/state";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
@@ -34,6 +39,7 @@ import {
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockPanel } from "./block-menu";
+import { OPEN_COMPONENT_MENU } from "./components/caret-policy";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
 import { ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
@@ -455,6 +461,17 @@ export function EditorBubble({
   useEffect(() => {
     if (active == null) setPanelOpen(false);
   }, [active == null]);
+
+  // a click on a leaf component (nothing to type into) opens its menu
+  useEffect(() => {
+    const onTransaction = ({ transaction }: { transaction: PMTransaction }) => {
+      if (transaction.getMeta(OPEN_COMPONENT_MENU)) setPanelOpen(true);
+    };
+    editor.on("transaction", onTransaction);
+    return () => {
+      editor.off("transaction", onTransaction);
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!state?.format) setTurnIntoOpen(false);

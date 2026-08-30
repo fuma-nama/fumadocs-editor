@@ -3,6 +3,10 @@ import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/stat
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
+/** transaction meta set when a leaf component is clicked: the bubble opens
+ * that component's menu, since there is nothing in it to type into */
+export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";
+
 /*
  * Caret and selection policy: the caret rests in editable text, a component is
  * selected only by explicit gesture (Escape, Mod-A), and a selected node is
@@ -78,6 +82,16 @@ export const caretPolicy = Extension.create({
           // the whole component
           handleClickOn(view, pos, node, nodePos, _event, direct) {
             if (!direct || node.type.name !== COMPONENT_NODE) return false;
+            // a leaf (GithubInfo, a dynamic TypeTable) has nothing to type
+            // into: clicking it selects it and surfaces its menu instead
+            if (node.childCount === 0) {
+              view.dispatch(
+                view.state.tr
+                  .setSelection(NodeSelection.create(view.state.doc, nodePos))
+                  .setMeta(OPEN_COMPONENT_MENU, true),
+              );
+              return true;
+            }
             const end = nodePos + node.nodeSize;
             const inside = Math.min(Math.max(pos, nodePos + 1), end - 1);
             const $inside = view.state.doc.resolve(inside);
