@@ -491,8 +491,7 @@ function componentToNode(
         (a) => a.type === "mdxJsxAttribute" && a.name === spec.itemsAttribute!.attribute,
       );
       if (attr && attr.type === "mdxJsxAttribute" && attr.value != null) {
-        items =
-          typeof attr.value === "string" ? [attr.value] : parseStringArray(attr.value.value);
+        items = typeof attr.value === "string" ? [attr.value] : parseStringArray(attr.value.value);
         // an items expression we can't read as labels (a variable, computed
         // values) makes the labels uneditable: keep the whole element generic
         if (items == null) return null;

@@ -31,14 +31,19 @@ for (const name of LAZY_CHUNKS) {
   const chunk = all.find((f) => f.startsWith(`${name}-`));
   if (!chunk) failures.push(`expected a lazy "${name}" chunk; splitting has regressed`);
   else if (eager.includes(`assets/${chunk}`)) failures.push(`"${name}" chunk is loaded eagerly`);
-  else console.log(`lazy   ${(gz(`assets/${chunk}`) / 1024).toFixed(1).padStart(7)} kB gz  assets/${chunk}`);
+  else
+    console.log(
+      `lazy   ${(gz(`assets/${chunk}`) / 1024).toFixed(1).padStart(7)} kB gz  assets/${chunk}`,
+    );
 }
 
 console.log(
   `\neager total ${(eagerTotal / 1024).toFixed(1)} kB gz (+ react ${(reactTotal / 1024).toFixed(1)} kB) — budget ${EAGER_BUDGET / 1024} kB`,
 );
 if (eagerTotal > EAGER_BUDGET) {
-  failures.push(`eager JS ${(eagerTotal / 1024).toFixed(1)} kB gz exceeds the ${EAGER_BUDGET / 1024} kB budget`);
+  failures.push(
+    `eager JS ${(eagerTotal / 1024).toFixed(1)} kB gz exceeds the ${EAGER_BUDGET / 1024} kB budget`,
+  );
 }
 
 if (failures.length > 0) {

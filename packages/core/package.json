@@ -7,6 +7,7 @@
     "dist"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
     "./parse": "./dist/parse.js",
@@ -14,7 +15,6 @@
     "./extensions": "./dist/extensions.js",
     "./package.json": "./package.json"
   },
-  "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },

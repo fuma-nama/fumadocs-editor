@@ -65,7 +65,10 @@ test("onMarkdownChange is debounced and serializes the edit", async () => {
 test("blur flushes the pending serialize so no edit is lost", async () => {
   vi.useFakeTimers();
   const onChange = vi.fn<(markdown: string) => void>();
-  const { editor, dom } = await mount({ defaultValue: "Hello world.\n", onMarkdownChange: onChange });
+  const { editor, dom } = await mount({
+    defaultValue: "Hello world.\n",
+    onMarkdownChange: onChange,
+  });
 
   act(() => {
     editor.commands.setTextSelection(1);

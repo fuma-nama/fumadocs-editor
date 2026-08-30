@@ -29,7 +29,8 @@ export function parseCodeMeta(meta: string | null): CodeMeta {
 export function buildCodeMeta({ title, lineNumbers, noCopy, rest }: CodeMeta): string | null {
   const parts: string[] = [];
   if (title) parts.push(`title="${title.replaceAll('"', "'")}"`);
-  if (lineNumbers) parts.push(typeof lineNumbers === "number" ? `lineNumbers=${lineNumbers}` : "lineNumbers");
+  if (lineNumbers)
+    parts.push(typeof lineNumbers === "number" ? `lineNumbers=${lineNumbers}` : "lineNumbers");
   if (noCopy) parts.push("noCopy");
   if (rest) parts.push(rest);
   return parts.length > 0 ? parts.join(" ") : null;

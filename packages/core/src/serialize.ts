@@ -42,10 +42,7 @@ export function matchBlocks(normalized: string[], snapshot: DocSnapshot): (numbe
   return matches;
 }
 
-export function tryNormalize(
-  node: JSONContent,
-  syntax: Syntax,
-): string | undefined {
+export function tryNormalize(node: JSONContent, syntax: Syntax): string | undefined {
   try {
     return stringifyBlock(nodeToMdastBlock(node, syntax));
   } catch {
@@ -80,7 +77,11 @@ export function assembleMdx(normalized: string[], snapshot?: DocSnapshot): strin
   const parts: { text: string; index: number | null }[] = [];
   for (let i = 0; i < normalized.length; i++) {
     const index = matches[i];
-    parts.push(index != null ? { text: snapshot!.blocks[index].source, index } : { text: normalized[i], index: null });
+    parts.push(
+      index != null
+        ? { text: snapshot!.blocks[index].source, index }
+        : { text: normalized[i], index: null },
+    );
   }
 
   const filtered = parts.filter((part) => part.text !== "");

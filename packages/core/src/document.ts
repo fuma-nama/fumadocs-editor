@@ -50,10 +50,7 @@ export interface ParsedDoc {
  * Parse MDX source into a TipTap-compatible document.
  * Throws on MDX syntax errors (invalid JSX / expressions).
  */
-export function parseMdxToDoc(
-  source: string,
-  syntax: Syntax = EMPTY_SYNTAX,
-): ParsedDoc {
+export function parseMdxToDoc(source: string, syntax: Syntax = EMPTY_SYNTAX): ParsedDoc {
   const root = parseMdx(source);
   const ctx = { source, syntax };
 

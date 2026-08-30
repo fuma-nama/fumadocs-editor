@@ -236,13 +236,21 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       return <tr key={key}>{children()}</tr>;
     case "tableHeader":
       return (
-        <th key={key} colSpan={node.attrs?.colspan as number} rowSpan={node.attrs?.rowspan as number}>
+        <th
+          key={key}
+          colSpan={node.attrs?.colspan as number}
+          rowSpan={node.attrs?.rowspan as number}
+        >
           {children()}
         </th>
       );
     case "tableCell":
       return (
-        <td key={key} colSpan={node.attrs?.colspan as number} rowSpan={node.attrs?.rowspan as number}>
+        <td
+          key={key}
+          colSpan={node.attrs?.colspan as number}
+          rowSpan={node.attrs?.rowspan as number}
+        >
           {children()}
         </td>
       );
@@ -262,14 +270,16 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       );
     case "mdxJsxTextElement":
       return (
-        <span key={key} data-mdx-inline="" data-component={(node.attrs?.name as string) ?? "Fragment"}>
+        <span
+          key={key}
+          data-mdx-inline=""
+          data-component={(node.attrs?.name as string) ?? "Fragment"}
+        >
           {children()}
         </span>
       );
     case "mdxTextExpression":
-      return (
-        <code key={key} data-mdx-expression="">{`{${String(node.attrs?.value ?? "")}}`}</code>
-      );
+      return <code key={key} data-mdx-expression="">{`{${String(node.attrs?.value ?? "")}}`}</code>;
     case "verbatimInline":
       return (
         <code key={key} data-mdx-verbatim="">
