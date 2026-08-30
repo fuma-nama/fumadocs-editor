@@ -15,7 +15,7 @@ import {
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { UiComponentSpec } from "./spec";
-import { readStringProps, setStringProp } from "./attributes";
+import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attributes";
 import { caretPolicy } from "./caret-policy";
 import { componentKeymap } from "./keymap";
 import { structureGuard } from "./structure";
@@ -66,6 +66,8 @@ function makeComponentView(specs: SpecMap) {
     const Render = spec.render;
     const setProp = (propName: string, value: string) =>
       updateAttributes({ attributes: setStringProp(attributes, propName, value) });
+    const setLiteral = (propName: string, value: unknown) =>
+      updateAttributes({ attributes: setLiteralProp(attributes, propName, value) });
 
     return (
       <NodeViewWrapper
@@ -73,7 +75,13 @@ function makeComponentView(specs: SpecMap) {
         data-component={name}
         data-selected={ringed || undefined}
       >
-        <Render props={readStringProps(attributes)} selected={selected} setProp={setProp}>
+        <Render
+          props={readStringProps(attributes)}
+          literals={readLiterals(attributes)}
+          selected={selected}
+          setProp={setProp}
+          setLiteral={setLiteral}
+        >
           <NodeViewContent className="fde-component-content" />
         </Render>
       </NodeViewWrapper>

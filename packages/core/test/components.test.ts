@@ -115,3 +115,28 @@ describe("component regions", () => {
     expect(twice).toBe(once);
   });
 });
+
+describe("expression attribute literals", () => {
+  const attrValue = (source: string) => {
+    const { doc } = parseMdxToDoc(source);
+    let value: unknown;
+    const walk = (node: JSONContent) => {
+      if (node.attrs?.attributes) value = (node.attrs.attributes as { value: unknown }[])[0].value;
+      for (const child of node.content ?? []) walk(child);
+    };
+    walk(doc);
+    return value as { value: string; literal?: unknown };
+  };
+
+  test("static object expressions carry their literal value", () => {
+    const value = attrValue(
+      '<TypeTable type={{ name: { type: "string", required: true }, size: -2 }} />\n',
+    );
+    expect(value.literal).toEqual({ name: { type: "string", required: true }, size: -2 });
+  });
+
+  test("dynamic expressions stay literal-free", () => {
+    expect(attrValue("<TypeTable type={{f}} />\n").literal).toBeUndefined();
+    expect(attrValue("<TypeTable type={props.type} />\n").literal).toBeUndefined();
+  });
+});

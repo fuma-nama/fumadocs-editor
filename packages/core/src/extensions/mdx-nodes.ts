@@ -7,7 +7,16 @@ import { Node } from "@tiptap/core";
 export interface MdxJsxAttribute {
   type: "mdxJsxAttribute";
   name: string;
-  value: string | null | { type: "mdxJsxAttributeValueExpression"; value: string };
+  value:
+    | string
+    | null
+    | {
+        type: "mdxJsxAttributeValueExpression";
+        value: string;
+        /** the expression's value when it is a static literal (JSON-safe),
+         * extracted at parse time — lets the UI edit it structurally */
+        literal?: unknown;
+      };
 }
 
 export interface MdxJsxExpressionAttribute {
