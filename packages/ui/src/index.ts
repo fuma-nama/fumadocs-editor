@@ -1,5 +1,6 @@
 export { MdxEditor } from "./editor";
 export type { MdxEditorProps, MdxEditorRef } from "./editor";
+export { StaticMdx } from "./static-mdx";
 export { EditorThemeProvider, useEditorTheme } from "./theme";
 export type { EditorTheme, ResolvedTheme } from "./theme";
 export { componentExtensions } from "./components/node-views";

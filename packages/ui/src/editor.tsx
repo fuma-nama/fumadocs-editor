@@ -1,21 +1,25 @@
 "use client";
-import { EditorContent, useEditor } from "@tiptap/react";
 import {
   createIncrementalSerializer,
   createRegistry,
-  editorExtensions,
   parseMdxToDoc,
   type DocSnapshot,
+  type ParsedDoc,
 } from "@fumadocs-editor/core";
-import type { JSONContent } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import { Tabs } from "@base-ui/react/tabs";
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
-import { componentExtensions } from "./components/node-views";
-import { codeBlockExtension } from "./components/code-block";
-import { slashMenu } from "./slash-menu";
-import { EditorBubble } from "./bubble-menu";
-import { BlockMenu } from "./block-menu";
-import { MobileBar } from "./mobile-bar";
+import {
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { LiveEditor } from "./live-editor";
+import { StaticMdx } from "./static-mdx";
+import { parseDocCached } from "./doc-cache";
 import type { UiComponentSpec } from "./components/spec";
 import { focusRing } from "./components/styles";
 import { useEditorTheme, type EditorTheme } from "./theme";
@@ -33,6 +37,17 @@ export interface MdxEditorProps {
   /** MDX components to render as WYSIWYG nodes with editable regions */
   components?: UiComponentSpec[];
   /**
+   * Reuse the parsed document across mounts of the same document (a small
+   * LRU): reopening a recently visited doc paints without reparsing.
+   */
+  cacheKey?: string;
+  /**
+   * Server-rendered (or otherwise precomputed) MDX to show as the first
+   * paint. Skips even the parse until the editor hydrates; the markup should
+   * visually match the document to avoid a shift when the editor swaps in.
+   */
+  staticFallback?: ReactNode;
+  /**
    * Scope the editor to a fixed colour theme. When omitted, the editor inherits
    * the ambient theme: an {@link EditorThemeProvider}, a `next-themes` `.dark`
    * class, or the OS preference, which is what a real fumadocs site wants.
@@ -43,8 +58,12 @@ export interface MdxEditorProps {
 }
 
 type Mode = "visual" | "source";
-
-const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+/**
+ * static  → only the zero-cost paint is up
+ * mounting → TipTap is constructing behind it (input captured meanwhile)
+ * live    → the editor is interactive and the static view is gone
+ */
+type Stage = "static" | "mounting" | "live";
 
 const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
 
@@ -52,100 +71,131 @@ export function MdxEditor({
   defaultValue = "",
   onMarkdownChange,
   components,
+  cacheKey,
+  staticFallback,
   theme,
   className,
   ref,
 }: MdxEditorProps) {
   const registry = useMemo(() => createRegistry(components ?? []), [components]);
+  const specMap = useMemo(
+    () => new Map((components ?? []).map((spec) => [spec.name, spec])),
+    [components],
+  );
+  const serialize = useMemo(() => createIncrementalSerializer(registry), [registry]);
   const ambient = useEditorTheme();
   // an explicit `theme` prop wins; otherwise stay unscoped so the editor
   // inherits the provider / next-themes / OS theme from an ancestor.
   const scoped = theme === "system" ? ambient.resolvedTheme : theme;
 
+  // with a host-provided fallback even the parse waits for hydration
   const [initial] = useState(() => {
+    if (staticFallback) return { parsed: null as ParsedDoc | null, error: null as string | null };
     try {
-      return { ...parseMdxToDoc(defaultValue, registry), error: null as string | null };
+      return { parsed: parseDocCached(cacheKey, defaultValue, registry), error: null };
     } catch (error) {
-      return { doc: EMPTY_DOC, snapshot: undefined, error: String(error) };
+      return { parsed: null, error: String(error) };
     }
   });
 
-  const snapshotRef = useRef<DocSnapshot | undefined>(initial.snapshot);
+  const [parsed, setParsed] = useState(initial.parsed);
+  const [stage, setStage] = useState<Stage>("static");
   const [mode, setMode] = useState<Mode>(initial.error ? "source" : "visual");
   const [source, setSource] = useState(initial.error ? defaultValue : "");
   const [sourceError, setSourceError] = useState(initial.error);
+
+  const editorRef = useRef<Editor | null>(null);
+  const snapshotRef = useRef<DocSnapshot | undefined>(initial.parsed?.snapshot);
+  const captureRef = useRef<{ point?: { x: number; y: number }; keys: string[] }>({ keys: [] });
 
   const onChangeRef = useRef(onMarkdownChange);
   useEffect(() => {
     onChangeRef.current = onMarkdownChange;
   });
 
-  const extensions = useMemo(
-    () => [
-      ...editorExtensions({ componentNodes: false, codeBlock: false }),
-      codeBlockExtension(),
-      ...componentExtensions(components ?? []),
-      slashMenu(components ?? []),
-    ],
-    [components],
-  );
-  const specMap = useMemo(
-    () => new Map((components ?? []).map((spec) => [spec.name, spec])),
-    [components],
-  );
+  const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
 
-  // unchanged blocks serialize from a per-node cache, so cost tracks the
-  // edited block; still debounced so bursts of keystrokes report once
-  const serialize = useMemo(() => createIncrementalSerializer(registry), [registry]);
-  const serializeTimer = useRef<number>(undefined);
-  useEffect(() => () => clearTimeout(serializeTimer.current), []);
+  // hydrate at idle even without intent, so the first interaction is instant
+  useEffect(() => {
+    if (stage !== "static" || mode !== "visual") return;
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(() => beginLive(), { timeout: 1500 });
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(beginLive, 200);
+    return () => clearTimeout(id);
+  }, [stage, mode]);
 
-  const editor = useEditor({
-    extensions,
-    content: initial.doc,
-    // file names, props and code everywhere: browser text assistance only
-    // paints false positives and mutates DOM the schema has to heal
-    editorProps: {
-      attributes: { spellcheck: "false", autocorrect: "off", autocapitalize: "off" },
-    },
-    onUpdate({ editor }) {
-      if (!onChangeRef.current) return;
-      clearTimeout(serializeTimer.current);
-      serializeTimer.current = window.setTimeout(() => {
-        serializeTimer.current = undefined;
-        onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
-      }, 250);
-    },
-    onBlur({ editor }) {
-      if (serializeTimer.current === undefined) return;
-      clearTimeout(serializeTimer.current);
-      serializeTimer.current = undefined;
-      onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
-    },
-  });
+  // the staticFallback path parses here, just before the editor constructs
+  useEffect(() => {
+    if (stage === "static" || parsed || sourceError) return;
+    try {
+      const result = parseDocCached(cacheKey, defaultValue, registry);
+      snapshotRef.current = result.snapshot;
+      setParsed(result);
+    } catch (error) {
+      setSourceError(String(error));
+      setSource(defaultValue);
+      setMode("source");
+    }
+  }, [stage, parsed, sourceError, cacheKey, defaultValue, registry]);
+
+  // replay input captured while the static view was up: caret lands where the
+  // user clicked (layout parity makes the coordinates transfer), keystrokes
+  // re-run through the real keymap
+  useEffect(() => {
+    if (stage !== "live") return;
+    const editor = editorRef.current;
+    const { point, keys } = captureRef.current;
+    captureRef.current = { keys: [] };
+    if (!editor || (!point && keys.length === 0)) return;
+    if (point) {
+      const found = editor.view.posAtCoords({ left: point.x, top: point.y });
+      editor.commands.focus(found ? found.pos : "start");
+    } else {
+      editor.commands.focus("start");
+    }
+    let run = "";
+    const flush = () => {
+      if (run === "") return;
+      editor.commands.insertContent({ type: "text", text: run });
+      run = "";
+    };
+    for (const key of keys) {
+      if (key.length === 1) run += key;
+      else {
+        flush();
+        editor.commands.keyboardShortcut(key);
+      }
+    }
+    flush();
+  }, [stage]);
 
   const getMarkdown = () => {
-    if (mode === "source" || !editor) return source;
-    return serialize(editor.state.doc, snapshotRef.current);
+    if (mode === "source") return source;
+    const editor = editorRef.current;
+    return editor ? serialize(editor.state.doc, snapshotRef.current) : defaultValue;
   };
 
   useImperativeHandle(ref, () => ({ getMarkdown }));
 
   function switchMode(next: Mode) {
-    if (next === mode || !editor) return;
+    if (next === mode) return;
 
     if (next === "source") {
-      setSource(serialize(editor.state.doc, snapshotRef.current));
+      setSource(getMarkdown());
       setMode("source");
+      editorRef.current = null; // LiveEditor unmounts and destroys the editor
       return;
     }
 
     try {
-      const parsed = parseMdxToDoc(source, registry);
-      snapshotRef.current = parsed.snapshot;
-      editor.commands.setContent(parsed.doc);
+      const result = parseMdxToDoc(source, registry);
+      snapshotRef.current = result.snapshot;
+      setParsed(result);
       setSourceError(null);
       setMode("visual");
+      setStage("static");
     } catch (error) {
       setSourceError(String(error));
     }
@@ -173,10 +223,47 @@ export function MdxEditor({
       </Tabs.Root>
       {mode === "visual" ? (
         <div className="relative">
-          <EditorContent editor={editor} className="fde-content" />
-          {editor && <EditorBubble editor={editor} specs={specMap} />}
-          {editor && <BlockMenu editor={editor} specs={specMap} />}
-          {editor && <MobileBar editor={editor} components={components ?? []} specs={specMap} />}
+          {stage !== "static" && parsed && (
+            <LiveEditor
+              doc={parsed.doc}
+              components={components ?? []}
+              specs={specMap}
+              serialize={serialize}
+              snapshotRef={snapshotRef}
+              onChangeRef={onChangeRef}
+              hidden={stage !== "live"}
+              onReady={(editor) => {
+                editorRef.current = editor;
+                setStage("live");
+              }}
+            />
+          )}
+          {stage !== "live" && (
+            <div
+              className="fde-content cursor-text outline-none"
+              tabIndex={0}
+              onPointerDown={(event) => {
+                captureRef.current.point = { x: event.clientX, y: event.clientY };
+                beginLive();
+              }}
+              onKeyDown={(event) => {
+                const { key } = event;
+                if (
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  !event.altKey &&
+                  (key.length === 1 || key === "Enter" || key === "Backspace")
+                ) {
+                  captureRef.current.keys.push(key);
+                  event.preventDefault();
+                }
+                beginLive();
+              }}
+              onFocus={beginLive}
+            >
+              {staticFallback ?? (parsed && <StaticMdx doc={parsed.doc} specs={specMap} />)}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-1 flex-col">
