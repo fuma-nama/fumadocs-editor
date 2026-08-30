@@ -8,9 +8,6 @@ export interface ComponentRenderProps {
   children: ReactNode;
   /** update a string attribute in place (for controls the renderer owns) */
   setProp: (name: string, value: string) => void;
-  /** replace the text of one of the component's regions (picker controls);
-   * a no-op in the static paint */
-  setRegionText: (region: string, text: string) => void;
   selected: boolean;
 }
 
@@ -23,4 +20,6 @@ export interface UiComponentSpec extends ComponentSpec {
   render: FC<ComponentRenderProps>;
   /** small glyph shown in menus and the component's control bar */
   icon?: ReactNode;
+  /** region holding a file path: with a FileProvider it autocompletes in place */
+  filePathRegion?: string;
 }

@@ -121,14 +121,15 @@ function componentItems(specs: UiComponentSpec[]): SlashItem[] {
   return items;
 }
 
-interface PopupProps {
+export interface PopupProps {
   items: SlashItem[];
   selected: number;
   rect: { left: number; top: number; bottom: number } | null;
   onSelect: (index: number) => void;
 }
 
-function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
+/** shared suggestion list: the slash menu and the file-path suggest */
+export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
