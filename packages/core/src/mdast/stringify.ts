@@ -5,6 +5,7 @@ import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { directiveHandlers, directiveUnsafe } from "../syntax/directives/serialize";
+import type { SyntaxOptions } from "../components/spec";
 
 /** Custom mdast node emitted for PM verbatim nodes: serialized as-is, no escaping. */
 export interface RawNode {
@@ -89,11 +90,11 @@ const directiveStringifyOptions: Options = {
   extensions: [...stringifyOptions.extensions!, { unsafe: directiveUnsafe }],
 };
 
-export function stringifyRoot(root: Root, directives = false): string {
-  return toMarkdown(root, directives ? directiveStringifyOptions : stringifyOptions);
+export function stringifyRoot(root: Root, options: SyntaxOptions = {}): string {
+  return toMarkdown(root, options.directives ? directiveStringifyOptions : stringifyOptions);
 }
 
 /** Stringify a single top-level block, without the trailing newline. */
-export function stringifyBlock(block: RootContent, directives = false): string {
-  return stringifyRoot({ type: "root", children: [block] }, directives).replace(/\n$/, "");
+export function stringifyBlock(block: RootContent, options: SyntaxOptions = {}): string {
+  return stringifyRoot({ type: "root", children: [block] }, options).replace(/\n$/, "");
 }

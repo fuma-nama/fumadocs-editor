@@ -51,7 +51,7 @@ export interface ParsedDoc {
  * Throws on MDX syntax errors (invalid JSX / expressions).
  */
 export function parseMdxToDoc(source: string, syntax: Syntax = EMPTY_SYNTAX): ParsedDoc {
-  const root = parseMdx(source, syntax.options.directives === true);
+  const root = parseMdx(source, syntax.options);
   const ctx = { source, syntax };
 
   const content: JSONContent[] = [];

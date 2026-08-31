@@ -44,7 +44,7 @@ export function matchBlocks(normalized: string[], snapshot: DocSnapshot): (numbe
 
 export function tryNormalize(node: JSONContent, syntax: Syntax): string | undefined {
   try {
-    return stringifyBlock(nodeToMdastBlock(node, syntax), syntax.options.directives === true);
+    return stringifyBlock(nodeToMdastBlock(node, syntax), syntax.options);
   } catch {
     return undefined;
   }
