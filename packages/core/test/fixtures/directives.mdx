@@ -1,0 +1,43 @@
+# Directive admonitions
+
+:::note
+A plain admonition with no title.
+:::
+
+:::warning[Watch out]
+The label becomes the editable title, **marks** survive in the body.
+
+A second paragraph.
+:::
+
+:::info{id="deep-link"}
+Directive attributes ride along.
+:::
+
+::::danger[Outer]
+Before the nested one.
+
+:::tip
+Admonitions nest; the outer fence grows.
+:::
+::::
+
+:::success
+Aliases: note, tip, info, warn, warning, danger, success.
+:::
+
+:::spoiler
+An unknown directive name stays on the verbatim fallback.
+:::
+
+:::note[A **rich** label]
+A non-plain label cannot back a plain-text region: verbatim fallback.
+:::
+
+<Callout type="info" title="JSX">
+  A JSX Callout next to a directive keeps its own source form.
+</Callout>
+
+A paragraph mentioning key:value pairs and a ::leaf directive line below.
+
+::video[Leaf directives stay verbatim]

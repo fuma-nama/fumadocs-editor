@@ -3,6 +3,7 @@ import {
   MdxEditor,
   EditorThemeProvider,
   useEditorTheme,
+  admonitionSpec,
   fumadocsUiComponents,
   type FileProvider,
   type MdxEditorRef,
@@ -44,6 +45,10 @@ function ThemeToggle() {
     </button>
   );
 }
+
+// registering the admonition spec turns the `:::` directive dialect on;
+// module-level so the identity is stable for the parse cache
+const components = [...fumadocsUiComponents, admonitionSpec];
 
 // uploads land in docs/assets via the dev server; relative srcs display
 // through the asset endpoint
@@ -228,7 +233,7 @@ function Playground() {
               key={active ?? "fallback"}
               defaultValue={initialText}
               cacheKey={active ?? undefined}
-              components={fumadocsUiComponents}
+              components={components}
               onMarkdownChange={(next) => {
                 setMarkdown(next);
                 sessionRef.current?.changed();

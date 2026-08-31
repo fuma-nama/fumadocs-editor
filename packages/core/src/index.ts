@@ -21,6 +21,9 @@ export { serializeDocToMdx, blockNormalized, matchBlocks, tryNormalize } from ".
 export { createIncrementalSerializer } from "./incremental";
 export {
   createSyntax,
+  admonitionSpec,
+  ADMONITION_TYPES,
+  DIRECTIVE_ADMONITION,
   COMPONENT_NODE,
   INLINE_REGION_NODE,
   BLOCK_REGION_NODE,

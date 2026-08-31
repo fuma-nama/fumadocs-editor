@@ -4,6 +4,7 @@ import { mdxToMarkdown } from "mdast-util-mdx";
 import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { frontmatterToMarkdown } from "mdast-util-frontmatter";
+import { directiveToMarkdown } from "mdast-util-directive";
 
 /** Custom mdast node emitted for PM verbatim nodes: serialized as-is, no escaping. */
 export interface RawNode {
@@ -66,13 +67,18 @@ const mdxJsxFlowElementTight: HandleWithPeek = (node, parent, state, info) =>
   collapseJsxSiblingGaps(mdxJsxFlowElement(node, parent, state, info));
 mdxJsxFlowElementTight.peek = mdxJsxFlowElement.peek;
 
-export const stringifyOptions: Options = {
+const directive = directiveToMarkdown();
+
+const stringifyOptions: Options = {
   extensions: [mdxToMarkdown(), gfmToMarkdown(), frontmatterToMarkdown(["yaml"])],
   // 'raw' is our own mdast extension, unknown to the Handlers map; the
-  // top-level mdxJsxFlowElement override wins over the extension's handler
+  // top-level mdxJsxFlowElement override wins over the extension's handler.
+  // Directive handlers are always on so an admonition node emits `:::` even
+  // outside the dialect; its escaping rules join only with the dialect.
   handlers: {
     raw,
     mdxJsxFlowElement: mdxJsxFlowElementTight,
+    ...directive.handlers,
   } as unknown as Options["handlers"],
   bullet: "-",
   rule: "-",
@@ -81,11 +87,21 @@ export const stringifyOptions: Options = {
   fences: true,
 };
 
-export function stringifyRoot(root: Root): string {
-  return toMarkdown(root, stringifyOptions);
+/**
+ * With the directive dialect on, text that would re-parse as a directive
+ * (`:word` in phrasing, `::` at a line start) must be escaped; without it,
+ * those escapes would be noise in everyone else's output.
+ */
+const directiveStringifyOptions: Options = {
+  ...stringifyOptions,
+  extensions: [...stringifyOptions.extensions!, { unsafe: directive.unsafe }],
+};
+
+export function stringifyRoot(root: Root, directives = false): string {
+  return toMarkdown(root, directives ? directiveStringifyOptions : stringifyOptions);
 }
 
 /** Stringify a single top-level block, without the trailing newline. */
-export function stringifyBlock(block: RootContent): string {
-  return stringifyRoot({ type: "root", children: [block] }).replace(/\n$/, "");
+export function stringifyBlock(block: RootContent, directives = false): string {
+  return stringifyRoot({ type: "root", children: [block] }, directives).replace(/\n$/, "");
 }
