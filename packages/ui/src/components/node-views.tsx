@@ -55,7 +55,7 @@ function makeComponentView(specs: SpecMap) {
     if (!spec) {
       return (
         <NodeViewWrapper
-          className="relative rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
+          className="relative isolate rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
           data-component={name ?? ""}
         >
           <NodeViewContent />
@@ -71,7 +71,7 @@ function makeComponentView(specs: SpecMap) {
 
     return (
       <NodeViewWrapper
-        className="relative data-[selected]:rounded-xl data-[selected]:bg-fd-primary/10 data-[selected]:outline-2 data-[selected]:outline-offset-2 data-[selected]:outline-fd-primary/50"
+        className="relative isolate data-[selected]:rounded-xl data-[selected]:bg-fd-primary/10 data-[selected]:outline-2 data-[selected]:outline-offset-2 data-[selected]:outline-fd-primary/50"
         data-component={name}
         data-selected={ringed || undefined}
       >
@@ -202,7 +202,13 @@ export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
   const BlockRegionView = makeRegionView("block", placeholders);
 
   return [
-    MdxComponent.extend({ addNodeView: () => ReactNodeViewRenderer(ComponentView, { stopEvent }) }),
+    MdxComponent.extend({
+      // `relative isolate`: a dragged element's ghost is rasterized from its
+      // own paint layer; without one Chromium snapshots the whole page. This
+      // wrapper is what ProseMirror marks draggable on mousedown.
+      addNodeView: () =>
+        ReactNodeViewRenderer(ComponentView, { stopEvent, className: "relative isolate" }),
+    }),
     MdxInlineRegion.extend({
       addNodeView: () => ReactNodeViewRenderer(InlineRegionView, { stopEvent }),
     }),
