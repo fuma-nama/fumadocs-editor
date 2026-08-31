@@ -7,15 +7,16 @@ import { mdxjs } from "micromark-extension-mdxjs";
 import { gfm } from "micromark-extension-gfm";
 import { frontmatter } from "micromark-extension-frontmatter";
 import { directive, directiveFromMarkdown } from "../syntax/directives/parse";
+import type { SyntaxOptions } from "../components/spec";
 
 /**
- * Parse MDX source into mdast with MDX, GFM and YAML frontmatter syntax;
- * `directives` adds the remark-directive dialect.
+ * Parse MDX source into mdast with MDX, GFM and YAML frontmatter syntax,
+ * plus whatever dialects `options` enables.
  */
-export function parseMdx(source: string, directives = false): Root {
+export function parseMdx(source: string, options: SyntaxOptions = {}): Root {
   const extensions = [mdxjs(), gfm(), frontmatter(["yaml"])];
   const mdastExtensions = [mdxFromMarkdown(), gfmFromMarkdown(), frontmatterFromMarkdown(["yaml"])];
-  if (directives) {
+  if (options.directives) {
     extensions.push(directive());
     mdastExtensions.push(directiveFromMarkdown());
   }
