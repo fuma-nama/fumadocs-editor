@@ -36,9 +36,13 @@ import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 /*
  * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
  * component's markup: same Tailwind utilities, same `fd-*` tokens, so the
- * editor is genuinely WYSIWYG. In a fumadocs-ui consumer these renderers would
- * import the actual components and drop `<NodeViewContent>` into their editable
- * slots. The editable regions arrive as `children`, in document order.
+ * editor is genuinely WYSIWYG. Mirroring is deliberate — the editor never
+ * renders through fumadocs-ui itself: real components own state and
+ * interactivity (tab switching, collapse, navigation) that conflict with
+ * always-editable regions, and the editor stays free of the dependency.
+ * Custom components integrate the same way: a lightweight editor-side
+ * renderer, with the editable regions arriving as `children` in document
+ * order.
  */
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
