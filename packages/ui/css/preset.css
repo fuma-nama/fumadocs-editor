@@ -428,6 +428,16 @@
   user-select: none;
 }
 
+/* A drag's ghost is rasterized from the dragged element's own paint layer —
+ * without one Chromium snapshots the enclosing layer: the whole page. The
+ * component wrappers carry `relative isolate` as utilities (node-views.tsx);
+ * this rule covers the non-editable chrome the browser can pick as a drag
+ * source when the press lands on a control, across every renderer. */
+.fde-content [data-component] > [contenteditable="false"] {
+  position: relative;
+  isolation: isolate;
+}
+
 /* ---- the quiet chrome ----
  * The only signals while writing: a warm border on the component the caret is
  * in (the activeComponent decoration lands on the `.react-renderer` wrapper),

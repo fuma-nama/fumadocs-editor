@@ -179,9 +179,11 @@ function Files({ children }: ComponentRenderProps) {
 }
 
 /**
- * File and Folder rows share one geometry; the icon doubles as the drag grip.
- * `z-[1]` lifts it above the name region (`position: relative`, later in DOM
- * order), which would otherwise swallow every pointer event aimed at it.
+ * File and Folder rows share one geometry; the icon reads as the drag grip
+ * (cursor only — pressing any chrome drags the row via the node's native
+ * draggability). `z-[1]` lifts it above the name region (`position:
+ * relative`, later in DOM order), which would otherwise swallow every
+ * pointer event aimed at it.
  */
 const entryIconCls =
   "absolute start-2 top-2 z-[1] cursor-grab text-fd-muted-foreground active:cursor-grabbing";
@@ -189,7 +191,7 @@ const entryIconCls =
 function File({ children }: ComponentRenderProps) {
   return (
     <div className="fde-file relative">
-      <span className={entryIconCls} contentEditable={false} draggable data-drag-handle>
+      <span className={entryIconCls} contentEditable={false}>
         <FileIcon size={15} />
       </span>
       {children}
@@ -200,7 +202,7 @@ function File({ children }: ComponentRenderProps) {
 function Folder({ children }: ComponentRenderProps) {
   return (
     <div className="fde-folder relative">
-      <span className={entryIconCls} contentEditable={false} draggable data-drag-handle>
+      <span className={entryIconCls} contentEditable={false}>
         <FolderIcon size={15} />
       </span>
       {children}

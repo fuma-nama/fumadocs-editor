@@ -1,6 +1,5 @@
 import { Extension } from "@tiptap/core";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
-import { CellSelection } from "@tiptap/pm/tables";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
@@ -35,20 +34,6 @@ export const caretPolicy = Extension.create({
     return [
       new Plugin({
         props: {
-          // Dragging a table cell-selection lets the browser rasterize the
-          // hidden native selection range as the ghost — which can be a huge
-          // slab of the viewport, not the cells. Pin the ghost to the table
-          // (bounded, and what actually moves).
-          handleDOMEvents: {
-            dragstart(view, event) {
-              const selection = view.state.selection;
-              if (!event.dataTransfer || !(selection instanceof CellSelection)) return false;
-              const cell = view.nodeDOM(selection.$anchorCell.pos);
-              const table = cell instanceof Element ? cell.closest("table") : null;
-              if (table) event.dataTransfer.setDragImage(table, 0, 0);
-              return false; // ProseMirror still stages the drag itself
-            },
-          },
           // typing never replaces a selected component or atom; deleting or
           // Enter-to-drill-in stay explicit gestures
           handleTextInput(view, _from, _to, text) {
