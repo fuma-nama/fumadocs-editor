@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
+import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 
 /**
  * A non-region attribute, edited through the component's props panel rather
@@ -97,10 +98,10 @@ export interface SyntaxOptions {
   headingSuffixes?: boolean;
   /**
    * Parse the remark-directive dialect, making `:::type[Title]` admonitions
-   * editable as {@link admonitionSpec} components. Off by default — it is a
-   * dialect: enabling it changes how any `:`-directive-shaped text parses
-   * (directives the editor doesn't model ride the verbatim fallback).
-   * Defaults to true when {@link admonitionSpec} is registered.
+   * editable components (the `syntax/directives` capsule). Off by default —
+   * it is a dialect: enabling it changes how any `:`-directive-shaped text
+   * parses (directives the editor doesn't model ride the verbatim fallback).
+   * Defaults to true when the admonition spec is registered.
    */
   directives?: boolean;
 }
@@ -125,61 +126,6 @@ export function createSyntax(
     options: { ...options, directives: options.directives ?? map.has(DIRECTIVE_ADMONITION) },
   };
 }
-
-/**
- * Spec name of the `:::` directive admonition. Not a valid JSX name, so it can
- * never collide with a real component — and serialization branches on it, so a
- * directive-sourced admonition re-emits `:::` syntax, never JSX (and a
- * `<Callout>` never becomes a directive).
- */
-export const DIRECTIVE_ADMONITION = ":::";
-
-/**
- * Directive names fumadocs' `remarkDirectiveAdmonition` accepts, mapped to
- * the Callout type each renders as.
- */
-export const ADMONITION_TYPES: Record<string, string> = {
-  note: "info",
-  tip: "info",
-  info: "info",
-  warn: "warning",
-  warning: "warning",
-  danger: "error",
-  success: "success",
-};
-
-/**
- * The `:::type[Title]` admonition as an editable component: the directive name
- * is stored as the `type` attribute, the label as the `title` region. Register
- * it (UI layers add a renderer) to turn the dialect on.
- */
-export const admonitionSpec: ComponentSpec = {
-  name: DIRECTIVE_ADMONITION,
-  title: "Admonition",
-  attributeRegions: [{ attribute: "title", region: "title", placeholder: "Title…" }],
-  childrenRegion: { region: "body", placeholder: "Write the admonition…" },
-  props: [
-    {
-      name: "type",
-      label: "Type",
-      type: "enum",
-      options: Object.keys(ADMONITION_TYPES),
-      default: "note",
-      inline: true,
-    },
-  ],
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: {
-      name: DIRECTIVE_ADMONITION,
-      attributes: [{ type: "mdxJsxAttribute", name: "type", value: "note" }],
-    },
-    content: [
-      { type: "mdxInlineRegion", attrs: { region: "title" } },
-      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
-    ],
-  }),
-};
 
 /** The three shared node type names produced for registered components. */
 export const COMPONENT_NODE = "mdxComponent";
