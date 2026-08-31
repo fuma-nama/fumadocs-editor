@@ -22,6 +22,32 @@ Paragraph with **bold**, *italic*, ~~strike~~, `code`, and a [link](./writing.md
   Callout body text.
 </Callout>
 
+## Directive admonitions
+
+:::note
+A plain admonition, no title.
+:::
+
+:::warning[Watch out]
+Directive with a title and **marks** in the body.
+:::
+
+::::danger[Nested]
+The outer fence grows around a nested one.
+
+:::tip
+Inner admonition.
+:::
+::::
+
+:::info{id="deep-link"}
+Directive attributes ride along.
+:::
+
+:::spoiler
+Unknown directive names stay on the verbatim fallback.
+:::
+
 ## Cards
 
 <Cards>

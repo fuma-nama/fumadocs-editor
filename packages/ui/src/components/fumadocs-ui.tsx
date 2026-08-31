@@ -16,6 +16,7 @@ import {
   Link as LinkIcon,
   ListOrdered,
   ListTree,
+  Megaphone,
   PanelTop,
   Plus,
   Rows3,
@@ -27,7 +28,8 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@base-ui/react/checkbox";
 import { Select } from "@base-ui/react/select";
-import type { CSSProperties } from "react";
+import { ADMONITION_TYPES, admonitionSpec as admonitionBase } from "@fumadocs-editor/core";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../utils/cn";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
 import { useEditorPortal } from "../utils/portal";
@@ -47,20 +49,31 @@ import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
   info: Info,
-  warn: TriangleAlert,
   warning: TriangleAlert,
   error: CircleX,
   success: CircleCheck,
   idea: Lightbulb,
 };
 
-const CALLOUT_TYPES = [
-  { value: "info", label: "Info" },
-  { value: "warn", label: "Warning" },
-  { value: "error", label: "Error" },
-  { value: "success", label: "Success" },
-  { value: "idea", label: "Idea" },
+interface CalloutTypeItem {
+  value: string;
+  label: string;
+  /** the Callout type it renders as: keys the icon and the colour token */
+  visual: string;
+}
+
+const CALLOUT_TYPES: CalloutTypeItem[] = [
+  { value: "info", label: "Info", visual: "info" },
+  { value: "warn", label: "Warning", visual: "warning" },
+  { value: "error", label: "Error", visual: "error" },
+  { value: "success", label: "Success", visual: "success" },
+  { value: "idea", label: "Idea", visual: "idea" },
 ];
+
+/** the `:::` directive names, each shown with the look it renders as */
+const ADMONITION_ITEMS: CalloutTypeItem[] = Object.entries(ADMONITION_TYPES).map(
+  ([value, visual]) => ({ value, label: value[0].toUpperCase() + value.slice(1), visual }),
+);
 
 /** map the JSX alias to the token/icon key */
 const colorKey = (type: string) => (type === "warn" ? "warning" : type);
@@ -68,20 +81,20 @@ const colorKey = (type: string) => (type === "warn" ? "warning" : type);
 /** The callout icon doubles as an in-place picker for the callout `type`. */
 function CalloutTypeSelect({
   value,
+  visual,
+  items,
   onChange,
 }: {
   value: string;
+  visual: string;
+  items: CalloutTypeItem[];
   onChange: (value: string) => void;
 }) {
-  const Current = CALLOUT_ICONS[value] ?? Info;
-  const isIdea = value === "idea";
+  const Current = CALLOUT_ICONS[visual] ?? Info;
+  const isIdea = visual === "idea";
   const { anchorRef, container } = useEditorPortal();
   return (
-    <Select.Root
-      items={CALLOUT_TYPES}
-      value={value}
-      onValueChange={(next) => onChange(next as string)}
-    >
+    <Select.Root items={items} value={value} onValueChange={(next) => onChange(next as string)}>
       <Select.Trigger
         ref={anchorRef}
         aria-label="Callout type"
@@ -96,14 +109,14 @@ function CalloutTypeSelect({
       <Select.Portal container={container}>
         <Select.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
           <Select.Popup className={popupCls}>
-            {CALLOUT_TYPES.map((item) => {
-              const Icon = CALLOUT_ICONS[item.value] ?? Info;
+            {items.map((item) => {
+              const Icon = CALLOUT_ICONS[item.visual] ?? Info;
               return (
                 <Select.Item key={item.value} value={item.value} className={itemCls}>
                   <Icon
                     size={15}
                     className="shrink-0"
-                    style={{ color: `var(--color-fd-${colorKey(item.value)})` }}
+                    style={{ color: `var(--color-fd-${item.visual})` }}
                   />
                   <Select.ItemText>{item.label}</Select.ItemText>
                   <Select.ItemIndicator className={itemIndicatorCls}>
@@ -119,13 +132,25 @@ function CalloutTypeSelect({
   );
 }
 
-function Callout({ props, children, setProp }: ComponentRenderProps) {
-  const type = props.type ?? "info";
+/** shared chrome of the JSX Callout and its `:::` directive mirror */
+function CalloutBox({
+  value,
+  visual,
+  items,
+  onChange,
+  children,
+}: {
+  value: string;
+  visual: string;
+  items: CalloutTypeItem[];
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
   return (
     <div
       className="fde-callout flex items-start gap-2 rounded-xl border border-fd-border bg-fd-card p-3 ps-1 text-[0.925em] text-fd-card-foreground shadow-md"
-      style={{ "--callout-color": `var(--color-fd-${colorKey(type)})` } as CSSProperties}
-      data-type={type}
+      style={{ "--callout-color": `var(--color-fd-${visual})` } as CSSProperties}
+      data-type={value}
     >
       <div
         role="none"
@@ -133,10 +158,38 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
         contentEditable={false}
       />
       <span className="contents" contentEditable={false}>
-        <CalloutTypeSelect value={type} onChange={(value) => setProp("type", value)} />
+        <CalloutTypeSelect value={value} visual={visual} items={items} onChange={onChange} />
       </span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
+  );
+}
+
+function Callout({ props, children, setProp }: ComponentRenderProps) {
+  const type = props.type ?? "info";
+  return (
+    <CalloutBox
+      value={type}
+      visual={colorKey(type)}
+      items={CALLOUT_TYPES}
+      onChange={(value) => setProp("type", value)}
+    >
+      {children}
+    </CalloutBox>
+  );
+}
+
+function Admonition({ props, children, setProp }: ComponentRenderProps) {
+  const type = props.type ?? "note";
+  return (
+    <CalloutBox
+      value={type}
+      visual={ADMONITION_TYPES[type] ?? "info"}
+      items={ADMONITION_ITEMS}
+      onChange={(value) => setProp("type", value)}
+    >
+      {children}
+    </CalloutBox>
   );
 }
 
@@ -489,6 +542,17 @@ function InlineTOC({ children }: ComponentRenderProps) {
     </div>
   );
 }
+
+/**
+ * The `:::type[Title]` directive admonition — the remark-directive dialect's
+ * Callout. Deliberately not part of {@link fumadocsUiComponents}: registering
+ * it is what turns the dialect on (see `SyntaxOptions.directives`).
+ */
+export const admonitionSpec: UiComponentSpec = {
+  ...admonitionBase,
+  icon: <Megaphone size={13} />,
+  render: Admonition,
+};
 
 export const calloutSpec: UiComponentSpec = {
   name: "Callout",

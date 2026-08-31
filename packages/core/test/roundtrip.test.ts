@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseMdxToDoc, serializeDocToMdx } from "../src";
+import { admonitionSpec, createSyntax, parseMdxToDoc, serializeDocToMdx } from "../src";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(dir, "fixtures");
@@ -63,21 +63,30 @@ describe.skipIf(!existsSync(corpus))("fumadocs docs corpus", () => {
     .filter((file) => file.endsWith(".mdx") || file.endsWith(".md"))
     .map((file) => path.join(corpus, file));
 
-  test(`zero-diff round trip over ${files.length} files`, () => {
-    const failures: { file: string; error?: string }[] = [];
+  // the directive dialect changes how `:`-shaped text parses, so the corpus
+  // must hold with it on as well as off
+  const syntaxes = [
+    ["default", createSyntax()],
+    ["directives", createSyntax([admonitionSpec])],
+  ] as const;
 
-    for (const file of files) {
-      const source = readFileSync(file, "utf-8");
-      try {
-        const { doc, snapshot } = parseMdxToDoc(source);
-        if (serializeDocToMdx(doc, snapshot) !== source) {
-          failures.push({ file: path.relative(corpus, file) });
+  for (const [label, syntax] of syntaxes) {
+    test(`zero-diff round trip over ${files.length} files (${label})`, () => {
+      const failures: { file: string; error?: string }[] = [];
+
+      for (const file of files) {
+        const source = readFileSync(file, "utf-8");
+        try {
+          const { doc, snapshot } = parseMdxToDoc(source, syntax);
+          if (serializeDocToMdx(doc, snapshot, syntax) !== source) {
+            failures.push({ file: path.relative(corpus, file) });
+          }
+        } catch (error) {
+          failures.push({ file: path.relative(corpus, file), error: String(error) });
         }
-      } catch (error) {
-        failures.push({ file: path.relative(corpus, file), error: String(error) });
       }
-    }
 
-    expect(failures).toEqual([]);
-  });
+      expect(failures).toEqual([]);
+    });
+  }
 });

@@ -9,6 +9,7 @@ export { codeBlockExtension } from "./components/code-block";
 export type { UiComponentSpec, ComponentRenderProps } from "./components/spec";
 export {
   fumadocsUiComponents,
+  admonitionSpec,
   calloutSpec,
   cardSpec,
   cardsSpec,

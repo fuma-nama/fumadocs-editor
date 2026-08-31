@@ -15,7 +15,9 @@ import type {
   MdxJsxFlowElement,
   MdxJsxTextElement,
 } from "mdast-util-mdx-jsx";
+import type { ContainerDirective } from "mdast-util-directive";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
+import { ADMONITION_TYPES, DIRECTIVE_ADMONITION } from "../components/spec";
 import type { Syntax, ComponentSpec } from "../components/spec";
 
 export interface FromMdastContext {
@@ -280,6 +282,7 @@ const PHRASING_TYPES = new Set([
   "footnoteReference",
   "linkReference",
   "imageReference",
+  "textDirective",
 ]);
 
 /**
@@ -379,6 +382,13 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
         content: mixedChildrenToBlocks(node.children, ctx),
       };
     }
+    case "containerDirective": {
+      const spec = ctx.syntax.components.get(DIRECTIVE_ADMONITION);
+      const component =
+        spec && admonitionConvertible(node) ? admonitionToNode(node, spec, ctx) : null;
+      if (component) return component;
+      return { type: "verbatim", attrs: { value: sliceSource(node, ctx) } };
+    }
     case "mdxFlowExpression":
       return { type: "mdxFlowExpression", attrs: { value: node.value } };
     case "mdxjsEsm":
@@ -422,6 +432,72 @@ function mdastText(nodes: { type: string; value?: string; children?: unknown[] }
     else if (node.children) out += mdastText(node.children as typeof nodes);
   }
   return out;
+}
+
+/** the `[label]` after a directive name, stored as a marked first paragraph */
+function directiveLabel(node: ContainerDirective) {
+  const head = node.children[0];
+  return head?.type === "paragraph" && head.data?.directiveLabel ? head : undefined;
+}
+
+/**
+ * A container directive the admonition dialect can edit structurally: a name
+ * fumadocs knows, a plain-text label (the title region is plain text by
+ * construction), no attribute colliding with the `type`/`title` storage slots
+ * — and, recursively, the same for every nested container directive: a bailed
+ * inner directive would ride verbatim, invisible to the outer fence sizing,
+ * and its `:::` would close the re-emitted outer fence early.
+ */
+function admonitionConvertible(node: ContainerDirective): boolean {
+  if (!(node.name in ADMONITION_TYPES)) return false;
+  const attributes = node.attributes ?? {};
+  if ("type" in attributes || "title" in attributes) return false;
+  const label = directiveLabel(node);
+  if (label && label.children.some((child) => child.type !== "text")) return false;
+  return nestedDirectivesConvertible(node.children);
+}
+
+function nestedDirectivesConvertible(nodes: { type: string; children?: unknown[] }[]): boolean {
+  for (const node of nodes) {
+    if (node.type === "containerDirective") {
+      if (!admonitionConvertible(node as ContainerDirective)) return false;
+    } else if (node.children && !nestedDirectivesConvertible(node.children as typeof nodes)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Convert `:::type[Title]` into the admonition component by reshaping it as a
+ * JSX-attribute view of itself — the directive name as `type`, the label as
+ * `title`, directive `{…}` attributes riding along — and reusing the generic
+ * component conversion for the regions.
+ */
+function admonitionToNode(
+  node: ContainerDirective,
+  spec: ComponentSpec,
+  ctx: FromMdastContext,
+): JSONContent | null {
+  const attributes: MdastJsxAttribute[] = [
+    { type: "mdxJsxAttribute", name: "type", value: node.name },
+  ];
+  const label = directiveLabel(node);
+  const title = label ? mdastText(label.children) : "";
+  if (title) attributes.push({ type: "mdxJsxAttribute", name: "title", value: title });
+  for (const [name, value] of Object.entries(node.attributes ?? {})) {
+    attributes.push({ type: "mdxJsxAttribute", name, value: value ?? null });
+  }
+  return componentToNode(
+    {
+      type: "mdxJsxFlowElement",
+      name: DIRECTIVE_ADMONITION,
+      attributes,
+      children: label ? node.children.slice(1) : node.children,
+    },
+    spec,
+    ctx,
+  );
 }
 
 /**
