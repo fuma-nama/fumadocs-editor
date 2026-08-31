@@ -4,7 +4,7 @@ import { mdxToMarkdown } from "mdast-util-mdx";
 import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { frontmatterToMarkdown } from "mdast-util-frontmatter";
-import { directiveToMarkdown } from "mdast-util-directive";
+import { directiveHandlers, directiveUnsafe } from "../syntax/directives/serialize";
 
 /** Custom mdast node emitted for PM verbatim nodes: serialized as-is, no escaping. */
 export interface RawNode {
@@ -67,18 +67,14 @@ const mdxJsxFlowElementTight: HandleWithPeek = (node, parent, state, info) =>
   collapseJsxSiblingGaps(mdxJsxFlowElement(node, parent, state, info));
 mdxJsxFlowElementTight.peek = mdxJsxFlowElement.peek;
 
-const directive = directiveToMarkdown();
-
 const stringifyOptions: Options = {
   extensions: [mdxToMarkdown(), gfmToMarkdown(), frontmatterToMarkdown(["yaml"])],
   // 'raw' is our own mdast extension, unknown to the Handlers map; the
-  // top-level mdxJsxFlowElement override wins over the extension's handler.
-  // Directive handlers are always on so an admonition node emits `:::` even
-  // outside the dialect; its escaping rules join only with the dialect.
+  // top-level mdxJsxFlowElement override wins over the extension's handler
   handlers: {
     raw,
     mdxJsxFlowElement: mdxJsxFlowElementTight,
-    ...directive.handlers,
+    ...directiveHandlers,
   } as unknown as Options["handlers"],
   bullet: "-",
   rule: "-",
@@ -87,14 +83,10 @@ const stringifyOptions: Options = {
   fences: true,
 };
 
-/**
- * With the directive dialect on, text that would re-parse as a directive
- * (`:word` in phrasing, `::` at a line start) must be escaped; without it,
- * those escapes would be noise in everyone else's output.
- */
+/** the directive dialect's escaping rules join only while it is on */
 const directiveStringifyOptions: Options = {
   ...stringifyOptions,
-  extensions: [...stringifyOptions.extensions!, { unsafe: directive.unsafe }],
+  extensions: [...stringifyOptions.extensions!, { unsafe: directiveUnsafe }],
 };
 
 export function stringifyRoot(root: Root, directives = false): string {

@@ -3,11 +3,10 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { mdxFromMarkdown } from "mdast-util-mdx";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { frontmatterFromMarkdown } from "mdast-util-frontmatter";
-import { directiveFromMarkdown } from "mdast-util-directive";
 import { mdxjs } from "micromark-extension-mdxjs";
 import { gfm } from "micromark-extension-gfm";
 import { frontmatter } from "micromark-extension-frontmatter";
-import { directive } from "micromark-extension-directive";
+import { directive, directiveFromMarkdown } from "../syntax/directives/parse";
 
 /**
  * Parse MDX source into mdast with MDX, GFM and YAML frontmatter syntax;

@@ -12,10 +12,12 @@ import type {
   MdxJsxAttribute as MdastJsxAttribute,
   MdxJsxExpressionAttribute as MdastJsxExpressionAttribute,
 } from "mdast-util-mdx-jsx";
-import type { ContainerDirective } from "mdast-util-directive";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
 import type { Syntax, ComponentSpec } from "../components/spec";
-import { DIRECTIVE_ADMONITION, createSyntax } from "../components/spec";
+import { createSyntax } from "../components/spec";
+import { DIRECTIVE_ADMONITION } from "../syntax/directives";
+import { admonitionToMdast } from "../syntax/directives/serialize";
+import { appendHeadingSuffixes } from "../syntax/heading-suffixes";
 import type { RawNode } from "./stringify";
 
 const EMPTY_SYNTAX = createSyntax();
@@ -199,18 +201,7 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
       return { type: "paragraph", children: inlineToPhrasing(node.content) };
     case "heading": {
       const children = inlineToPhrasing(node.content);
-      // suffix order matters on the fumadocs side: `[#id]` must come last
-      let suffix = "";
-      if (node.attrs?.toc === "hide") suffix += " [!toc]";
-      else if (node.attrs?.toc === "only") suffix += " [toc]";
-      if (node.attrs?.anchor) suffix += ` [#${String(node.attrs.anchor)}]`;
-      if (suffix) {
-        // raw, not text: the serializer would escape the brackets
-        children.push({
-          type: "raw",
-          value: children.length > 0 ? suffix : suffix.trimStart(),
-        } as unknown as PhrasingContent);
-      }
+      appendHeadingSuffixes(node.attrs, children);
       return {
         type: "heading",
         depth: Math.min(6, Math.max(1, Number(node.attrs?.level ?? 1))) as 1 | 2 | 3 | 4 | 5 | 6,
@@ -379,42 +370,6 @@ function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
   if (name === DIRECTIVE_ADMONITION) return admonitionToMdast(attributes, mdChildren);
 
   return { type: "mdxJsxFlowElement", name, attributes, children: mdChildren };
-}
-
-/**
- * An admonition re-emits `:::` directive syntax, never JSX: the directive name
- * comes back out of the `type` attribute, the title becomes the `[label]`
- * paragraph, remaining string attributes become directive `{…}` attributes.
- */
-function admonitionToMdast(
-  attributes: (MdastJsxAttribute | MdastJsxExpressionAttribute)[],
-  children: (BlockContent | DefinitionContent)[],
-): ContainerDirective {
-  let name = "note";
-  let title = "";
-  const directiveAttributes: Record<string, string | null> = {};
-  for (const attr of attributes) {
-    if (attr.type !== "mdxJsxAttribute") continue;
-    const value = attr.value;
-    if (value != null && typeof value !== "string") continue;
-    if (attr.name === "type") name = value ?? name;
-    else if (attr.name === "title") title = value ?? "";
-    else directiveAttributes[attr.name] = value ?? null;
-  }
-  // an empty paragraph (a freshly inserted or emptied body region) has no
-  // markdown form; keeping it would emit a stray blank line inside the fences
-  children = children.filter((child) => child.type !== "paragraph" || child.children.length > 0);
-  if (title) {
-    children = [
-      {
-        type: "paragraph",
-        data: { directiveLabel: true },
-        children: [{ type: "text", value: title }],
-      },
-      ...children,
-    ];
-  }
-  return { type: "containerDirective", name, attributes: directiveAttributes, children };
 }
 
 export function docToMdast(doc: JSONContent, syntax: Syntax = EMPTY_SYNTAX): Root {

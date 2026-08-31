@@ -16,7 +16,6 @@ import {
   Link as LinkIcon,
   ListOrdered,
   ListTree,
-  Megaphone,
   PanelTop,
   Plus,
   Rows3,
@@ -28,7 +27,6 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@base-ui/react/checkbox";
 import { Select } from "@base-ui/react/select";
-import { ADMONITION_TYPES, admonitionSpec as admonitionBase } from "@fumadocs-editor/core";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../utils/cn";
 import { itemCls, itemIndicatorCls, popupCls } from "./styles";
@@ -55,7 +53,7 @@ const CALLOUT_ICONS: Record<string, LucideIcon> = {
   idea: Lightbulb,
 };
 
-interface CalloutTypeItem {
+export interface CalloutTypeItem {
   value: string;
   label: string;
   /** the Callout type it renders as: keys the icon and the colour token */
@@ -69,11 +67,6 @@ const CALLOUT_TYPES: CalloutTypeItem[] = [
   { value: "success", label: "Success", visual: "success" },
   { value: "idea", label: "Idea", visual: "idea" },
 ];
-
-/** the `:::` directive names, each shown with the look it renders as */
-const ADMONITION_ITEMS: CalloutTypeItem[] = Object.entries(ADMONITION_TYPES).map(
-  ([value, visual]) => ({ value, label: value[0].toUpperCase() + value.slice(1), visual }),
-);
 
 /** map the JSX alias to the token/icon key */
 const colorKey = (type: string) => (type === "warn" ? "warning" : type);
@@ -133,7 +126,7 @@ function CalloutTypeSelect({
 }
 
 /** shared chrome of the JSX Callout and its `:::` directive mirror */
-function CalloutBox({
+export function CalloutBox({
   value,
   visual,
   items,
@@ -172,20 +165,6 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
       value={type}
       visual={colorKey(type)}
       items={CALLOUT_TYPES}
-      onChange={(value) => setProp("type", value)}
-    >
-      {children}
-    </CalloutBox>
-  );
-}
-
-function Admonition({ props, children, setProp }: ComponentRenderProps) {
-  const type = props.type ?? "note";
-  return (
-    <CalloutBox
-      value={type}
-      visual={ADMONITION_TYPES[type] ?? "info"}
-      items={ADMONITION_ITEMS}
       onChange={(value) => setProp("type", value)}
     >
       {children}
@@ -542,17 +521,6 @@ function InlineTOC({ children }: ComponentRenderProps) {
     </div>
   );
 }
-
-/**
- * The `:::type[Title]` directive admonition — the remark-directive dialect's
- * Callout. Deliberately not part of {@link fumadocsUiComponents}: registering
- * it is what turns the dialect on (see `SyntaxOptions.directives`).
- */
-export const admonitionSpec: UiComponentSpec = {
-  ...admonitionBase,
-  icon: <Megaphone size={13} />,
-  render: Admonition,
-};
 
 export const calloutSpec: UiComponentSpec = {
   name: "Callout",
