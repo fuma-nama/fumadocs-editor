@@ -187,7 +187,9 @@ test("a fresh row insert normalizes to its own re-parse once named", () => {
   row.content![0].content = [{ type: "text", text: "page.mdx" }];
   const doc: JSONContent = {
     type: "doc",
-    content: [{ type: "mdxComponent", attrs: { name: FENCE_FILES, attributes: [] }, content: [row] }],
+    content: [
+      { type: "mdxComponent", attrs: { name: FENCE_FILES, attributes: [] }, content: [row] },
+    ],
   };
   const out = serializeDocToMdx(doc, undefined, syntax);
   expect(out).toBe("```files\npage.mdx\n```\n");

@@ -17,6 +17,7 @@ import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
 import type { FileProvider, MediaProvider } from "./components/media";
+import type { EditorCollab } from "./collab";
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 
@@ -34,6 +35,12 @@ export interface LiveEditorProps {
   files?: FileProvider;
   /** dialect switches; must match what the document was parsed with */
   syntax?: SyntaxOptions;
+  /**
+   * Already-started collab runtime (a separate chunk, loaded by the shell).
+   * The Y.Doc is then the source of truth: `doc` is ignored, local history
+   * yields to the Y undo manager, and `onReady` waits for the first sync.
+   */
+  collab?: EditorCollab;
 }
 
 /**
@@ -53,6 +60,7 @@ export function LiveEditor({
   media,
   files,
   syntax,
+  collab,
 }: LiveEditorProps) {
   const extensions = useMemo(
     () => [
@@ -61,6 +69,7 @@ export function LiveEditor({
         codeBlock: false,
         image: false,
         mathNodes: false,
+        history: !collab,
       }),
       codeBlockExtension(),
       imageExtension(media),
@@ -68,8 +77,9 @@ export function LiveEditor({
       ...mathExtensions(syntax?.math === true),
       slashMenu(components, media, syntax?.math),
       ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
+      ...(collab ? collab.extensions : []),
     ],
-    [components, media, files, specs, syntax],
+    [components, media, files, specs, syntax, collab],
   );
   const serialize = useMemo(
     () => createIncrementalSerializer(createSyntax(components, syntax)),
@@ -83,7 +93,9 @@ export function LiveEditor({
 
   const editor = useEditor({
     extensions,
-    content: doc,
+    // under collab the server's Y.Doc is the document; seeding content here
+    // would sync a duplicate copy into it
+    content: collab ? null : doc,
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
     // file names, props and code everywhere: browser text assistance only
@@ -92,7 +104,15 @@ export function LiveEditor({
       attributes: { spellcheck: "false", autocorrect: "off", autocapitalize: "off" },
     },
     onCreate({ editor }) {
-      onReady(editor, serialize);
+      // hold the static → live swap until the shared doc has arrived, so the
+      // first visible state is the document and replayed input lands in it
+      if (collab) {
+        void collab.whenSynced.then(() => {
+          if (!editor.isDestroyed) onReady(editor, serialize);
+        });
+      } else {
+        onReady(editor, serialize);
+      }
     },
     onUpdate({ editor }) {
       if (!onChangeRef.current) return;

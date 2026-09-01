@@ -4,6 +4,15 @@ export interface WsTransport extends SyncTransport {
   close(): void;
   /** connection state changes; fires immediately with the current state */
   onOnline(listener: (online: boolean) => void): () => void;
+  /**
+   * Collab frames ride this same socket as binary messages (see `wire.ts`).
+   * Sends while offline are dropped — the y-protocols handshake re-run on
+   * reconnect recovers whatever was missed.
+   */
+  sendBinary(data: Uint8Array): void;
+  onBinary(listener: (data: Uint8Array) => void): () => void;
+  /** a JSON request/response call on the mirror protocol (e.g. collab-open) */
+  request<T>(payload: Record<string, unknown>): Promise<T>;
 }
 
 /**
@@ -20,6 +29,7 @@ export function wsTransport(url: string): WsTransport {
   const pending = new Map<number, { resolve: (v: never) => void; reject: (e: Error) => void }>();
   const watchers = new Map<string, Set<(state: FileState) => void>>();
   const onlineListeners = new Set<(online: boolean) => void>();
+  const binaryListeners = new Set<(data: Uint8Array) => void>();
 
   const online = () => socket?.readyState === WebSocket.OPEN;
   const emitOnline = () => {
@@ -29,6 +39,7 @@ export function wsTransport(url: string): WsTransport {
   const connect = () => {
     if (closed) return;
     const ws = new WebSocket(url);
+    ws.binaryType = "arraybuffer";
     socket = ws;
     ws.addEventListener("open", () => {
       backoff = 300;
@@ -36,6 +47,11 @@ export function wsTransport(url: string): WsTransport {
       emitOnline();
     });
     ws.addEventListener("message", (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        const data = new Uint8Array(event.data);
+        for (const listener of binaryListeners) listener(data);
+        return;
+      }
       const message = JSON.parse(String(event.data));
       if (message.type === "change") {
         const state = { text: message.text as string, version: message.version as string };
@@ -108,6 +124,14 @@ export function wsTransport(url: string): WsTransport {
       listener(online());
       return () => onlineListeners.delete(listener);
     },
+    sendBinary(data) {
+      if (online()) socket!.send(data);
+    },
+    onBinary(listener) {
+      binaryListeners.add(listener);
+      return () => binaryListeners.delete(listener);
+    },
+    request,
     close() {
       closed = true;
       socket?.close();

@@ -77,10 +77,14 @@ export function mergeRemote(options: {
   };
 
   // the local child an insertion should follow: the nearest base block at or
-  // before `b` that still has a surviving (or replaced-in-place) local child
+  // before `b` still present locally — surviving unchanged, or edited in
+  // place (anchoring after the edited version keeps "append after a block
+  // someone is typing in" appending, not slipping in front of it)
   const anchorLocal = (b: number): number => {
     for (; b >= 0; b--) {
       if (baseToLocal[b] >= 0) return baseToLocal[b];
+      const edited = localForEditedBase(b);
+      if (edited >= 0) return edited;
     }
     return -1;
   };

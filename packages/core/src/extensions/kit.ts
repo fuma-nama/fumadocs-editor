@@ -89,6 +89,12 @@ export interface EditorExtensionsOptions {
    * `SyntaxOptions.math`); `false` when the UI ships node views.
    */
   mathNodes?: boolean;
+  /**
+   * Include the local undo/redo history. Set `false` under collaborative
+   * editing, where the Collaboration extension supplies a `Y.UndoManager`
+   * that undoes only this client's own edits.
+   */
+  history?: boolean;
 }
 
 export function editorExtensions({
@@ -96,6 +102,7 @@ export function editorExtensions({
   codeBlock = true,
   image = true,
   mathNodes: math = true,
+  history = true,
 }: EditorExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
@@ -106,6 +113,7 @@ export function editorExtensions({
       // the UI layer draws its own drop indicator from the real drop target;
       // the stock cursor previews dropPoint, which disagrees with it
       dropcursor: false,
+      ...(history ? {} : { undoRedo: false as const }),
     }),
     // keeps the text selection visibly highlighted (`.selection` decoration)
     // while focus is in the bubble or a panel: native ::selection paints only
