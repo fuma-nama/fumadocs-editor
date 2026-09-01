@@ -47,6 +47,15 @@ export interface SyncServerOptions {
   authenticate?: SyncAuthenticate;
   /** how long a connection may sit without its hello before it is closed */
   helloTimeoutMs?: number;
+  /** how long an open document outlives its last client before eviction (default 60s) */
+  evictAfterMs?: number;
+  /**
+   * Upload endpoint limits, enforced before anything is stored and
+   * independent of auth: an oversized body is refused with 413, a body whose
+   * content-type the pattern rejects (or that has none) with 415. Defaults:
+   * 10 MiB, `image/*`.
+   */
+  upload?: { maxBytes?: number; types?: RegExp };
 }
 
 export interface SyncServer {
@@ -117,8 +126,11 @@ export function createSyncServer({
   root,
   authenticate,
   helloTimeoutMs = 10_000,
+  evictAfterMs,
+  upload = {},
 }: SyncServerOptions): SyncServer {
   root = path.resolve(root);
+  const { maxBytes = 10 * 1024 * 1024, types: uploadTypes = /^image\// } = upload;
   const wss = new WebSocketServer({ noServer: true });
   const conns = new Map<WebSocket, Conn>();
   /** version we ourselves just wrote per path: chokidar echoes to swallow */
@@ -172,6 +184,7 @@ export function createSyncServer({
     },
     send: (client, data) => client.send(data),
     scope: (client) => conns.get(client)?.scope ?? DENY,
+    evictAfterMs,
   });
 
   let watcher: FSWatcher | undefined;
@@ -371,12 +384,38 @@ export function createSyncServer({
         response.statusCode = 405;
         return response.end();
       }
+      // limits come before auth and long before the write: type from the
+      // header (fetch derives it from the File), size streamed, so an
+      // oversized body is refused without ever being buffered whole
+      const type = request.headers["content-type"];
+      if (!type || !uploadTypes.test(type)) {
+        response.statusCode = 415;
+        return response.end();
+      }
+      if (Number(request.headers["content-length"]) > maxBytes) {
+        response.statusCode = 413;
+        return response.end();
+      }
       const original = decodeURIComponent(String(request.headers["x-filename"] ?? "upload"))
         .replace(/[^\w.-]+/g, "-")
         .replace(/^[-.]+/, "");
       const chunks: Buffer[] = [];
-      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      let size = 0;
+      request.on("data", (chunk: Buffer) => {
+        if (response.writableEnded) return;
+        size += chunk.length;
+        if (size > maxBytes) {
+          // respond early and drain the rest; destroying the socket here
+          // would truncate the status before the client reads it
+          chunks.length = 0;
+          response.statusCode = 413;
+          response.end();
+          return;
+        }
+        chunks.push(chunk);
+      });
       request.on("end", () => {
+        if (response.writableEnded) return;
         void (async () => {
           const name = `${Date.now().toString(36)}-${original || "upload"}`;
           const scope = await httpScope(request);
