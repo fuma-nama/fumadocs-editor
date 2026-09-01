@@ -1,10 +1,9 @@
-import type { FileState, OpenState, SyncTransport } from "./transport";
-import type { WsTransport } from "./client";
+import type { FileState, ReadResult, SyncTransport } from "./transport";
 
 export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
 export interface FileSessionOptions {
-  transport: SyncTransport & Partial<Pick<WsTransport, "onStatus">>;
+  transport: SyncTransport;
   path: string;
   /** the editor's current markdown, read at save time */
   getText: () => string;
@@ -17,7 +16,7 @@ export interface FileSessionOptions {
 
 export interface FileSession {
   /** read the file and adopt it as the sync base; returns its state (plus any scope-derived data) */
-  open(): Promise<OpenState>;
+  open(): Promise<ReadResult>;
   /** the document changed: schedules an autosave */
   changed(): void;
   /** save now if there is anything to save (blur / beforeunload / Cmd-S) */

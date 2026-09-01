@@ -128,7 +128,7 @@ function componentItems(specs: UiComponentSpec[]): SlashItem[] {
   for (const spec of specs) {
     if (!spec.insert || childOnly.has(spec.name)) continue;
     items.push({
-      title: spec.title ?? spec.name,
+      title: spec.label ?? spec.name,
       group: "Components",
       icon: spec.icon,
       run: (editor, range) => {
@@ -299,8 +299,8 @@ export function entryItems(
   const children = insertableChildren(containerSpec, specs);
   if (children.length === 0) return null;
   return children.map((spec) => ({
-    title: spec.title ?? spec.name,
-    group: containerSpec?.title ?? containerSpec?.name ?? "Rows",
+    title: spec.label ?? spec.name,
+    group: containerSpec?.label ?? containerSpec?.name ?? "Rows",
     icon: spec.icon,
     run: (current) => {
       const { $from: $at } = current.state.selection;

@@ -2,7 +2,13 @@
 import type { JSONContent } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
-import { Component as ReactComponent, createContext, useContext, Fragment, type ReactNode } from "react";
+import {
+  Component as ReactComponent,
+  createContext,
+  useContext,
+  Fragment,
+  type ReactNode,
+} from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
 import { resolveSrc, type MediaProvider } from "./components/media";

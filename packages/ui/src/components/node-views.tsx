@@ -5,7 +5,7 @@ import {
   MdxComponent,
   MdxInlineRegion,
   type MdxAttribute,
-} from "@fumadocs-editor/core";
+} from "@fumadocs-editor/core/extensions";
 import {
   NodeViewContent,
   NodeViewWrapper,

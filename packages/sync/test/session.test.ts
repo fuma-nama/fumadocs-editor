@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createFileSession, type FileSession } from "../src/session";
 import type { FileState, SyncTransport } from "../src/transport";
-import { hashText } from "../src/node";
+import { createHash } from "node:crypto";
+
+const hashText = (text: string) => createHash("sha1").update(text).digest("hex");
 
 /** in-memory transport with a controllable "disk" */
 function memoryTransport() {
@@ -19,7 +21,7 @@ function memoryTransport() {
   const transport: SyncTransport & {
     onStatus: (l: (status: "online" | "offline") => void) => () => void;
   } = {
-    list: async () => [...files.keys()].map((path) => ({ path })),
+    list: async () => [...files.keys()],
     read: async (path) => state(path),
     async write(path, text, baseVersion) {
       if (!online) throw new Error("sync offline");

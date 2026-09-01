@@ -4,15 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { JSONContent } from "@tiptap/core";
 import {
-  FENCE_FILE,
-  FENCE_FILES,
-  FENCE_FOLDER,
   createSyntax,
   filesFenceSpecs,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
+import { FENCE_FILE, FENCE_FILES, FENCE_FOLDER } from "../src/syntax/files";
 
 const jsxFilesSpecs: ComponentSpec[] = [
   { name: "Files", childComponent: ["File", "Folder"], listLike: true },

@@ -1,10 +1,15 @@
 export { MdxEditor } from "./editor";
-export type { MdxEditorProps, MdxEditorRef, SyncIndicatorProps, SyncStatus } from "./editor";
-export { StaticMdx } from "./static-mdx";
+export type { MdxEditorProps, MdxEditorRef, MdxEditorCollab, SyncIndicatorProps } from "./editor";
 export type { FileProvider, MediaProvider } from "./components/media";
 export { EditorThemeProvider, useEditorTheme } from "./theme";
 export type { EditorTheme, ResolvedTheme } from "./theme";
 export type { UiComponentSpec, ComponentRenderProps } from "./components/spec";
+export type {
+  ComponentSpec,
+  PropField,
+  AttributeRegion,
+  SyntaxOptions,
+} from "@fumadocs-editor/core";
 export { admonitionSpec } from "./components/admonition";
 export { filesFenceSpecs } from "./components/files-fence";
 export { fumadocsUiComponents } from "./components/fumadocs-ui";

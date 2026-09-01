@@ -1,14 +1,11 @@
 import {
   CLOSE_DENIED,
-  type FileEntry,
+  type ConnectionStatus,
   type FileState,
-  type OpenState,
+  type ReadResult,
   type SyncTransport,
   type WriteResult,
 } from "./transport";
-
-/** "denied" is terminal: the server rejected the hello, no retry loop runs */
-export type ConnectionStatus = "online" | "offline" | "denied";
 
 export interface WsTransportOptions {
   /**
@@ -144,8 +141,8 @@ export function wsTransport(url: string, options: WsTransportOptions = {}): WsTr
   };
 
   return {
-    list: () => request<FileEntry[]>({ type: "list" }),
-    read: (path) => request<OpenState>({ type: "read", path }),
+    list: () => request<string[]>({ type: "list" }),
+    read: (path) => request<ReadResult>({ type: "read", path }),
     write: (path, text, baseVersion) =>
       request<WriteResult>({ type: "write", path, text, baseVersion }),
     watch(path, onChange) {

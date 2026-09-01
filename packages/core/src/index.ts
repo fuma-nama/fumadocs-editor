@@ -1,9 +1,10 @@
-export { editorExtensions } from "./extensions/kit";
-export type { MdxAttribute } from "./extensions/mdx-nodes";
 export { parseMdxToDoc } from "./document";
 export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
 export { serializeDocToMdx } from "./serialize";
 export { createIncrementalSerializer } from "./incremental";
+export { editorExtensions } from "./extensions/kit";
+export type { EditorExtensionsOptions } from "./extensions/kit";
+export type { MdxAttribute } from "./extensions/mdx-nodes";
 export {
   createSyntax,
   COMPONENT_NODE,
@@ -17,6 +18,5 @@ export type {
   PropField,
   AttributeRegion,
 } from "./components/spec";
-export { admonitionSpec, ADMONITION_TYPES, DIRECTIVE_ADMONITION } from "./syntax/directives";
-export { filesFenceSpecs, FENCE_FILES, FENCE_FOLDER, FENCE_FILE } from "./syntax/files";
-export { MdxComponent, MdxInlineRegion, MdxBlockRegion } from "./components/nodes";
+export { admonitionSpec, ADMONITION_TYPES } from "./syntax/directives";
+export { filesFenceSpecs } from "./syntax/files";

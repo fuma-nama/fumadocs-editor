@@ -107,9 +107,7 @@ describe("structure guard", () => {
     const extra = schema.nodes.mdxInlineRegion.create({ region: "title" }, [
       schema.text("and more"),
     ]);
-    editor.view.dispatch(
-      editor.state.tr.insert(title.pos + title.node.nodeSize, extra),
-    );
+    editor.view.dispatch(editor.state.tr.insert(title.pos + title.node.nodeSize, extra));
 
     const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
     expect(callout.node.childCount).toBe(2);

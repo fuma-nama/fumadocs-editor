@@ -138,7 +138,7 @@ test("reconnects re-invoke the client auth hook and carry the fresh token", asyn
   wire();
   await listen();
   await until(() => (seen.includes("admin-fresh") ? true : undefined));
-  expect(await transport.list()).toContainEqual({ path: "outside.mdx" });
+  expect(await transport.list()).toContain("outside.mdx");
   transport.close();
 }, 10000);
 
@@ -218,7 +218,7 @@ test("subtree write scope: Y updates refused outside, applied inside", async () 
 
 test("read predicate: filtered list, withheld broadcasts, refused joins", async () => {
   const reader = open("reader");
-  const listed = (await reader.list()).map((entry) => entry.path);
+  const listed = await reader.list();
   expect(listed).toContain("outside.mdx");
   expect(listed).not.toContain("secret/hidden.mdx");
 

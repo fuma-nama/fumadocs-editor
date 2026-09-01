@@ -1,31 +1,36 @@
 import path from "node:path";
 import type { Plugin } from "vite";
-import { createSyncServer, type SyncAuthenticate } from "./node";
+import { createSyncServer, type SyncServerOptions } from "./node";
+import { ASSET_ENDPOINT, SYNC_ENDPOINT, UPLOAD_ENDPOINT } from "./transport";
 
-export const SYNC_ENDPOINT = "/__fde_sync";
+export interface EditorSyncOptions extends Omit<SyncServerOptions, "root"> {
+  /** the mirrored directory, resolved against the Vite project root; defaults to it */
+  root?: string;
+}
 
 /**
  * Mounts the FS mirror on the Vite dev server: the sync websocket at
- * `/__fde_sync`, media uploads at `/__fde_upload` (stored under
- * `<root>/assets`, referenced as `./assets/…`), and asset serving at
- * `/__fde_asset/<relative>` so the editor can display them.
- * `root` is resolved against the Vite project root and defaults to it.
- * `authenticate` guards every surface (see {@link SyncAuthenticate});
- * absent, everything is allowed.
+ * {@link SYNC_ENDPOINT}, media uploads at {@link UPLOAD_ENDPOINT} (stored
+ * under `<root>/assets`, referenced as `./assets/…`), and asset serving at
+ * `ASSET_ENDPOINT/<relative>` so the editor can display them.
+ * `authenticate` guards every surface (see {@link SyncServerOptions.authenticate});
+ * absent, everything is allowed — the same trust as Vite's own dev socket.
  */
-export function fdeSync(options: { root?: string; authenticate?: SyncAuthenticate } = {}): Plugin {
+export function editorSync(options: EditorSyncOptions = {}): Plugin {
   return {
-    name: "fde-sync",
+    name: "fumadocs-editor-sync",
     apply: "serve",
     configureServer(server) {
-      const root = path.resolve(server.config.root, options.root ?? ".");
-      const sync = createSyncServer({ root, authenticate: options.authenticate });
+      const sync = createSyncServer({
+        ...options,
+        root: path.resolve(server.config.root, options.root ?? "."),
+      });
       server.httpServer?.on("upgrade", (request, socket, head) => {
         if (request.url === SYNC_ENDPOINT) sync.handleUpgrade(request, socket, head as Buffer);
       });
       server.httpServer?.once("close", () => void sync.close());
-      server.middlewares.use("/__fde_upload", sync.handleUpload);
-      server.middlewares.use("/__fde_asset", sync.handleAsset);
+      server.middlewares.use(UPLOAD_ENDPOINT, sync.handleUpload);
+      server.middlewares.use(ASSET_ENDPOINT, sync.handleAsset);
     },
   };
 }

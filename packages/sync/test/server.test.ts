@@ -3,13 +3,16 @@ import { createServer, type Server } from "node:http";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createSyncServer, hashText, type SyncServer } from "../src/node";
+import { createHash } from "node:crypto";
+import { createSyncServer, type SyncServer } from "../src/node";
 import { wsTransport, type WsTransport } from "../src/client";
 
 let root: string;
 let http: Server;
 let sync: SyncServer;
 let transport: WsTransport;
+
+const hashText = (text: string) => createHash("sha1").update(text).digest("hex");
 
 const until = <T>(poll: () => T | undefined, ms = 4000): Promise<T> =>
   new Promise((resolve, reject) => {
@@ -48,7 +51,7 @@ afterAll(async () => {
 });
 
 test("lists only markdown files, recursively", async () => {
-  expect(await transport.list()).toEqual([{ path: "docs/guide.mdx" }, { path: "readme.md" }]);
+  expect(await transport.list()).toEqual(["docs/guide.mdx", "readme.md"]);
 });
 
 test("read returns text and its content hash", async () => {
