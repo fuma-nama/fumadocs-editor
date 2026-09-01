@@ -5,6 +5,7 @@ import { Tabs } from "@base-ui/react/tabs";
 import {
   Suspense,
   lazy,
+  memo,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -14,7 +15,7 @@ import {
   type Ref,
 } from "react";
 import { StaticMdx } from "./static-mdx";
-import { parseDocCached } from "./doc-cache";
+import { parseDocCached, sameOptions } from "./doc-cache";
 import type { EditorCollab } from "./collab";
 import type { SerializeFn } from "./live-editor";
 import type { WsTransport } from "@fumadocs-editor/sync";
@@ -156,11 +157,26 @@ function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   );
 }
 
-export function MdxEditor({
+/** keep the previous reference while newly passed values stay equal by content */
+function useStableValue<T>(value: T, equal: (a: T, b: T) => boolean): T {
+  const ref = useRef(value);
+  if (value !== ref.current && !equal(value, ref.current)) ref.current = value;
+  return ref.current;
+}
+
+function sameSpecs(a: UiComponentSpec[], b: UiComponentSpec[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+export const MdxEditor = memo(function MdxEditor({
   defaultValue = "",
   onMarkdownChange,
-  components,
-  syntax,
+  components: componentsProp,
+  syntax: syntaxProp,
   cacheKey,
   staticFallback,
   theme,
@@ -171,8 +187,13 @@ export function MdxEditor({
   className,
   ref,
 }: MdxEditorProps) {
+  // hosts tend to pass `components`/`syntax` as inline literals; everything
+  // downstream (the parse cache, the collab session, the live extensions)
+  // keys on their identity, so churn is absorbed here by value comparison
+  const components = useStableValue(componentsProp ?? [], sameSpecs);
+  const syntax = useStableValue(syntaxProp, sameOptions);
   const specMap = useMemo(
-    () => new Map((components ?? []).map((spec) => [spec.name, spec])),
+    () => new Map(components.map((spec) => [spec.name, spec])),
     [components],
   );
   const ambient = useEditorTheme();
@@ -192,9 +213,7 @@ export function MdxEditor({
   const captureRef = useRef<{ point?: { x: number; y: number }; keys: string[] }>({ keys: [] });
 
   const onChangeRef = useRef(onMarkdownChange);
-  useEffect(() => {
-    onChangeRef.current = onMarkdownChange;
-  });
+  onChangeRef.current = onMarkdownChange;
 
   const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
 
@@ -214,7 +233,7 @@ export function MdxEditor({
     let cancelled = false;
     void import("./collab").then((module) => {
       if (cancelled) return;
-      session = module.startCollab(collabRef.current!, components ?? [], syntax, () => {
+      session = module.startCollab(collabRef.current!, components, syntax, () => {
         editorRef.current = null;
         setStage("static");
         setGeneration((current) => current + 1);
@@ -234,7 +253,7 @@ export function MdxEditor({
     if (parsed || sourceError || mode !== "visual") return;
     if (staticFallback && stage === "static") return;
     let cancelled = false;
-    parseDocCached(cacheKey, defaultValue, components ?? [], syntax).then(
+    parseDocCached(cacheKey, defaultValue, components, syntax).then(
       (result) => {
         if (cancelled) return;
         snapshotRef.current = result.snapshot;
@@ -320,7 +339,7 @@ export function MdxEditor({
     const snapshot = snapshotRef.current;
     if (!editor || !snapshot) {
       // nothing live yet: the disk text simply becomes the document
-      const result = await parseDocCached(undefined, text, components ?? [], syntax);
+      const result = await parseDocCached(undefined, text, components, syntax);
       snapshotRef.current = result.snapshot;
       setParsed(result);
       return [];
@@ -366,7 +385,7 @@ export function MdxEditor({
   };
 
   const setMarkdown = async (text: string): Promise<void> => {
-    const result = await parseDocCached(undefined, text, components ?? [], syntax);
+    const result = await parseDocCached(undefined, text, components, syntax);
     snapshotRef.current = result.snapshot;
     setParsed(result);
     setSourceError(null);
@@ -388,7 +407,7 @@ export function MdxEditor({
       return;
     }
 
-    void parseDocCached(undefined, source, components ?? [], syntax).then(
+    void parseDocCached(undefined, source, components, syntax).then(
       (result) => {
         snapshotRef.current = result.snapshot;
         setParsed(result);
@@ -434,7 +453,7 @@ export function MdxEditor({
                   key={generation}
                   collab={collabRuntime ?? undefined}
                   doc={parsed.doc}
-                  components={components ?? []}
+                  components={components}
                   specs={specMap}
                   syntax={syntax}
                   snapshotRef={snapshotRef}
@@ -503,4 +522,4 @@ export function MdxEditor({
       </div>
     </ProvidersContext.Provider>
   );
-}
+});
