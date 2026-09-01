@@ -5,13 +5,13 @@ import { fileURLToPath } from "node:url";
 import type { JSONContent } from "@tiptap/core";
 import {
   ADMONITION_TYPES,
-  DIRECTIVE_ADMONITION,
   admonitionSpec,
   createSyntax,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
+import { DIRECTIVE_ADMONITION } from "../src/syntax/directives";
 
 const calloutSpec: ComponentSpec = {
   name: "Callout",

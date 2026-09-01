@@ -24,7 +24,9 @@ export interface PropField {
 
 /** A JSX string attribute surfaced as an inline (plain-text) editable region. */
 export interface AttributeRegion {
+  /** the JSX attribute holding the text, e.g. Callout's `title` */
   attribute: string;
+  /** region identifier, unique within the component */
   region: string;
   placeholder?: string;
   label?: string;
@@ -41,8 +43,8 @@ export interface AttributeRegion {
 export interface ComponentSpec {
   /** JSX tag name, e.g. "Callout" */
   name: string;
-  /** human label for menus */
-  title?: string;
+  /** human-readable name shown in menus; defaults to `name` */
+  label?: string;
   /** string attributes shown as inline editable regions (e.g. Callout title) */
   attributeRegions?: AttributeRegion[];
   /**
@@ -122,6 +124,11 @@ export interface Syntax {
   options: SyntaxOptions;
 }
 
+/**
+ * Build the {@link Syntax} a document is parsed and serialized with.
+ * Registering the admonition spec defaults `directives` on — registering a
+ * component is what makes its syntax meaningful.
+ */
 export function createSyntax(
   components: ComponentSpec[] = [],
   options: SyntaxOptions = {},
@@ -143,7 +150,7 @@ export function createSyntax(
 export function componentSpecData(spec: ComponentSpec): ComponentSpec {
   const {
     name,
-    title,
+    label,
     attributeRegions,
     contentRegion,
     childrenRegion,
@@ -154,7 +161,7 @@ export function componentSpecData(spec: ComponentSpec): ComponentSpec {
   } = spec;
   return {
     name,
-    title,
+    label,
     attributeRegions,
     contentRegion,
     childrenRegion,

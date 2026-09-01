@@ -36,14 +36,14 @@ const entryInsert = (name: string, region: string) => () => ({
 
 const fenceFileSpec: ComponentSpec = {
   name: FENCE_FILE,
-  title: "File",
+  label: "File",
   attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
   insert: entryInsert(FENCE_FILE, "file-name"),
 };
 
 const fenceFolderSpec: ComponentSpec = {
   name: FENCE_FOLDER,
-  title: "Folder",
+  label: "Folder",
   attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
   childComponent: [FENCE_FILE, FENCE_FOLDER],
   listLike: true,
@@ -58,7 +58,7 @@ const fenceFolderSpec: ComponentSpec = {
  */
 const filesFenceSpec: ComponentSpec = {
   name: FENCE_FILES,
-  title: "Files fence",
+  label: "Files fence",
   childComponent: [FENCE_FILE, FENCE_FOLDER],
   listLike: true,
 };

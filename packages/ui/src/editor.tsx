@@ -18,7 +18,7 @@ import { StaticMdx } from "./static-mdx";
 import { parseDocCached, sameOptions } from "./doc-cache";
 import type { EditorCollab } from "./collab";
 import type { SerializeFn } from "./live-editor";
-import type { WsTransport } from "@fumadocs-editor/sync";
+import type { SessionStatus, WsTransport } from "@fumadocs-editor/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
 import type { UiComponentSpec } from "./components/spec";
@@ -31,6 +31,7 @@ import { cn } from "./utils/cn";
 const LiveEditor = lazy(() => import("./live-editor").then((m) => ({ default: m.LiveEditor })));
 
 export interface MdxEditorRef {
+  /** serialize the current document; unedited blocks come back byte-identical */
   getMarkdown: () => string;
   /**
    * Merge new on-disk markdown into the live document. Remote-only block
@@ -44,10 +45,9 @@ export interface MdxEditorRef {
   setMarkdown: (text: string) => Promise<void>;
 }
 
-export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
-
 export interface SyncIndicatorProps {
-  status: SyncStatus;
+  /** a `FileSession`'s status (or your own equivalent for a custom backend) */
+  status: SessionStatus;
   /** conflict resolution: overwrite the disk with the local document */
   onKeepMine: () => void;
   /** conflict resolution: drop local edits for the disk version */
@@ -57,6 +57,7 @@ export interface SyncIndicatorProps {
 export interface MdxEditorCollab {
   /** the mirror websocket; the Yjs frames ride the same connection */
   transport: WsTransport;
+  /** the document's root-relative path — its identity on the sync server */
   path: string;
   /** presence identity shown at this user's caret on other clients */
   user: { name: string; color: string };
@@ -127,7 +128,7 @@ type Stage = "static" | "mounting" | "live";
 
 const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground hover:bg-fd-background/70 hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
 
-const SYNC_DOT: Record<SyncStatus, string> = {
+const SYNC_DOT: Record<SessionStatus, string> = {
   synced: "bg-fd-success",
   dirty: "bg-fd-warning",
   saving: "bg-fd-warning animate-pulse",
@@ -136,7 +137,7 @@ const SYNC_DOT: Record<SyncStatus, string> = {
   denied: "bg-fd-error",
 };
 
-const SYNC_LABEL: Record<SyncStatus, string> = {
+const SYNC_LABEL: Record<SessionStatus, string> = {
   synced: "Saved",
   dirty: "Edited",
   saving: "Saving…",

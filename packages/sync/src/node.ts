@@ -79,7 +79,7 @@ const MIME: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
-export function hashText(text: string): string {
+function hashText(text: string): string {
   return createHash("sha1").update(text).digest("hex");
 }
 
@@ -263,7 +263,7 @@ export function createSyncServer({
       text?: string;
       baseVersion?: string;
       components?: unknown;
-      options?: unknown;
+      syntax?: unknown;
     },
   ): Promise<void> {
     const scope = conn.scope!;
@@ -273,15 +273,15 @@ export function createSyncServer({
       switch (message.type) {
         case "list": {
           const entries = await readdir(root, { recursive: true, withFileTypes: true });
-          const files = [];
+          const files: string[] = [];
           for (const entry of entries) {
             if (!entry.isFile() || !MARKDOWN.test(entry.name)) continue;
             const absolute = path.join(entry.parentPath, entry.name);
             if (absolute.includes("node_modules")) continue;
             const relative = path.relative(root, absolute).split(path.sep).join("/");
-            if (scope.read(relative)) files.push({ path: relative });
+            if (scope.read(relative)) files.push(relative);
           }
-          files.sort((a, b) => (a.path < b.path ? -1 : 1));
+          files.sort();
           reply(files);
           return;
         }
@@ -329,7 +329,7 @@ export function createSyncServer({
             relative,
             client,
             (message.components ?? []) as ComponentSpec[],
-            message.options as SyntaxOptions | undefined,
+            message.syntax as SyntaxOptions | undefined,
           );
           reply({ ...opened, user: scope.user, writable: scope.write(relative) });
           return;

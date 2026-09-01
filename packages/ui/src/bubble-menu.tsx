@@ -613,11 +613,11 @@ export function EditorBubble({
           {state?.format && <span className="mx-0.5 h-4 w-px bg-fd-border" />}
           <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
             <Popover.Trigger
-              aria-label={`${spec.title ?? spec.name} options`}
+              aria-label={`${spec.label ?? spec.name} options`}
               className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-fd-foreground outline-none hover:bg-fd-accent data-[popup-open]:bg-fd-accent"
             >
               <span className="inline-flex text-fd-muted-foreground">{spec.icon}</span>
-              {spec.title ?? spec.name}
+              {spec.label ?? spec.name}
               <ChevronDown size={12} className="text-fd-muted-foreground" />
             </Popover.Trigger>
             <Popover.Portal container={panelContainer}>

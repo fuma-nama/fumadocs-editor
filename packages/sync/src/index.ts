@@ -1,12 +1,12 @@
 export { wsTransport } from "./client";
-export type { ConnectionStatus, WsTransport, WsTransportOptions } from "./client";
+export type { WsTransport, WsTransportOptions } from "./client";
 export { createFileSession } from "./session";
 export type { FileSession, FileSessionOptions, SessionStatus } from "./session";
-export { AUTH_HEADER } from "./transport";
+export { AUTH_HEADER, SYNC_ENDPOINT, UPLOAD_ENDPOINT, ASSET_ENDPOINT } from "./transport";
 export type {
-  FileEntry,
+  ConnectionStatus,
   FileState,
-  OpenState,
+  ReadResult,
   SyncTransport,
   SyncUser,
   WriteResult,

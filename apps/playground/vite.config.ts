@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fdeSync } from "@fumadocs-editor/sync/vite";
+import { editorSync } from "@fumadocs-editor/sync/vite";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    fdeSync({
+    editorSync({
       root: "docs",
       // toy auth layer for trying the scope enforcement: open the playground
       // with ?token=editor / ?token=viewer / ?token=anything-else (denied).

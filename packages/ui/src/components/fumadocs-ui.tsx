@@ -524,7 +524,7 @@ function InlineTOC({ children }: ComponentRenderProps) {
 
 export const calloutSpec: UiComponentSpec = {
   name: "Callout",
-  title: "Callout",
+  label: "Callout",
   icon: <Info size={13} />,
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Title…" }],
   childrenRegion: { region: "body", placeholder: "Write the callout…" },
@@ -564,7 +564,7 @@ const cardInsert = () => ({
 
 export const cardSpec: UiComponentSpec = {
   name: "Card",
-  title: "Card",
+  label: "Card",
   icon: <SquareStack size={13} />,
   // title is edited inline; the multi-line body is the block region below it.
   // `description` and children render into the same slot in fumadocs-ui, so a
@@ -581,7 +581,7 @@ export const cardSpec: UiComponentSpec = {
 
 export const cardsSpec: UiComponentSpec = {
   name: "Cards",
-  title: "Cards",
+  label: "Cards",
   icon: <LayoutGrid size={13} />,
   childComponent: "Card",
   render: Cards,
@@ -594,7 +594,7 @@ export const cardsSpec: UiComponentSpec = {
 
 export const stepSpec: UiComponentSpec = {
   name: "Step",
-  title: "Step",
+  label: "Step",
   childrenRegion: { region: "body", placeholder: "Describe this step…" },
   render: Step,
   insert: () => ({
@@ -608,7 +608,7 @@ export const stepSpec: UiComponentSpec = {
 
 export const stepsSpec: UiComponentSpec = {
   name: "Steps",
-  title: "Steps",
+  label: "Steps",
   icon: <ListOrdered size={13} />,
   childComponent: "Step",
   render: Steps,
@@ -648,7 +648,7 @@ const accordionInsert = () => ({
 
 export const accordionSpec: UiComponentSpec = {
   name: "Accordion",
-  title: "Accordion",
+  label: "Accordion",
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Question…" }],
   childrenRegion: { region: "body", placeholder: "Answer…" },
   props: [
@@ -661,7 +661,7 @@ export const accordionSpec: UiComponentSpec = {
 
 export const accordionsSpec: UiComponentSpec = {
   name: "Accordions",
-  title: "Accordions",
+  label: "Accordions",
   icon: <Rows3 size={13} />,
   childComponent: "Accordion",
   props: [
@@ -689,7 +689,7 @@ const entryInsert = (name: string, region: string) => () => ({
 
 export const fileSpec: UiComponentSpec = {
   name: "File",
-  title: "File",
+  label: "File",
   icon: <FileIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
   render: File,
@@ -698,7 +698,7 @@ export const fileSpec: UiComponentSpec = {
 
 export const folderSpec: UiComponentSpec = {
   name: "Folder",
-  title: "Folder",
+  label: "Folder",
   icon: <FolderIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
   // a folder holds files and further folders: needs the array child form
@@ -710,7 +710,7 @@ export const folderSpec: UiComponentSpec = {
 
 export const filesSpec: UiComponentSpec = {
   name: "Files",
-  title: "Files",
+  label: "Files",
   icon: <FolderTree size={13} />,
   childComponent: ["File", "Folder"],
   listLike: true,
@@ -776,7 +776,7 @@ const tabInsert = () => ({
 
 export const tabSpec: UiComponentSpec = {
   name: "Tab",
-  title: "Tab",
+  label: "Tab",
   childrenRegion: { region: "body", placeholder: "Tab content…" },
   props: [
     { name: "value", label: "Value", type: "string", placeholder: "derived from label" },
@@ -788,7 +788,7 @@ export const tabSpec: UiComponentSpec = {
 
 export const tabsSpec: UiComponentSpec = {
   name: "Tabs",
-  title: "Tabs",
+  label: "Tabs",
   icon: <PanelTop size={13} />,
   childComponent: "Tab",
   listLike: true,
@@ -819,7 +819,7 @@ export const tabsSpec: UiComponentSpec = {
 
 export const includeSpec: UiComponentSpec = {
   name: "include",
-  title: "Include",
+  label: "Include",
   icon: <FileInput size={13} />,
   contentRegion: { region: "path", placeholder: "./path/to/file.mdx" },
   filePathRegion: "path",
@@ -838,7 +838,7 @@ export const includeSpec: UiComponentSpec = {
 
 export const typeTableSpec: UiComponentSpec = {
   name: "TypeTable",
-  title: "Type table",
+  label: "Type table",
   icon: <Table2 size={13} />,
   props: [
     {
@@ -866,7 +866,7 @@ export const typeTableSpec: UiComponentSpec = {
 
 export const githubInfoSpec: UiComponentSpec = {
   name: "GithubInfo",
-  title: "GitHub info",
+  label: "GitHub info",
   icon: <GitBranch size={13} />,
   props: [
     { name: "owner", label: "Owner", type: "string", placeholder: "fuma-nama" },
@@ -882,7 +882,7 @@ export const githubInfoSpec: UiComponentSpec = {
 
 export const inlineTocSpec: UiComponentSpec = {
   name: "InlineTOC",
-  title: "Inline TOC",
+  label: "Inline TOC",
   icon: <ListTree size={13} />,
   childrenRegion: { region: "body", placeholder: "Table of Contents" },
   props: [

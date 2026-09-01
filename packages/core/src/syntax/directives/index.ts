@@ -42,7 +42,7 @@ export const ADMONITION_TYPES: Record<string, string> = {
  */
 export const admonitionSpec: ComponentSpec = {
   name: DIRECTIVE_ADMONITION,
-  title: "Admonition",
+  label: "Admonition",
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Title…" }],
   childrenRegion: { region: "body", placeholder: "Write the admonition…" },
   props: [

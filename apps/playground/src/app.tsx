@@ -9,13 +9,16 @@ import {
   type FileProvider,
   type MdxEditorRef,
   type MediaProvider,
-  type SyncStatus,
 } from "@fumadocs-editor/ui";
 import {
+  ASSET_ENDPOINT,
   AUTH_HEADER,
+  SYNC_ENDPOINT,
+  UPLOAD_ENDPOINT,
   createFileSession,
   wsTransport,
   type FileSession,
+  type SessionStatus,
   type WsTransport,
 } from "@fumadocs-editor/sync";
 import { FileText, Moon, Sun } from "lucide-react";
@@ -79,13 +82,13 @@ const media: MediaProvider = {
     const headers: Record<string, string> = { "x-filename": encodeURIComponent(file.name) };
     const token = authToken();
     if (token !== undefined) headers[AUTH_HEADER] = JSON.stringify(token);
-    const res = await fetch("/__fde_upload", { method: "POST", body: file, headers });
+    const res = await fetch(UPLOAD_ENDPOINT, { method: "POST", body: file, headers });
     if (!res.ok) throw new Error(`upload failed: ${res.status}`);
     const { src } = (await res.json()) as { src: string };
     return src;
   },
   resolve: (src) =>
-    /^(?:[a-z]+:|\/)/i.test(src) ? src : `/__fde_asset/${src.replace(/^\.\//, "")}`,
+    /^(?:[a-z]+:|\/)/i.test(src) ? src : `${ASSET_ENDPOINT}/${src.replace(/^\.\//, "")}`,
 };
 
 function Playground() {
@@ -93,7 +96,7 @@ function Playground() {
   const [files, setFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [initialText, setInitialText] = useState<string | null>(null);
-  const [status, setStatus] = useState<SyncStatus>("synced");
+  const [status, setStatus] = useState<SessionStatus>("synced");
   const [markdown, setMarkdown] = useState("");
   const [syncedText, setSyncedText] = useState("");
   // consumer wiring for the auth scope: the handshake's `writable` (data the
@@ -104,13 +107,12 @@ function Playground() {
 
   useEffect(() => {
     // per-mount transport: StrictMode's probe mount closes its own copy
-    const next = wsTransport(`ws://${location.host}/__fde_sync`, { auth: authToken });
+    const next = wsTransport(`ws://${location.host}${SYNC_ENDPOINT}`, { auth: authToken });
     let open = true;
     setTransport(next);
     void next.list().then(
-      (entries) => {
+      (paths) => {
         if (!open) return;
-        const paths = entries.map((entry) => entry.path);
         setFiles(paths);
         setActive((current) => current ?? paths[0] ?? null);
       },
@@ -217,8 +219,8 @@ function Playground() {
       list: async () => {
         const entries = await transport.list();
         const paths: string[] = [];
-        for (const entry of entries) {
-          if (entry.path !== active) paths.push(`./${entry.path}`);
+        for (const path of entries) {
+          if (path !== active) paths.push(`./${path}`);
         }
         return paths;
       },

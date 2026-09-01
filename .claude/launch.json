@@ -14,6 +14,12 @@
       "port": 5273
     },
     {
+      "name": "playground-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/playground", "dev", "--port", "5373"],
+      "port": 5373
+    },
+    {
       "name": "playground-prod",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/playground", "exec", "vite", "preview", "--port", "4173"],

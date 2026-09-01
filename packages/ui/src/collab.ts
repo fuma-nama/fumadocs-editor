@@ -22,14 +22,14 @@ export interface EditorCollab {
 export function startCollab(
   collab: MdxEditorCollab,
   components: UiComponentSpec[],
-  options: SyntaxOptions | undefined,
+  syntax: SyntaxOptions | undefined,
   onReset: () => void,
 ): EditorCollab {
   const session = createCollabSession({
     transport: collab.transport,
     path: collab.path,
     components,
-    options,
+    syntax,
     onReset,
   });
   return {

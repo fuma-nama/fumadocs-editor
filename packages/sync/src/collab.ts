@@ -29,7 +29,8 @@ export interface CollabSessionOptions {
    * serializes with them, renderers stay client-side.
    */
   components: ComponentSpec[];
-  options?: SyntaxOptions;
+  /** dialect switches beyond the component specs (math, directives…) */
+  syntax?: SyntaxOptions;
   /**
    * The server re-seeded this document since we first synced (it restarted):
    * our Y history no longer shares an origin with its doc, so syncing would
@@ -63,7 +64,7 @@ export interface CollabSession {
  * edits buffered while offline.
  */
 export function createCollabSession(options: CollabSessionOptions): CollabSession {
-  const { transport, path, components, options: syntaxOptions, onReset } = options;
+  const { transport, path, components, syntax, onReset } = options;
   const doc = options.doc ?? new Y.Doc();
   const awareness = new Awareness(doc);
   let epoch: string | undefined;
@@ -122,7 +123,7 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
         type: "collab-open",
         path,
         components: components.map(componentSpecData),
-        options: syntaxOptions,
+        syntax,
       });
       if (destroyed) return;
       if (epoch !== undefined && reply.epoch !== epoch) {
