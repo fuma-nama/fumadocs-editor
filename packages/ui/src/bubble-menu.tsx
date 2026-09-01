@@ -254,7 +254,13 @@ function LinkControl({
                 spellCheck={false}
                 autoFocus
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && highlighted.current == null) apply(draft);
+                  if (event.key === "Enter" && highlighted.current == null) {
+                    // apply() focuses the editor during this keydown; without
+                    // preventDefault WebKit then delivers Enter's editing
+                    // action (delete selection + split) to the editor
+                    event.preventDefault();
+                    apply(draft);
+                  }
                   if (event.key === "Escape") setOpen(false);
                 }}
               />
