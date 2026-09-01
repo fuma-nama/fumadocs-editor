@@ -12,3 +12,12 @@ T_{f}(z)=\sum _{k=0}^{\infty }{\frac {(z-c)^{k}}{2\pi i}}\int _{\gamma }{\frac {
 $$
 
 Prices like $5 stay editable as prose once escaped.
+
+## Diagram
+
+```mermaid
+graph TD;
+  A[Edit fence] --> B{Valid?};
+  B -- yes --> C[Render diagram];
+  B -- no --> D[Keep last good];
+```

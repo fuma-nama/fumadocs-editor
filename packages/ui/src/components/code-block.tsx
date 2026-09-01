@@ -17,6 +17,7 @@ import { popupCls, switchRootCls, switchThumbCls } from "./styles";
 import { cn } from "../utils/cn";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
+import { MermaidDiagram } from "./mermaid";
 import { useEditorPortal } from "../utils/portal";
 
 /**
@@ -71,6 +72,7 @@ const LANGUAGES: { value: string; label: string }[] = [
   { value: "go", label: "Go" },
   { value: "sql", label: "SQL" },
   { value: "yaml", label: "YAML" },
+  { value: "mermaid", label: "Mermaid" },
   { value: "npm", label: "npm command" },
   { value: "package-install", label: "Package install" },
 ];
@@ -271,6 +273,7 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
           </pre>
         </div>
       </div>
+      {normalize(language) === "mermaid" && <MermaidDiagram code={node.textContent} />}
     </NodeViewWrapper>
   );
 }
