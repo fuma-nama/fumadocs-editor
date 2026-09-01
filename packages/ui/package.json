@@ -10,7 +10,9 @@
     "css"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./dist/index.js",
     "./css/preset.css": "./css/preset.css",

@@ -13,6 +13,11 @@
  * mounted inside a real fumadocs site its own theme overrides them.
  */
 
+/* the editor chrome is styled with utility classes in the shipped JS; scan it
+ * so the consumer's Tailwind build generates them (glob form: the directory
+ * may not exist yet in a fresh workspace checkout) */
+@source "../dist/**/*.js";
+
 @theme {
   --color-fd-background: hsl(0 0% 96%);
   --color-fd-foreground: hsl(0 0% 3.9%);
