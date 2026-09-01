@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "index",
+    "---Sync---",
+    "sync",
+    "collab",
+    "auth",
+    "---Authoring---",
+    "components",
+    "syntax",
+    "providers",
+    "read-only",
+    "---Reference---",
+    "limits"
+  ]
+}

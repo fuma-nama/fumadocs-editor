@@ -1,0 +1,47 @@
+---
+title: Providers
+description: Where uploads go and what documents can reference
+---
+
+## Host concerns
+
+Two things the editor deliberately doesn't know: where files live when a user
+pastes an image, and which documents exist for links to point at. Both are
+provider props — small interfaces your host implements.
+
+Without `media`, paste/drop upload is off and images are added by URL.
+Without `files`, the include picker and `[[` page-link autocomplete are plain
+text inputs. Everything else works.
+
+## MediaProvider
+
+<include meta='title="providers.tsx"'>../examples/providers.tsx#media</include>
+
+`upload` stores the file and returns the `src` written into the document —
+keep it relative if that's what your site expects. `resolve` maps document
+srcs to displayable URLs at render time, so relative paths in the file still
+preview correctly in the editor.
+
+When you're on the [sync dev server](/sync#the-dev-server), its endpoints do
+the storing:
+
+<include meta='title="dev-media.tsx"'>../examples/providers-dev.tsx</include>
+
+Uploads land in `<root>/assets` and are checked server-side before anything
+is stored: content type against `upload.types` (default `image/*`) and size
+against `upload.maxBytes` (default 10 MiB). With [auth](/auth) enabled, the
+upload also needs `write` on the stored path — pass the payload in the
+`AUTH_HEADER` header as the example app does.
+
+## FileProvider
+
+<include meta='title="providers.tsx"'>../examples/providers.tsx#files</include>
+
+Return the exact relative paths to write into the document (relative to the
+open document, e.g. `./shared/props.mdx`). They power two affordances:
+
+- the `<include>` component's path region autocompletes in place, and
+- typing `[[` opens Obsidian-style page-link suggestions.
+
+On the dev server, `transport.list()` minus the open document is usually the
+right implementation.

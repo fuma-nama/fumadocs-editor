@@ -1,0 +1,68 @@
+---
+title: Collaboration
+description: Real-time collaborative editing over the sync server
+---
+
+## Enabling it
+
+Collaboration rides the same [sync server](/sync) and the same websocket —
+pass the editor a `collab` prop and everything else is automatic:
+
+<include meta='title="collab-editor.tsx"'>../examples/collab.tsx</include>
+
+`user` is the presence identity shown at your caret on other clients. The
+initial `read` is only the first paint; once the collab session syncs, the
+server's document is authoritative. Everything Yjs loads lazily — clients
+that never pass `collab` never fetch it.
+
+## The authority model
+
+With collaboration on, the server stops being a dumb mirror and becomes the
+document's authority:
+
+- It holds one Y.Doc per open file and is its **single writer**: client edits
+  converge in the Y.Doc, and the server serializes it back to disk
+  (debounced, still byte-preserving for untouched blocks).
+- Disk changes — a `git pull` mid-session — enter through the same
+  [block-level merge](/sync#the-conflict-model), applied to the Y.Doc. On a
+  same-block conflict the in-editor version wins and the disk is rewritten;
+  with a live shared document there is no one to show a conflict chip to.
+- When the last client leaves, the document is flushed immediately and
+  evicted after a grace period (`evictAfterMs`, default 60 s).
+
+The parser and serializer run server-side with your own syntax: the first
+client to open a document sends the data half of its component specs over the
+wire — renderers stay in the browser.
+
+## What changes vs single-user
+
+|                   | FS mirror                         | Collab                                          |
+| ----------------- | --------------------------------- | ----------------------------------------------- |
+| Document lives in | your editor                       | the server's Y.Doc                              |
+| Writes to disk    | each client (compare-and-swap)    | the server only                                 |
+| External edits    | merged client-side, conflict chip | merged server-side, editor wins                 |
+| Undo              | full local history                | your own edits only                             |
+| Raw MDX tab       | available                         | disabled (no sane merge with a live shared doc) |
+| `sync` prop shows | session status                    | connectivity only                               |
+
+Presence carets render with each peer's name flag; a server-side
+[auth scope](/auth) with a `user` overrides whatever name a client claims.
+Plain mirror tabs and collab tabs can edit the same file side by side — the
+mirror tab's writes flow into the authority like any other disk change.
+
+## Restarts and the epoch model
+
+The server keeps no Yjs persistence — **the file is the record**. Each
+document gets an epoch when first opened; when the server restarts (or the
+document is evicted and reopened), it re-seeds from the file under a fresh
+epoch. A client returning with history from an old epoch discards its session
+and rebuilds from the server — re-syncing old state would duplicate the
+document.
+
+Two bounded loss windows follow from this design:
+
+- a hard kill of the server can lose edits still inside the save debounce
+  (under a second), and
+- edits typed **while the server was down** are discarded by the epoch reset.
+  Edits made while merely disconnected (server up, network down) are buffered
+  and converge on reconnect.

@@ -10,6 +10,9 @@
     "types:check": "fumadocs-mdx && tsc --noEmit"
   },
   "dependencies": {
+    "@fumadocs-editor/core": "workspace:*",
+    "@fumadocs-editor/sync": "workspace:*",
+    "@fumadocs-editor/ui": "workspace:*",
     "fumadocs-core": "^16.10.2",
     "fumadocs-mdx": "^15.0.12",
     "fumadocs-ui": "^16.10.2",
@@ -26,6 +29,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "tailwindcss": "^4.3.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^8.1.3"
   }
 }

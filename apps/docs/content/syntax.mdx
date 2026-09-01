@@ -1,0 +1,73 @@
+---
+title: Syntax
+description: Dialects, feature switches, and the verbatim safety net
+---
+
+## One syntax
+
+Everything the editor understands is described by two props: `components`
+(the registered specs) and `syntax` (parse-level feature switches). Together
+they decide how a document parses, serializes, and edits.
+
+Everything **outside** that syntax rides the verbatim safety net: an unknown
+construct round-trips byte-for-byte and is edited as source. Disabling a
+feature never breaks a document — its constructs just stop being editable in
+place.
+
+<include meta='title="editor.tsx"'>../examples/syntax.tsx</include>
+
+## Options
+
+| Option            | Default                                          | Turns on                                |
+| ----------------- | ------------------------------------------------ | --------------------------------------- |
+| `headingSuffixes` | `true`                                           | fumadocs heading suffixes as attributes |
+| `directives`      | off — `true` once `admonitionSpec` is registered | the `:::` admonition dialect            |
+| `math`            | off                                              | `$…$` / `$$…$$` TeX math                |
+
+The dialects are off by default because they change how existing text parses:
+any `$`-delimited span, any `:::`-shaped line. Turning one on is a statement
+about your content, so make it deliberately.
+
+### Heading suffixes
+
+`## Title [#custom-id]`, `[!toc]` and `[toc]` parse into heading attributes —
+shown as chips, edited via the heading's turn-into menu — instead of reading
+as literal prose. On by default since it never changes meaning outside a
+heading.
+
+### Directive admonitions
+
+`:::warn[Title]` becomes an editable admonition. There's no separate flag to
+think about: registering the spec is the switch —
+
+```ts
+const components = [...fumadocsUiComponents, admonitionSpec];
+```
+
+Admonitions stay `:::` on save and `<Callout>` stays JSX; converting between
+them never happens implicitly. Directives the editor can't model faithfully —
+unknown names, rich label markup, nested unknown directives — fall back to
+verbatim rather than risking a lossy rewrite.
+
+### Math
+
+With `syntax={{ math: true }}`, `$x^2$` and `$$…$$` become math nodes: the
+source stays editable in place with a rendered KaTeX preview beside the
+caret. KaTeX loads lazily, only when a document actually renders math.
+Delimiters are preserved exactly (`$$x$$` re-emits `$$x$$`); an inline
+formula emptied of its source disappears from the output, since bare `$$`
+wouldn't re-parse.
+
+### Files fences
+
+Registering `filesFenceSpecs` makes canonical ` ```files ` tree fences
+editable as the same file-tree UI the JSX `<Files>` components use. The
+provenance is kept: a fence re-emits fence syntax, JSX re-emits JSX. A fence
+the parser can't treat as canonical (loose indentation, multiple roots)
+stays a plain code block.
+
+## Deferred syntaxes
+
+`<CodeBlockTabs>`, the primitive (non-fumadocs) `<Tabs>` form, and footnotes
+are not yet structurally editable. They ride the verbatim fallback: rendered
+as source cards, preserved byte-for-byte.

@@ -1,0 +1,131 @@
+---
+title: Sync
+description: Mirror documents to the file system with autosave and live merge
+---
+
+## Overview
+
+`@fumadocs-editor/sync` keeps the editor and a directory of `.md`/`.mdx` files
+in sync, in both directions:
+
+- the editor autosaves with compare-and-swap writes (no lost updates), and
+- changes from outside — a `git pull`, an IDE save — merge into the live
+  document as you type, without touching your caret.
+
+The files stay the source of truth; the editor is just another writer.
+
+```bash
+npm install @fumadocs-editor/sync
+```
+
+## The dev server
+
+For local editing, mount the sync server on Vite:
+
+<include meta='title="vite.config.ts"'>../examples/sync-vite.ts</include>
+
+`root` is the mirrored directory, resolved against the Vite project root. The
+plugin serves three endpoints (exported as constants from
+`@fumadocs-editor/sync`):
+
+| Endpoint         | Constant          | Purpose                                              |
+| ---------------- | ----------------- | ---------------------------------------------------- |
+| `/__fde_sync`    | `SYNC_ENDPOINT`   | the sync websocket                                   |
+| `/__fde_upload`  | `UPLOAD_ENDPOINT` | media uploads (`POST`, stored under `<root>/assets`) |
+| `/__fde_asset/*` | `ASSET_ENDPOINT`  | serves stored assets for display                     |
+
+It also accepts every [`createSyncServer` option](#standalone-server) — most
+importantly [`authenticate`](/auth).
+
+<Callout type="warn" title="Keep Vite away from the mirrored files">
+If the mirrored directory sits inside your Vite root, exclude it from the
+watcher — otherwise Tailwind's source scan invalidates the CSS and reloads
+the page on every save:
+
+```ts title="vite.config.ts"
+export default defineConfig({
+  server: { watch: { ignored: ["**/content/docs/**"] } },
+});
+```
+
+Never import mirrored files as modules (`?raw` included) for the same reason.
+
+</Callout>
+
+### Standalone server
+
+Outside Vite, `createSyncServer` gives you the same server as plain handlers
+to mount on any Node HTTP server:
+
+<include meta='title="server.ts"'>../examples/sync-server.ts</include>
+
+Options: `authenticate` ([auth](/auth)), `evictAfterMs` (how long an open
+collab document outlives its last client, default 60 s), and `upload` limits
+(default 10 MiB, `image/*` — oversized or wrong-typed bodies are refused
+before anything is stored).
+
+## The editor side
+
+A `FileSession` owns one open file: it autosaves (800 ms after the last
+change, 5 s max), merges external changes in as they land, and pauses on
+conflicts. Wire it to the editor through its ref:
+
+<include meta='title="synced-editor.tsx"'>../examples/sync-editor.tsx</include>
+
+The session never touches the editor directly — you hand it four callbacks:
+
+| Option          | Wire it to                    |
+| --------------- | ----------------------------- |
+| `getText`       | `ref.getMarkdown()`           |
+| `applyRemote`   | `ref.applyExternalMarkdown()` |
+| `resetToRemote` | `ref.setMarkdown()`           |
+| `onStatus`      | the editor's `sync` prop      |
+
+Call `session.changed()` from `onMarkdownChange`, and `session.flush()` on
+blur, `beforeunload`, or Cmd-S if you want saves at those moments too.
+
+### Status
+
+`onStatus` reports a `SessionStatus`; passing it to the editor's `sync` prop
+renders the dot beside the mode tabs:
+
+| Status     | Meaning                                                |
+| ---------- | ------------------------------------------------------ |
+| `synced`   | the disk holds what you see                            |
+| `dirty`    | local edits waiting for the autosave                   |
+| `saving`   | a write is in flight                                   |
+| `conflict` | the same block changed locally and on disk             |
+| `offline`  | connection lost; edits keep, saves resume on reconnect |
+| `denied`   | the server rejected the credentials ([auth](/auth))    |
+
+### The conflict model
+
+Merging is block-level and three-way: the last-synced document is the base,
+and a block counts as "the same" exactly when the serializer would emit it
+byte-identically. Changes that only happened on disk apply to the live
+document as one non-undoable transaction — your caret stays put. A block
+edited on **both** sides becomes a conflict: the editor keeps the local
+version, pauses writes, and shows a quiet chip with two resolutions —
+`keepMine()` (overwrite the disk) or `takeDisk()` (drop local edits).
+
+## Custom backends
+
+The dev server is one implementation of the `SyncTransport` interface. A
+different backend — a database, a CMS, a browser file-system handle — only
+needs four calls:
+
+```ts
+interface SyncTransport {
+  list(): Promise<string[]>;
+  read(path: string): Promise<ReadResult>;
+  write(path: string, text: string, baseVersion: string): Promise<WriteResult>;
+  watch(path: string, onChange: (state: FileState) => void): () => void;
+  onStatus?(listener: (status: ConnectionStatus) => void): () => void;
+}
+```
+
+Documents are addressed by root-relative posix paths. `version` strings are
+opaque compare-and-swap tokens: `write` must fail with the current state when
+`baseVersion` no longer matches, and that is all the session needs to merge
+and retry. `onStatus` is optional — omit it for a backend that cannot go
+offline.
