@@ -293,6 +293,54 @@ test("a throwing renderer cannot kill the static first paint", () =>
     expect(fallback!.textContent).toContain("Boom body.");
   }));
 
+test("arrow keys enter math source on every engine (hidden text traversal differs)", async () => {
+  vi.useFakeTimers();
+  const source = "Before $x+y$ after.\n\n$$\nE=mc^2\n$$\n\nLast.\n";
+  const { editor, dom } = await mount({ defaultValue: source, syntax: { math: true } });
+  const arrow = (key: string) =>
+    act(() => {
+      dom.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+  const nodes: Record<string, { pos: number; size: number }> = {};
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name.startsWith("math")) {
+      nodes[node.type.name] = { pos, size: node.nodeSize };
+    }
+    return true;
+  });
+  const inline = nodes.mathInline;
+  const block = nodes.mathBlock;
+  const parentAt = () => editor.state.selection.$from.parent.type.name;
+
+  // inline: from either side, one arrow enters edit mode, caret at the
+  // source end (the click-to-edit position — a caret at source offset 0
+  // cannot be distinguished from "before the node" in the DOM)
+  act(() => editor.commands.setTextSelection(inline.pos));
+  arrow("ArrowRight");
+  expect(parentAt()).toBe("mathInline");
+  expect(editor.state.selection.from).toBe(inline.pos + inline.size - 1);
+  act(() => editor.commands.setTextSelection(inline.pos + inline.size));
+  arrow("ArrowLeft");
+  expect(parentAt()).toBe("mathInline");
+  expect(editor.state.selection.from).toBe(inline.pos + inline.size - 1);
+
+  // block: from the paragraph above (right/down) and below (left/up)
+  act(() => editor.commands.setTextSelection(block.pos - 1));
+  arrow("ArrowRight");
+  expect(parentAt()).toBe("mathBlock");
+  expect(editor.state.selection.from).toBe(block.pos + block.size - 1);
+  act(() => editor.commands.setTextSelection(block.pos - 1));
+  arrow("ArrowDown");
+  expect(parentAt()).toBe("mathBlock");
+  act(() => editor.commands.setTextSelection(block.pos + block.size + 1));
+  arrow("ArrowLeft");
+  expect(parentAt()).toBe("mathBlock");
+  expect(editor.state.selection.from).toBe(block.pos + block.size - 1);
+  act(() => editor.commands.setTextSelection(block.pos + block.size + 1));
+  arrow("ArrowUp");
+  expect(parentAt()).toBe("mathBlock");
+});
+
 test("unedited document round-trips byte-identical through the debounce", async () => {
   vi.useFakeTimers();
   const source = "# Title\n\nSome *rich* text.\n";
