@@ -126,6 +126,16 @@
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
+/* While ProseMirror hides the native selection (node selections: the ring is
+ * the signal), the themed tint above must not resurrect it — source order
+ * lets it beat ProseMirror's own transparent rule, and WebKit's node range
+ * bleeds onto the inter-block whitespace line owned by the .ProseMirror
+ * element itself, painting a phantom selected bar above the component. */
+[data-fde-root] .ProseMirror-hideselection::selection,
+[data-fde-root] .ProseMirror-hideselection ::selection {
+  background: transparent;
+}
+
 /* TipTap's injected Selection CSS blanks native ::selection for every
  * descendant while the editor is blurred
  * (`.ProseMirror:not(.ProseMirror-focused) ::selection`) so its decoration
