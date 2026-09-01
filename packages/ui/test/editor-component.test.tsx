@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
+import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -160,6 +161,33 @@ test("applyExternalMarkdown reports a conflict for a block edited on both sides"
   expect(conflicts).toEqual([0]);
   expect(editor.state.doc.textContent).toContain("LOCAL");
   expect(editor.state.doc.textContent).not.toContain("disk");
+});
+
+test("editable={false}: read-only surface, typing dropped, no mutating chrome", async () => {
+  vi.useFakeTimers();
+  const source = 'Hello.\n\n<Callout type="info">Body</Callout>\n';
+  render({ defaultValue: source, components: fumadocsUiComponents, editable: false });
+  await settle();
+
+  // typing on the static view must not queue a replay
+  const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement;
+  act(() => {
+    staticView.parentElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "X", bubbles: true }),
+    );
+  });
+
+  const { editor, dom } = await hydrate();
+  expect(editor.isEditable).toBe(false);
+  expect(dom.getAttribute("contenteditable")).toBe("false");
+  expect(editor.state.doc.textContent).toBe("Hello.Body");
+
+  // the caret resting inside a component would normally surface the ⋯ handle
+  act(() => {
+    editor.commands.setTextSelection(editor.state.doc.content.size - 3);
+  });
+  act(() => void vi.advanceTimersByTime(50));
+  expect(host!.querySelector('[aria-label$="options"]')).toBeNull();
 });
 
 test("unedited document round-trips byte-identical through the debounce", async () => {

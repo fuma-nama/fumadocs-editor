@@ -15,6 +15,7 @@ import {
 } from "@fumadocs-editor/core/parse";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
 import type { WsTransport } from "./client";
+import type { SyncUser } from "./transport";
 
 /** an update applied from the wire; local edits carry any other origin */
 const REMOTE = "remote";
@@ -45,6 +46,12 @@ export interface CollabSession {
   awareness: Awareness;
   /** resolves once the first server sync lands and the doc holds the document */
   whenSynced: Promise<void>;
+  /**
+   * Scope-derived data from the doc-open handshake, set before `whenSynced`
+   * resolves. Data only — the session never acts on it; consumers wire it
+   * into their own props (e.g. `writable` into the editor's `editable`).
+   */
+  access?: { user?: SyncUser; writable: boolean };
   destroy(): void;
 }
 
@@ -107,7 +114,11 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
 
   const hello = async () => {
     try {
-      const reply = await transport.request<{ epoch: string }>({
+      const reply = await transport.request<{
+        epoch: string;
+        user?: SyncUser;
+        writable?: boolean;
+      }>({
         type: "collab-open",
         path,
         components: components.map(componentSpecData),
@@ -119,6 +130,7 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
         return;
       }
       epoch = reply.epoch;
+      session.access = { user: reply.user, writable: reply.writable ?? true };
       const frame = collabFrame(path, MESSAGE_SYNC);
       syncProtocol.writeSyncStep1(frame, doc);
       send(frame);
@@ -128,12 +140,7 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
       // offline or connection lost mid-open; retried on reconnect
     }
   };
-  // fires immediately with the current state, so this is also the first open
-  const stopOnline = transport.onOnline((online) => {
-    if (online) void hello();
-  });
-
-  return {
+  const session: CollabSession = {
     doc,
     awareness,
     whenSynced,
@@ -142,10 +149,17 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
       // announce departure while the handlers are still wired
       removeAwarenessStates(awareness, [doc.clientID], "destroy");
       stopBinary();
-      stopOnline();
+      stopStatus();
       awareness.off("update", onAwarenessUpdate);
       awareness.destroy();
       doc.off("update", onDocUpdate);
     },
   };
+
+  // fires immediately with the current state, so this is also the first open
+  const stopStatus = transport.onStatus((status) => {
+    if (status === "online") void hello();
+  });
+
+  return session;
 }

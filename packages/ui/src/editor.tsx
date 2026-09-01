@@ -44,7 +44,7 @@ export interface MdxEditorRef {
   setMarkdown: (text: string) => Promise<void>;
 }
 
-export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline";
+export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
 export interface SyncIndicatorProps {
   status: SyncStatus;
@@ -106,6 +106,13 @@ export interface MdxEditorProps {
   media?: MediaProvider;
   /** what the document can reference: include paths, page links */
   files?: FileProvider;
+  /**
+   * TipTap passthrough, default true: `false` shows the document read-only,
+   * with typing and the mutating chrome (slash menu, bubble and block menus,
+   * mobile bar, drag) disabled. Auth-agnostic — consumers wire scope data
+   * (e.g. a sync handshake's `writable`) into it themselves.
+   */
+  editable?: boolean;
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -126,6 +133,7 @@ const SYNC_DOT: Record<SyncStatus, string> = {
   saving: "bg-fd-warning animate-pulse",
   conflict: "bg-fd-error",
   offline: "bg-fd-muted-foreground",
+  denied: "bg-fd-error",
 };
 
 const SYNC_LABEL: Record<SyncStatus, string> = {
@@ -134,6 +142,7 @@ const SYNC_LABEL: Record<SyncStatus, string> = {
   saving: "Saving…",
   conflict: "Changed on disk",
   offline: "Offline",
+  denied: "No access",
 };
 
 const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground hover:bg-fd-accent active:bg-fd-border ${focusRing}`;
@@ -185,6 +194,7 @@ export const MdxEditor = memo(function MdxEditor({
   collab,
   media,
   files,
+  editable = true,
   className,
   ref,
 }: MdxEditorProps) {
@@ -450,6 +460,7 @@ export const MdxEditor = memo(function MdxEditor({
                 <LiveEditor
                   key={generation}
                   collab={collabRuntime ?? undefined}
+                  editable={editable}
                   doc={parsed.doc}
                   components={components}
                   specs={specMap}
@@ -478,6 +489,7 @@ export const MdxEditor = memo(function MdxEditor({
                 onKeyDown={(event) => {
                   const { key } = event;
                   if (
+                    editable &&
                     !event.metaKey &&
                     !event.ctrlKey &&
                     !event.altKey &&
@@ -509,6 +521,7 @@ export const MdxEditor = memo(function MdxEditor({
             <textarea
               className="min-h-[420px] flex-1 resize-y bg-fd-background px-5 py-4 font-mono text-[13px] leading-relaxed text-fd-foreground outline-none [tab-size:2] focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-fd-ring/40"
               value={source}
+              readOnly={!editable}
               spellCheck={false}
               onChange={(event) => {
                 setSource(event.target.value);
