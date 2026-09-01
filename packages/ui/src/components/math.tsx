@@ -1,5 +1,11 @@
 "use client";
-import { Extension, InputRule, textblockTypeInputRule, type Extensions } from "@tiptap/core";
+import {
+  Extension,
+  InputRule,
+  textblockTypeInputRule,
+  type Editor,
+  type Extensions,
+} from "@tiptap/core";
 import {
   MATH_BLOCK_NODE,
   MATH_INLINE_NODE,
@@ -169,6 +175,57 @@ const mathActive = Extension.create({
   },
 });
 
+/*
+ * Deterministic arrow entry into math. The inactive TeX source is
+ * display:none (the preview shows instead), and engines disagree on moving
+ * a caret through hidden text: Chromium and WebKit step into it (which
+ * activates the node), Firefox skips the whole node. Handle the crossing
+ * explicitly so every engine enters edit mode the same way.
+ */
+
+/*
+ * The entry caret goes to the END of the source, exactly like click-to-edit
+ * (focusSource): a caret at source offset 0 is structurally equivalent to
+ * the position before the node, so ProseMirror's selectionToDOM leaves the
+ * DOM caret outside the (still hidden) source and typing lands beside the
+ * formula instead of in it. End-of-source has text between it and either
+ * boundary, so the placement sticks in every engine.
+ */
+
+/** caret adjacent to an inline math node: step into its source */
+function enterInline(editor: Editor, dir: 1 | -1): boolean {
+  const { $from, empty } = editor.state.selection;
+  if (!empty || !$from.parent.isTextblock) return false;
+  const adjacent = dir === 1 ? $from.nodeAfter : $from.nodeBefore;
+  if (adjacent?.type.name !== MATH_INLINE_NODE) return false;
+  const end = dir === 1 ? $from.pos + 1 + adjacent.content.size : $from.pos - 1;
+  return editor.commands.setTextSelection(end);
+}
+
+/** caret at a textblock edge with a math block as the next sibling: enter it */
+function enterBlock(editor: Editor, dir: 1 | -1, axis: "h" | "v"): boolean {
+  const { $from, empty } = editor.state.selection;
+  if (!empty || !$from.parent.isTextblock) return false;
+  const atEdge =
+    dir === 1 ? $from.parentOffset === $from.parent.content.size : $from.parentOffset === 0;
+  if (axis === "h") {
+    if (!atEdge) return false;
+  } else if (!atEdge && !editor.view.endOfTextblock(dir === 1 ? "down" : "up")) {
+    return false;
+  }
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const parent = $from.node(depth - 1);
+    const sibIndex = $from.index(depth - 1) + dir;
+    if (sibIndex < 0 || sibIndex >= parent.childCount) continue;
+    const sibling = parent.child(sibIndex);
+    if (sibling.type.name !== MATH_BLOCK_NODE) return false;
+    const boundary = dir === 1 ? $from.after(depth) : $from.before(depth);
+    const end = dir === 1 ? boundary + 1 + sibling.content.size : boundary - 1;
+    return editor.commands.setTextSelection(end);
+  }
+  return false;
+}
+
 /**
  * The math node types wired to their KaTeX node views. Views register
  * regardless of the dialect flag (a flag-off document simply never contains
@@ -194,6 +251,8 @@ export function mathExtensions(enabled: boolean): Extensions {
       },
       addKeyboardShortcuts() {
         return {
+          ArrowRight: () => enterInline(this.editor, 1),
+          ArrowLeft: () => enterInline(this.editor, -1),
           // Enter finishes the formula instead of splitting the paragraph
           Enter: () => {
             const { $from } = this.editor.state.selection;
@@ -224,6 +283,10 @@ export function mathExtensions(enabled: boolean): Extensions {
       },
       addKeyboardShortcuts() {
         return {
+          ArrowRight: () => enterBlock(this.editor, 1, "h"),
+          ArrowLeft: () => enterBlock(this.editor, -1, "h"),
+          ArrowDown: () => enterBlock(this.editor, 1, "v"),
+          ArrowUp: () => enterBlock(this.editor, -1, "v"),
           Backspace: () => {
             const { $from, empty } = this.editor.state.selection;
             if (
