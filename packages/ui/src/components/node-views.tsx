@@ -15,6 +15,7 @@ import {
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { UiComponentSpec } from "./spec";
+import { FallbackCard, RenderBoundary } from "../static-mdx";
 import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
 import { caretPolicy } from "./caret-policy";
 import { componentKeymap } from "./keymap";
@@ -54,11 +55,10 @@ function makeComponentView(specs: SpecMap) {
 
     if (!spec) {
       return (
-        <NodeViewWrapper
-          className="relative isolate rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
-          data-component={name ?? ""}
-        >
-          <NodeViewContent />
+        <NodeViewWrapper className="relative isolate" data-component={name ?? ""}>
+          <FallbackCard name={name ?? ""}>
+            <NodeViewContent />
+          </FallbackCard>
         </NodeViewWrapper>
       );
     }
@@ -75,15 +75,24 @@ function makeComponentView(specs: SpecMap) {
         data-component={name}
         data-selected={ringed || undefined}
       >
-        <Render
-          props={readStringProps(attributes)}
-          literals={readLiterals(attributes)}
-          selected={selected}
-          setProp={setProp}
-          setLiteral={setLiteral}
+        <RenderBoundary
+          resetOn={node}
+          fallback={
+            <FallbackCard name={spec.name}>
+              <NodeViewContent className="fde-component-content" />
+            </FallbackCard>
+          }
         >
-          <NodeViewContent className="fde-component-content" />
-        </Render>
+          <Render
+            props={readStringProps(attributes)}
+            literals={readLiterals(attributes)}
+            selected={selected}
+            setProp={setProp}
+            setLiteral={setLiteral}
+          >
+            <NodeViewContent className="fde-component-content" />
+          </Render>
+        </RenderBoundary>
       </NodeViewWrapper>
     );
   };
