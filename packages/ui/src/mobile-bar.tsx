@@ -160,7 +160,7 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
       return {
         inInlineRegion,
         active: activeComponent(current.state),
-        listEntry: listEntryDepth($from, specs as SpecMap) !== -1,
+        listEntry: listEntryDepth($from, specs) !== -1,
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
@@ -236,16 +236,16 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
           {state.listEntry && (
             <>
               <span className="mx-0.5 h-5 w-px shrink-0 bg-fd-border" />
-              <BarButton label="Outdent" onClick={() => outdentEntry(editor, specs as SpecMap)}>
+              <BarButton label="Outdent" onClick={() => outdentEntry(editor, specs)}>
                 <IndentDecrease size={17} />
               </BarButton>
               <BarButton
                 label="Toggle folder"
-                onClick={() => toggleEntryType(editor, specs as SpecMap)}
+                onClick={() => toggleEntryType(editor, specs)}
               >
                 <Folder size={17} />
               </BarButton>
-              <BarButton label="New row" onClick={() => handleModEnter(editor, specs as SpecMap)}>
+              <BarButton label="New row" onClick={() => handleModEnter(editor, specs)}>
                 <ListPlus size={17} />
               </BarButton>
             </>

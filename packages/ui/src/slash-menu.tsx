@@ -298,7 +298,7 @@ export function entryItems(
   specs: Map<string, UiComponentSpec>,
 ): SlashItem[] | null {
   const { $from } = editor.state.selection;
-  const depth = listEntryDepth($from, specs as SpecMap);
+  const depth = listEntryDepth($from, specs);
   if (depth === -1) return null;
   const container = $from.node(depth - 1);
   const containerSpec = specs.get(container.attrs.name as string);
@@ -310,7 +310,7 @@ export function entryItems(
     icon: spec.icon,
     run: (current) => {
       const { $from: $at } = current.state.selection;
-      const at = listEntryDepth($at, specs as SpecMap);
+      const at = listEntryDepth($at, specs);
       if (at === -1) return;
       const start = $at.before(at);
       const end = start + $at.node(at).nodeSize;
@@ -322,12 +322,12 @@ export function entryItems(
 
 /** `/` in a paragraph opens the insert menu: block types plus registered components. */
 export function slashMenu(
-  specs: UiComponentSpec[],
+  components: UiComponentSpec[],
+  specMap: Map<string, UiComponentSpec>,
   media?: MediaProvider,
   math?: boolean,
 ): Extension {
-  const all = insertItems(specs, media, math);
-  const specMap = new Map(specs.map((spec) => [spec.name, spec]));
+  const all = insertItems(components, media, math);
 
   return Extension.create({
     name: "fdeSlashMenu",
@@ -345,7 +345,7 @@ export function slashMenu(
               $pos.parent.type.name === INLINE_REGION_NODE &&
               $pos.parentOffset === 0 &&
               range.to - range.from === $pos.parent.content.size &&
-              listEntryDepth($pos, specMap as SpecMap) !== -1
+              listEntryDepth($pos, specMap) !== -1
             );
           },
           items: ({ editor, query }) => {

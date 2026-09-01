@@ -15,7 +15,8 @@ import {
  * whose spec accepts it, so an invalid document is unproducible.
  */
 
-export type SpecMap = Map<string, ComponentSpec>;
+/** read-only, so a `Map<string, UiComponentSpec>` passes without casts */
+export type SpecMap = ReadonlyMap<string, ComponentSpec>;
 
 export function childNames(spec: ComponentSpec | undefined): string[] {
   if (!spec?.childComponent) return [];
@@ -34,7 +35,7 @@ export function childOnlyNames(specs: Iterable<ComponentSpec>): Set<string> {
 /** child specs a container can insert */
 export function insertableChildren<S extends ComponentSpec>(
   spec: ComponentSpec | undefined,
-  specs: Map<string, S>,
+  specs: ReadonlyMap<string, S>,
 ): S[] {
   const out: S[] = [];
   for (const name of childNames(spec)) {
@@ -52,7 +53,7 @@ export function insertableChildren<S extends ComponentSpec>(
 export function childInsertContext<S extends ComponentSpec>(
   state: EditorState,
   pos: number,
-  specs: Map<string, S>,
+  specs: ReadonlyMap<string, S>,
 ): { children: S[]; insertAt: number } | null {
   const node = state.doc.nodeAt(pos);
   if (!node || node.type.name !== COMPONENT_NODE) return null;

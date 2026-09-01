@@ -323,7 +323,7 @@ function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
   });
 }
 
-export function structureGuard(specs: Map<string, ComponentSpec>): Extension {
+export function structureGuard(specs: SpecMap): Extension {
   const childOnly = childOnlyNames(specs.values());
 
   return Extension.create({
