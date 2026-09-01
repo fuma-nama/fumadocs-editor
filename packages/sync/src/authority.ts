@@ -39,6 +39,8 @@ export interface DocAuthorityOptions<C> {
   send(conn: C, data: Uint8Array): void;
   /** the connection's resolved permissions; gates Y writes and pins identity */
   scope(conn: C): { user?: SyncUser; write(path: string): boolean };
+  /** grace period after the last client leaves before the doc is evicted */
+  evictAfterMs?: number;
 }
 
 interface DocState<C> {
@@ -58,6 +60,8 @@ interface DocState<C> {
   queue: Promise<void>;
   trailing?: ReturnType<typeof setTimeout>;
   maxWait?: ReturnType<typeof setTimeout>;
+  /** pending eviction, armed while the doc has no clients */
+  evict?: ReturnType<typeof setTimeout>;
 }
 
 export interface DocAuthority<C> {
@@ -90,15 +94,18 @@ const getDocSchema = () => (schema ??= getSchema(editorExtensions()));
  * same block merge the single-user mirror uses, applied to the Y.Doc.
  *
  * Documents are seeded from disk and never persisted as Y state — the file
- * is the document of record. A document stays alive until the server closes
- * (so briefly offline clients can deliver buffered edits); after a server
- * restart the epoch changes and clients must re-seed rather than sync.
+ * is the document of record. When the last client of a document leaves, its
+ * final state is flushed to disk and the doc evicted after a grace period
+ * (memory must not grow with every file ever opened); the grace keeps a
+ * reload or a brief drop from discarding Y history, and a client returning
+ * later re-seeds through the changed epoch, exactly like a server restart.
  */
 export function createDocAuthority<C>({
   read,
   write,
   send,
   scope,
+  evictAfterMs = 60_000,
 }: DocAuthorityOptions<C>): DocAuthority<C> {
   const docs = new Map<string, Promise<DocState<C>>>();
   const live = new Set<DocState<C>>();
@@ -236,33 +243,51 @@ export function createDocAuthority<C>({
     return doc;
   };
 
-  return {
-    open(path, conn, components, options) {
-      let entry = docs.get(path);
-      if (!entry) {
-        entry = createDoc(path, components, options);
-        docs.set(path, entry);
-        entry.catch(() => docs.delete(path));
+  const evict = (doc: DocState<C>) => {
+    if (doc.conns.size > 0) return;
+    docs.delete(doc.path);
+    live.delete(doc);
+    // a disk change during the grace may have re-armed the save debounce
+    flush(doc);
+    enqueue(doc, () => {
+      doc.awareness.destroy();
+      doc.ydoc.destroy();
+    });
+  };
+
+  const open: DocAuthority<C>["open"] = (path, conn, components, options) => {
+    let entry = docs.get(path);
+    if (!entry) {
+      entry = createDoc(path, components, options);
+      docs.set(path, entry);
+      entry.catch(() => docs.delete(path));
+    }
+    return entry.then((doc) => {
+      // evicted between lookup and resolution: start over with a fresh doc
+      if (!live.has(doc)) return open(path, conn, components, options);
+      clearTimeout(doc.evict);
+      doc.evict = undefined;
+      if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
+      // greet writers with our step1 (the reply delivers their buffered
+      // edits) — a read-only client's reply would only be refused — and
+      // everyone with the room's presence
+      if (scope(conn).write(path)) {
+        const step1 = collabFrame(path, MESSAGE_SYNC);
+        syncProtocol.writeSyncStep1(step1, doc.ydoc);
+        send(conn, encoding.toUint8Array(step1));
       }
-      return entry.then((doc) => {
-        if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
-        // greet writers with our step1 (the reply delivers their buffered
-        // edits) — a read-only client's reply would only be refused — and
-        // everyone with the room's presence
-        if (scope(conn).write(path)) {
-          const step1 = collabFrame(path, MESSAGE_SYNC);
-          syncProtocol.writeSyncStep1(step1, doc.ydoc);
-          send(conn, encoding.toUint8Array(step1));
-        }
-        const states = doc.awareness.getStates();
-        if (states.size > 0) {
-          const aw = collabFrame(path, MESSAGE_AWARENESS);
-          encoding.writeVarUint8Array(aw, encodeAwarenessUpdate(doc.awareness, [...states.keys()]));
-          send(conn, encoding.toUint8Array(aw));
-        }
-        return { epoch: doc.epoch };
-      });
-    },
+      const states = doc.awareness.getStates();
+      if (states.size > 0) {
+        const aw = collabFrame(path, MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(aw, encodeAwarenessUpdate(doc.awareness, [...states.keys()]));
+        send(conn, encoding.toUint8Array(aw));
+      }
+      return { epoch: doc.epoch };
+    });
+  };
+
+  return {
+    open,
 
     handleBinary(conn, data) {
       const frame = readCollabFrame(data);
@@ -306,11 +331,18 @@ export function createDocAuthority<C>({
         if (!owned) continue;
         doc.conns.delete(conn);
         if (owned.size > 0) removeAwarenessStates(doc.awareness, [...owned], null);
+        if (doc.conns.size === 0) {
+          flush(doc);
+          doc.evict = setTimeout(() => evict(doc), evictAfterMs);
+        }
       }
     },
 
     async close() {
-      for (const doc of live) flush(doc);
+      for (const doc of live) {
+        clearTimeout(doc.evict);
+        flush(doc);
+      }
       for (const doc of live) {
         await doc.queue;
         doc.awareness.destroy();

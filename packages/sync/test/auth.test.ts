@@ -277,9 +277,11 @@ test("a scope user overrides spoofed awareness before it reaches peers", async (
 
 test("HTTP media endpoints authenticate via the header payload", async () => {
   const base = `http://127.0.0.1:${port}`;
+  // image-typed bodies: the upload limits (type check) run before auth
+  const png = (bytes: string) => new Blob([bytes], { type: "image/png" });
   const uploaded = await fetch(`${base}/__fde_upload`, {
     method: "POST",
-    body: "png-bytes",
+    body: png("png-bytes"),
     headers: { "x-filename": "pic.png", [AUTH_HEADER]: JSON.stringify("admin") },
   });
   expect(uploaded.status).toBe(200);
@@ -288,12 +290,12 @@ test("HTTP media endpoints authenticate via the header payload", async () => {
   expect(await readFile(path.join(root, relative), "utf-8")).toBe("png-bytes");
 
   // no payload -> authenticate still runs (and this policy denies it)
-  const anonymous = await fetch(`${base}/__fde_upload`, { method: "POST", body: "x" });
+  const anonymous = await fetch(`${base}/__fde_upload`, { method: "POST", body: png("x") });
   expect(anonymous.status).toBe(401);
   // authenticated, but assets/ sits outside the writable subtree
   const scoped = await fetch(`${base}/__fde_upload`, {
     method: "POST",
-    body: "x",
+    body: png("x"),
     headers: { [AUTH_HEADER]: JSON.stringify("team-a") },
   });
   expect(scoped.status).toBe(403);
