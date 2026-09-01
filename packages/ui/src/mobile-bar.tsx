@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { useEditorPortal } from "./utils/portal";
-import { redoDepth, undoDepth } from "@tiptap/pm/history";
 import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Dialog } from "@base-ui/react/dialog";
 import {
@@ -150,8 +149,10 @@ export function MobileBar({
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
         code: current.isActive("code"),
-        canUndo: undoDepth(current.state) > 0,
-        canRedo: redoDepth(current.state) > 0,
+        // through the registered undo command, so this is the plugin history
+        // in single-user mode and the Y undo manager under collab
+        canUndo: current.can().undo(),
+        canRedo: current.can().redo(),
       };
     },
   });

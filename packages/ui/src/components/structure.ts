@@ -349,7 +349,11 @@ export function structureGuard(specs: Map<string, ComponentSpec>): Extension {
       return [
         new Plugin({
           appendTransaction(transactions, _oldState, newState) {
-            if (!transactions.some((tr) => tr.docChanged)) return null;
+            // remote Yjs transactions ('y-sync$' is the sync plugin's meta
+            // key) are a peer's already-guarded state — "healing" them here
+            // would race the peer doing the same and duplicate the moved
+            // content, so only local edits are guarded
+            if (!transactions.some((tr) => tr.docChanged && !tr.getMeta("y-sync$"))) return null;
             return applyFixes(newState, touchedComponents(newState, transactions, specs));
           },
           props: {

@@ -5,6 +5,8 @@ import type { Duplex } from "node:stream";
 import type { IncomingMessage } from "node:http";
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
 import { WebSocketServer, type WebSocket } from "ws";
+import type { ComponentSpec, SyntaxOptions } from "@fumadocs-editor/core/parse";
+import { createDocAuthority } from "./authority";
 
 export interface SyncServerOptions {
   /** directory whose `.md`/`.mdx` files are mirrored */
@@ -54,6 +56,22 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
     }
   };
 
+  // collaboratively edited documents: one authoritative Y.Doc per open file,
+  // exchanged with clients as binary frames on this same websocket. The
+  // authority's writes suppress their chokidar echo and reach plain mirror
+  // watchers like any other client's write would.
+  const authority = createDocAuthority<WebSocket>({
+    read: readState,
+    async write(relative, text) {
+      const version = hashText(text);
+      selfWrites.set(relative, version);
+      await writeFile(resolveSafe(relative), text);
+      broadcast(relative, JSON.stringify({ type: "change", path: relative, text, version }));
+      return version;
+    },
+    send: (client, data) => client.send(data),
+  });
+
   let watcher: FSWatcher | undefined;
   const ensureWatcher = () => {
     watcher ??= chokidarWatch(root, {
@@ -68,6 +86,7 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
         (state) => {
           if (selfWrites.get(relative) === state.version) return;
           broadcast(relative, JSON.stringify({ type: "change", path: relative, ...state }));
+          authority.diskChanged(relative, state);
         },
         () => {},
       );
@@ -76,15 +95,27 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
 
   wss.on("connection", (client: WebSocket) => {
     watching.set(client, new Set());
-    client.on("close", () => watching.delete(client));
-    client.on("message", (data: Buffer) => {
-      void handle(client, JSON.parse(String(data)));
+    client.on("close", () => {
+      watching.delete(client);
+      authority.disconnect(client);
+    });
+    client.on("message", (data: Buffer, isBinary: boolean) => {
+      if (isBinary) authority.handleBinary(client, new Uint8Array(data));
+      else void handle(client, JSON.parse(String(data)));
     });
   });
 
   async function handle(
     client: WebSocket,
-    message: { id?: number; type: string; path?: string; text?: string; baseVersion?: string },
+    message: {
+      id?: number;
+      type: string;
+      path?: string;
+      text?: string;
+      baseVersion?: string;
+      components?: unknown;
+      options?: unknown;
+    },
   ): Promise<void> {
     const reply = (result: unknown) =>
       client.send(JSON.stringify({ id: message.id, ok: true, result }));
@@ -123,6 +154,23 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
             JSON.stringify({ type: "change", path: relative, text, version }),
             client,
           );
+          // the selfWrites echo suppression also silences chokidar for the
+          // authority, so feed it the change directly
+          authority.diskChanged(relative, { text, version });
+          return;
+        }
+        case "collab-open": {
+          // external edits must keep flowing into the authority's Y.Doc
+          ensureWatcher();
+          resolveSafe(message.path!);
+          reply(
+            await authority.open(
+              message.path!,
+              client,
+              (message.components ?? []) as ComponentSpec[],
+              message.options as SyntaxOptions | undefined,
+            ),
+          );
           return;
         }
         case "watch":
@@ -148,6 +196,7 @@ export function createSyncServer({ root }: SyncServerOptions): SyncServer {
     },
     async close() {
       await watcher?.close();
+      await authority.close();
       for (const client of wss.clients) client.terminate();
       wss.close();
     },

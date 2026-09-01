@@ -52,6 +52,17 @@ function ThemeToggle() {
 const components = [...fumadocsUiComponents, admonitionSpec, ...filesFenceSpecs];
 const syntax = { math: true };
 
+// collaborative editing is opt-in via ?collab: the sync server then owns the
+// document (single writer) and every tab with the flag edits the same Y.Doc
+const collabEnabled = new URLSearchParams(location.search).has("collab");
+const CARET_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
+const collabUser = {
+  name:
+    new URLSearchParams(location.search).get("name") ??
+    `Guest ${Math.floor(Math.random() * 90) + 10}`,
+  color: CARET_COLORS[Math.floor(Math.random() * CARET_COLORS.length)],
+};
+
 // uploads land in docs/assets via the dev server; relative srcs display
 // through the asset endpoint
 const media: MediaProvider = {
@@ -108,8 +119,37 @@ function Playground() {
     };
   }, []);
 
+  // collab mode: the server holds and saves the document, so there is no
+  // FileSession — just the initial read, connectivity for the dot, and the
+  // server's disk writes feeding the round-trip badge
   useEffect(() => {
-    if (!active || !transport) return;
+    if (!collabEnabled || !active || !transport) return;
+    let open = true;
+    setInitialText(null);
+    void transport.read(active).then(
+      (state) => {
+        if (!open) return;
+        setInitialText(state.text);
+        setMarkdown(state.text);
+        setSyncedText(state.text);
+      },
+      () => {},
+    );
+    const stopWatch = transport.watch(active, (state) => {
+      if (open) setSyncedText(state.text);
+    });
+    const stopOnline = transport.onOnline((next) => {
+      if (open) setStatus(next ? "synced" : "offline");
+    });
+    return () => {
+      open = false;
+      stopWatch();
+      stopOnline();
+    };
+  }, [active, transport]);
+
+  useEffect(() => {
+    if (collabEnabled || !active || !transport) return;
     let open = true;
     setInitialText(null);
     const session = createFileSession({
@@ -199,6 +239,16 @@ function Playground() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href={collabEnabled ? location.pathname : "?collab"}
+            className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
+              collabEnabled
+                ? "border-fd-primary/30 bg-fd-primary/15 text-fd-primary"
+                : "border-fd-border bg-fd-card text-fd-muted-foreground hover:text-fd-foreground"
+            }`}
+          >
+            {collabEnabled ? "collab: on" : "collab: off"}
+          </a>
           <span
             className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
               identical
@@ -244,6 +294,11 @@ function Playground() {
               ref={editorRef}
               media={media}
               files={fileProvider}
+              collab={
+                collabEnabled && transport && active
+                  ? { transport, path: active, user: collabUser }
+                  : undefined
+              }
               sync={
                 active != null
                   ? {

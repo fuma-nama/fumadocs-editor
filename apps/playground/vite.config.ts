@@ -56,6 +56,10 @@ export default defineConfig({
         replacement: path.resolve(dir, "../../packages/sync/src/merge.ts"),
       },
       {
+        find: /^@fumadocs-editor\/sync\/collab$/,
+        replacement: path.resolve(dir, "../../packages/sync/src/collab.ts"),
+      },
+      {
         find: /^@fumadocs-editor\/sync$/,
         replacement: path.resolve(dir, "../../packages/sync/src/index.ts"),
       },

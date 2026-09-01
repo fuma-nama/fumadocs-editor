@@ -15,7 +15,9 @@ import {
 } from "react";
 import { StaticMdx } from "./static-mdx";
 import { parseDocCached } from "./doc-cache";
+import type { EditorCollab } from "./collab";
 import type { SerializeFn } from "./live-editor";
+import type { WsTransport } from "@fumadocs-editor/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
 import type { UiComponentSpec } from "./components/spec";
@@ -42,6 +44,14 @@ export interface MdxEditorRef {
 }
 
 export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline";
+
+export interface MdxEditorCollab {
+  /** the mirror websocket; the Yjs frames ride the same connection */
+  transport: WsTransport;
+  path: string;
+  /** presence identity shown at this user's caret on other clients */
+  user: { name: string; color: string };
+}
 
 export interface SyncIndicatorProps {
   status: SyncStatus;
@@ -83,6 +93,14 @@ export interface MdxEditorProps {
   theme?: EditorTheme;
   /** sync state shown beside the mode tabs; conflicts surface a quiet chip */
   sync?: SyncIndicatorProps;
+  /**
+   * Edit this document collaboratively. The sync server holds the
+   * authoritative document and is its single writer; the client-side merge
+   * and conflict flow of the plain FS mirror is superseded (`sync` then only
+   * reports connectivity). Everything Yjs loads lazily, and only with this
+   * prop set.
+   */
+  collab?: MdxEditorCollab;
   /** where uploads go and how document srcs resolve for display */
   media?: MediaProvider;
   /** what the document can reference: include paths, page links */
@@ -147,6 +165,7 @@ export function MdxEditor({
   staticFallback,
   theme,
   sync,
+  collab,
   media,
   files,
   className,
@@ -179,6 +198,36 @@ export function MdxEditor({
 
   const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
 
+  // the collab runtime (yjs + binding + carets) is its own chunk; connect as
+  // soon as the editor mounts so the doc is usually synced before hydration.
+  // `generation` bumps when the server was re-seeded (restart): the session's
+  // Y history can no longer merge with it, so everything is rebuilt fresh.
+  const [collabRuntime, setCollabRuntime] = useState<EditorCollab | null>(null);
+  const [generation, setGeneration] = useState(0);
+  const collabTransport = collab?.transport;
+  const collabPath = collab?.path;
+  const collabRef = useRef(collab);
+  collabRef.current = collab;
+  useEffect(() => {
+    if (!collabTransport) return;
+    let session: EditorCollab | undefined;
+    let cancelled = false;
+    void import("./collab").then((module) => {
+      if (cancelled) return;
+      session = module.startCollab(collabRef.current!, components ?? [], syntax, () => {
+        editorRef.current = null;
+        setStage("static");
+        setGeneration((current) => current + 1);
+      });
+      setCollabRuntime(session);
+    });
+    return () => {
+      cancelled = true;
+      session?.destroy();
+      setCollabRuntime(null);
+    };
+  }, [collabTransport, collabPath, components, syntax, generation]);
+
   // the parse stack is a separate chunk; with a host fallback on screen it
   // isn't even fetched until the editor starts hydrating
   useEffect(() => {
@@ -201,7 +250,17 @@ export function MdxEditor({
     return () => {
       cancelled = true;
     };
-  }, [parsed, sourceError, mode, stage, staticFallback, cacheKey, defaultValue, components, syntax]);
+  }, [
+    parsed,
+    sourceError,
+    mode,
+    stage,
+    staticFallback,
+    cacheKey,
+    defaultValue,
+    components,
+    syntax,
+  ]);
 
   // hydrate at idle even without intent, so the first interaction is instant
   useEffect(() => {
@@ -360,7 +419,8 @@ export function MdxEditor({
               <Tabs.Tab className={modeTabCls} value="visual">
                 Visual
               </Tabs.Tab>
-              <Tabs.Tab className={modeTabCls} value="source">
+              {/* raw-source editing has no sane merge with a live shared doc */}
+              <Tabs.Tab className={modeTabCls} value="source" disabled={collab != null}>
                 MDX
               </Tabs.Tab>
             </Tabs.List>
@@ -368,9 +428,11 @@ export function MdxEditor({
         </Tabs.Root>
         {mode === "visual" ? (
           <div className="relative">
-            {stage !== "static" && parsed && (
+            {stage !== "static" && parsed && (!collab || collabRuntime) && (
               <Suspense fallback={null}>
                 <LiveEditor
+                  key={generation}
+                  collab={collabRuntime ?? undefined}
                   doc={parsed.doc}
                   components={components ?? []}
                   specs={specMap}

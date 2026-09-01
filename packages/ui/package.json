@@ -30,6 +30,8 @@
     "@tiptap/core": "^3.27.3",
     "@tiptap/extension-bubble-menu": "^3.27.3",
     "@tiptap/extension-code-block-lowlight": "^3.27.3",
+    "@tiptap/extension-collaboration": "^3.27.3",
+    "@tiptap/extension-collaboration-caret": "^3.27.3",
     "@tiptap/extension-image": "^3.27.3",
     "@tiptap/extension-list": "^3.27.3",
     "@tiptap/extension-table": "^3.27.3",
@@ -42,7 +44,8 @@
     "katex": "^0.18.4",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.23.0",
-    "mermaid": "^11.17.2"
+    "mermaid": "^11.17.2",
+    "yjs": "^13.6.32"
   },
   "devDependencies": {
     "@types/katex": "^0.16.8",

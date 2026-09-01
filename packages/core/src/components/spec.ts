@@ -133,6 +133,38 @@ export function createSyntax(
   };
 }
 
+/**
+ * The pure-data view of a spec: everything parse/serialize consult, nothing
+ * more. This is what a collab client sends the sync server so it can parse
+ * and serialize the document authoritatively — editor-side fields (`insert`,
+ * a UI layer's renderers) never cross the wire. Keep the field list in step
+ * with {@link ComponentSpec}.
+ */
+export function componentSpecData(spec: ComponentSpec): ComponentSpec {
+  const {
+    name,
+    title,
+    attributeRegions,
+    contentRegion,
+    childrenRegion,
+    childComponent,
+    listLike,
+    itemsAttribute,
+    props,
+  } = spec;
+  return {
+    name,
+    title,
+    attributeRegions,
+    contentRegion,
+    childrenRegion,
+    childComponent,
+    listLike,
+    itemsAttribute,
+    props,
+  };
+}
+
 /** The three shared node type names produced for registered components. */
 export const COMPONENT_NODE = "mdxComponent";
 export const INLINE_REGION_NODE = "mdxInlineRegion";

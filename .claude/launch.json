@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "playground-collab",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/playground", "dev", "--port", "5273"],
+      "port": 5273
+    },
+    {
       "name": "playground-prod",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/playground", "exec", "vite", "preview", "--port", "4173"],

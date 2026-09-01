@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 // entry html loads before any interaction; everything editor-shaped must
 // stay in lazy chunks.
 const EAGER_BUDGET = 100 * 1024; // gzip bytes, react vendor chunk excluded
-const LAZY_CHUNKS = ["parse", "live-editor", "code-languages", "katex", "mermaid"];
+const LAZY_CHUNKS = ["parse", "live-editor", "code-languages", "katex", "mermaid", "collab"];
+// a string only the yjs runtime contains: it may live in the collab chunk and
+// nowhere else — not eager, not live-editor, not a shared chunk they pull in
+const YJS_MARKER = "Yjs was already imported";
 
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
 const html = readFileSync(path.join(dist, "index.html"), "utf-8");
@@ -35,6 +38,15 @@ for (const name of LAZY_CHUNKS) {
     console.log(
       `lazy   ${(gz(`assets/${chunk}`) / 1024).toFixed(1).padStart(7)} kB gz  assets/${chunk}`,
     );
+}
+
+for (const file of all) {
+  if (
+    !file.startsWith("collab-") &&
+    readFileSync(path.join(dist, "assets", file), "utf-8").includes(YJS_MARKER)
+  ) {
+    failures.push(`yjs has leaked out of the collab chunk into assets/${file}`);
+  }
 }
 
 console.log(

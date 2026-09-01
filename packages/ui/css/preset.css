@@ -1038,3 +1038,37 @@
 .fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc="only"] {
   opacity: 0.65;
 }
+
+/* ---------- collaboration presence ----------
+ * Peer carets from the CollaborationCaret extension: a 2px colored bar in
+ * the text flow (the extension sets each element's user color inline) with
+ * a small name flag pinned above it. Pure CSS, no motion; the flag is
+ * chrome — never selectable, never a pointer target. */
+.fde-content .collaboration-carets__caret {
+  position: relative;
+  margin-inline: -1px;
+  border-inline: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.fde-content .collaboration-carets__label {
+  position: absolute;
+  top: -1.15em;
+  left: -1px;
+  padding: 0 4px;
+  border-radius: 3px 3px 3px 0;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--font-sans, inherit);
+  line-height: 1.5;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* a peer's text selection (inline background color from the extension) */
+.fde-content .ProseMirror-yjs-selection {
+  border-radius: 2px;
+}
