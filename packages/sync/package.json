@@ -3,6 +3,8 @@
   "version": "0.0.0",
   "description": "Filesystem mirror for the Fumadocs MDX editor: sync transport, dev server, block-level three-way merge",
   "license": "MIT",
+  "author": "Fuma Nama",
+  "repository": "github:fuma-nama/fumadocs-editor",
   "files": [
     "dist"
   ],
@@ -37,6 +39,7 @@
     "yjs": "^13.6.32"
   },
   "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.13.2",
     "@types/ws": "^8.18.1",
     "tsdown": "^0.22.4",

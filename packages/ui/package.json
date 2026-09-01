@@ -3,6 +3,8 @@
   "version": "0.0.0",
   "description": "MDX editor for Fumadocs: React component with Base UI chrome",
   "license": "MIT",
+  "author": "Fuma Nama",
+  "repository": "github:fuma-nama/fumadocs-editor",
   "files": [
     "dist",
     "css"
@@ -48,6 +50,7 @@
     "yjs": "^13.6.32"
   },
   "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
     "@types/katex": "^0.16.8",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

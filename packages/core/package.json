@@ -3,6 +3,8 @@
   "version": "0.0.0",
   "description": "Headless MDX editor engine for Fumadocs: TipTap schema + lossless MDX round-trip",
   "license": "MIT",
+  "author": "Fuma Nama",
+  "repository": "github:fuma-nama/fumadocs-editor",
   "files": [
     "dist"
   ],
@@ -51,6 +53,7 @@
     "micromark-extension-mdxjs": "^3.0.0"
   },
   "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.13.2",
     "tsdown": "^0.22.4",
