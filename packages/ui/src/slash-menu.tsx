@@ -24,13 +24,7 @@ import {
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import type { UiComponentSpec } from "./components/spec";
-import {
-  childOnlyNames,
-  focusAt,
-  insertableChildren,
-  listEntryDepth,
-  type SpecMap,
-} from "./components/keymap";
+import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
 import { itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";

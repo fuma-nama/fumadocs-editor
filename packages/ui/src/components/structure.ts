@@ -2,12 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, Selection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
-import {
-  BLOCK_REGION_NODE,
-  COMPONENT_NODE,
-  INLINE_REGION_NODE,
-  type ComponentSpec,
-} from "@fumadocs-editor/core";
+import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { childNames, childOnlyNames, type SpecMap } from "./keymap";
 
 /*

@@ -57,7 +57,7 @@ describe("itemsAttribute (Tabs)", () => {
     expect(children).toHaveLength(2);
     expect(find(children[0], "mdxInlineRegion", "label")?.content?.[0].text).toBe("First");
     expect(find(children[1], "mdxInlineRegion", "label")?.content?.[0].text).toBe("Second");
-    const names = (tabs.attrs?.attributes as { name?: string }[]).map((a) => a.name);
+    const names = (tabs.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(names).not.toContain("items");
     expect(names).toContain("groupId");
   });
@@ -106,7 +106,7 @@ describe("contentRegion (include)", () => {
     const source = '<include lang="tsx" cwd>./scripts/build.ts</include>\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
     const component = find(doc, "mdxComponent")!;
-    const names = (component.attrs?.attributes as { name?: string }[]).map((a) => a.name);
+    const names = (component.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(names).toEqual(["lang", "cwd"]);
     expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
   });

@@ -87,7 +87,7 @@ describe("dialect on", () => {
       const { doc } = parseMdxToDoc(`:::${name}\nbody\n:::\n`, syntax);
       const [node] = components(doc);
       expect(node.attrs?.name).toBe(DIRECTIVE_ADMONITION);
-      expect((node.attrs?.attributes as { value?: unknown }[])[0].value).toBe(name);
+      expect((node.attrs!.attributes as { value?: unknown }[])[0].value).toBe(name);
     }
   });
 

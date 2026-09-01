@@ -467,10 +467,11 @@ export function EditorBubble({
   });
 
   const active = state?.active ?? null;
+  const hasActive = active != null;
 
   useEffect(() => {
-    if (active == null) setPanelOpen(false);
-  }, [active == null]);
+    if (!hasActive) setPanelOpen(false);
+  }, [hasActive]);
 
   // a click on a leaf component (nothing to type into) opens its menu
   useEffect(() => {
