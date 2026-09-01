@@ -1,0 +1,30 @@
+---
+title: Files fence
+---
+
+# Project layout
+
+```files
+project
+├── src
+│   ├── index.js
+│   └── utils
+│       └── helper.js
+├── package.json
+└── assets/
+```
+
+The JSX form stays JSX:
+
+<Files>
+  <Folder name="app">
+    <File name="page.mdx" />
+  </Folder>
+</Files>
+
+Not convertible (two roots), stays a code block:
+
+```files
+one
+two
+```

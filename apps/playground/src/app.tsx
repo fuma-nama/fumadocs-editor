@@ -4,6 +4,7 @@ import {
   EditorThemeProvider,
   useEditorTheme,
   admonitionSpec,
+  filesFenceSpecs,
   fumadocsUiComponents,
   type FileProvider,
   type MdxEditorRef,
@@ -48,7 +49,7 @@ function ThemeToggle() {
 
 // registering the admonition spec turns the `:::` directive dialect on;
 // module-level so the identity is stable for the parse cache
-const components = [...fumadocsUiComponents, admonitionSpec];
+const components = [...fumadocsUiComponents, admonitionSpec, ...filesFenceSpecs];
 const syntax = { math: true };
 
 // uploads land in docs/assets via the dev server; relative srcs display

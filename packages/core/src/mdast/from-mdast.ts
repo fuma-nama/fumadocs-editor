@@ -20,6 +20,8 @@ import type { Syntax, ComponentSpec } from "../components/spec";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionAsJsx } from "../syntax/directives/parse";
 import { inlineMathToNode, mathToNode } from "../syntax/math/parse";
+import { FENCE_FILE, FENCE_FILES, FENCE_FOLDER, FILES_FENCE_LANG } from "../syntax/files";
+import { filesFenceAsJsx } from "../syntax/files/parse";
 import { extractHeadingSuffixes } from "../syntax/heading-suffixes";
 
 export interface FromMdastContext {
@@ -349,12 +351,26 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     }
     case "list":
       return listToNode(node, ctx);
-    case "code":
+    case "code": {
+      // a ```files tree listing becomes an editable Files tree when the whole
+      // fence spec set is registered (a partial set would drop rows silently)
+      const specs = ctx.syntax.components;
+      if (
+        node.lang === FILES_FENCE_LANG &&
+        specs.has(FENCE_FILES) &&
+        specs.has(FENCE_FOLDER) &&
+        specs.has(FENCE_FILE)
+      ) {
+        const jsx = node.value ? filesFenceAsJsx(node.value) : null;
+        const component = jsx && componentToNode(jsx, specs.get(FENCE_FILES)!, ctx);
+        if (component) return component;
+      }
       return {
         type: "codeBlock",
         attrs: { language: node.lang ?? null, meta: node.meta ?? null },
         content: node.value ? [{ type: "text", text: node.value }] : undefined,
       };
+    }
     case "thematicBreak":
       return { type: "horizontalRule" };
     case "math":

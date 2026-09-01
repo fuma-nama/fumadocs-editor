@@ -18,6 +18,8 @@ import { createSyntax } from "../components/spec";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionToMdast } from "../syntax/directives/serialize";
 import { inlineMathToMdast, mathToMdast } from "../syntax/math/serialize";
+import { FENCE_FILE, FENCE_FILES, FENCE_FOLDER } from "../syntax/files";
+import { filesFenceToMdast } from "../syntax/files/serialize";
 import { appendHeadingSuffixes } from "../syntax/heading-suffixes";
 import type { RawNode } from "./stringify";
 
@@ -296,6 +298,11 @@ function jsxAttrSource(attr: MdastJsxAttribute | MdastJsxExpressionAttribute): s
 
 function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
   const name = (node.attrs?.name as string | null) ?? null;
+  // fence trees serialize straight from the node (the generic path would
+  // recurse each row into its own code block), registered or not
+  if (name === FENCE_FILES || name === FENCE_FOLDER || name === FENCE_FILE) {
+    return filesFenceToMdast(node);
+  }
   const spec = name ? syntax.components.get(name) : undefined;
   const attributes = attributesToMdast(node.attrs?.attributes as MdxAttribute[]);
   const children = (node.content ?? []) as JSONContent[];
