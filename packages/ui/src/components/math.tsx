@@ -1,0 +1,243 @@
+"use client";
+import { Extension, InputRule, textblockTypeInputRule, type Extensions } from "@tiptap/core";
+import {
+  MATH_BLOCK_NODE,
+  MATH_INLINE_NODE,
+  MathBlock,
+  MathInline,
+} from "@fumadocs-editor/core/extensions";
+import { Plugin } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import {
+  NodeViewContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type NodeViewProps,
+} from "@tiptap/react";
+import { useEffect, useState } from "react";
+
+/*
+ * UI slice of the remark-math syntax (core/src/syntax/math): in-place TeX
+ * source editing with a KaTeX preview, mirroring fumadocs' rehype-katex
+ * rendering. The caret position drives which face shows — a plugin decorates
+ * the math node holding the caret with `data-active`, and preset.css swaps
+ * source/preview from that attribute alone, so activation never re-renders
+ * React. KaTeX (and its stylesheet) load in their own chunk on the first
+ * math node actually rendered.
+ */
+
+type Katex = typeof import("katex").default;
+
+let katexModule: Katex | null = null;
+let katexPromise: Promise<void> | undefined;
+
+function useKatex(): Katex | null {
+  const [katex, setKatex] = useState(katexModule);
+  useEffect(() => {
+    if (katex) return;
+    katexPromise ??= Promise.all([
+      import("katex"),
+      // @ts-expect-error -- style-only import, no module declaration
+      import("katex/dist/katex.min.css"),
+    ]).then(([m]) => {
+      katexModule = m.default;
+    });
+    let live = true;
+    void katexPromise.then(() => {
+      if (live) setKatex(katexModule);
+    });
+    return () => {
+      live = false;
+    };
+  }, [katex]);
+  return katex;
+}
+
+function Preview({
+  katex,
+  value,
+  display,
+  onClick,
+}: {
+  katex: Katex;
+  value: string;
+  display: boolean;
+  onClick: () => void;
+}) {
+  const html = katex.renderToString(value, {
+    displayMode: display,
+    throwOnError: false,
+  });
+  return (
+    <span
+      className="fde-math-preview"
+      contentEditable={false}
+      onClick={onClick}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+/** caret to the end of the node's source text, entering edit mode */
+function focusSource({ editor, getPos, node }: NodeViewProps) {
+  const pos = getPos();
+  if (typeof pos !== "number") return;
+  editor
+    .chain()
+    .focus()
+    .setTextSelection(pos + 1 + node.content.size)
+    .run();
+}
+
+function MathInlineView(props: NodeViewProps) {
+  const { node } = props;
+  const katex = useKatex();
+  const empty = node.content.size === 0;
+  return (
+    <NodeViewWrapper
+      as="span"
+      className="fde-math fde-math-inline"
+      data-rendered={(katex && !empty) || undefined}
+      data-empty={empty || undefined}
+    >
+      <span className="fde-math-src">
+        <NodeViewContent as={"span" as "div"} />
+      </span>
+      {katex && !empty && (
+        <Preview
+          katex={katex}
+          value={node.textContent}
+          display={false}
+          onClick={() => focusSource(props)}
+        />
+      )}
+    </NodeViewWrapper>
+  );
+}
+
+function MathBlockView(props: NodeViewProps) {
+  const { node } = props;
+  const katex = useKatex();
+  const empty = node.content.size === 0;
+  return (
+    <NodeViewWrapper
+      className="fde-math fde-math-block"
+      data-rendered={(katex && !empty) || undefined}
+    >
+      <pre className="fde-math-src" data-empty={empty || undefined}>
+        <NodeViewContent as={"code" as "div"} />
+      </pre>
+      {katex && !empty && (
+        <Preview
+          katex={katex}
+          value={node.textContent}
+          display
+          onClick={() => focusSource(props)}
+        />
+      )}
+    </NodeViewWrapper>
+  );
+}
+
+/**
+ * Marks the math node holding the caret with `data-active` (on its outer
+ * `.react-renderer`, like the component tint) so CSS can show the TeX source
+ * only while it is being edited.
+ */
+const mathActive = Extension.create({
+  name: "fdeMathActive",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations(state) {
+            const { $from } = state.selection;
+            for (let depth = $from.depth; depth > 0; depth--) {
+              const node = $from.node(depth);
+              if (node.type.name === MATH_INLINE_NODE || node.type.name === MATH_BLOCK_NODE) {
+                const pos = $from.before(depth);
+                return DecorationSet.create(state.doc, [
+                  Decoration.node(pos, pos + node.nodeSize, { "data-active": "" }),
+                ]);
+              }
+            }
+            return DecorationSet.empty;
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * The math node types wired to their KaTeX node views. Views register
+ * regardless of the dialect flag (a flag-off document simply never contains
+ * the nodes); only the creation paths — input rules — are gated, so math is
+ * unproducible while `SyntaxOptions.math` is off.
+ */
+export function mathExtensions(enabled: boolean): Extensions {
+  return [
+    MathInline.extend({
+      addNodeView: () => ReactNodeViewRenderer(MathInlineView),
+      addInputRules() {
+        if (!enabled) return [];
+        return [
+          // typing `$x$` becomes inline math (the closing `$` completes it)
+          new InputRule({
+            find: /(?<!\$)\$([^$\s](?:[^$]*[^$\s])?)\$$/,
+            handler: ({ state, range, match }) => {
+              const node = this.type.create(null, state.schema.text(match[1]));
+              state.tr.replaceWith(range.from, range.to, node);
+            },
+          }),
+        ];
+      },
+      addKeyboardShortcuts() {
+        return {
+          // Enter finishes the formula instead of splitting the paragraph
+          Enter: () => {
+            const { $from } = this.editor.state.selection;
+            if ($from.parent.type.name !== MATH_INLINE_NODE) return false;
+            return this.editor.commands.setTextSelection($from.after());
+          },
+          // Backspace in an emptied formula removes the node itself
+          Backspace: () => {
+            const { $from, empty } = this.editor.state.selection;
+            if (
+              !empty ||
+              $from.parent.type.name !== MATH_INLINE_NODE ||
+              $from.parent.content.size > 0
+            ) {
+              return false;
+            }
+            const from = $from.before();
+            return this.editor.commands.deleteRange({ from, to: from + $from.parent.nodeSize });
+          },
+        };
+      },
+    }),
+    MathBlock.extend({
+      addNodeView: () => ReactNodeViewRenderer(MathBlockView),
+      addInputRules() {
+        if (!enabled) return [];
+        return [textblockTypeInputRule({ find: /^\$\$\s$/, type: this.type })];
+      },
+      addKeyboardShortcuts() {
+        return {
+          Backspace: () => {
+            const { $from, empty } = this.editor.state.selection;
+            if (
+              !empty ||
+              $from.parent.type.name !== MATH_BLOCK_NODE ||
+              $from.parent.content.size > 0
+            ) {
+              return false;
+            }
+            return this.editor.commands.setNode("paragraph");
+          },
+        };
+      },
+    }),
+    mathActive,
+  ];
+}

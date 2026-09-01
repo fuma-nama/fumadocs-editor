@@ -7,6 +7,7 @@ import { mdxjs } from "micromark-extension-mdxjs";
 import { gfm } from "micromark-extension-gfm";
 import { frontmatter } from "micromark-extension-frontmatter";
 import { directive, directiveFromMarkdown } from "../syntax/directives/parse";
+import { math, mathFromMarkdown } from "../syntax/math/parse";
 import type { SyntaxOptions } from "../components/spec";
 
 /**
@@ -19,6 +20,10 @@ export function parseMdx(source: string, options: SyntaxOptions = {}): Root {
   if (options.directives) {
     extensions.push(directive());
     mdastExtensions.push(directiveFromMarkdown());
+  }
+  if (options.math) {
+    extensions.push(math());
+    mdastExtensions.push(mathFromMarkdown());
   }
   return fromMarkdown(source, { extensions, mdastExtensions });
 }

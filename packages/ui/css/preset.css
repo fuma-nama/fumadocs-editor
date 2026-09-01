@@ -673,6 +673,85 @@
 }
 
 /* =========================================================================
+ * Math (remark-math dialect): editable TeX source + KaTeX preview. The
+ * `fdeMathActive` plugin marks the math node holding the caret with
+ * `data-active` on its outer .react-renderer; `data-rendered` appears once
+ * KaTeX has produced a preview. Source shows while editing or while the
+ * KaTeX chunk hasn't loaded; the preview shows the rest of the time.
+ * ====================================================================== */
+
+.fde-content .node-mathInline {
+  display: inline;
+}
+
+.fde-content .fde-math-inline .fde-math-src {
+  position: relative;
+  display: inline-block;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--color-fd-primary) 8%, var(--color-fd-muted));
+  padding: 0 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8125em;
+}
+
+/* room for a caret + placeholder while the formula is still empty */
+.fde-content .fde-math-inline[data-empty] .fde-math-src {
+  min-width: 3ch;
+}
+.fde-content .fde-math-inline[data-empty] .fde-math-src::before {
+  content: "TeX";
+  position: absolute;
+  inset-inline-start: 4px;
+  color: var(--color-fd-muted-foreground);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.fde-content .node-mathInline:not([data-active]) .fde-math[data-rendered] .fde-math-src {
+  display: none;
+}
+.fde-content .node-mathInline[data-active] .fde-math-preview {
+  display: none;
+}
+.fde-content .fde-math-preview {
+  cursor: text;
+}
+
+.fde-content .fde-math-block {
+  margin: 1rem 0;
+}
+.fde-content .fde-math-block .fde-math-src {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 10px;
+  background: var(--color-fd-card);
+  padding: 12px 14px;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.fde-content .fde-math-block .fde-math-src[data-empty]::before {
+  content: "TeX equation…";
+  position: absolute;
+  color: var(--color-fd-muted-foreground);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.fde-content .node-mathBlock:not([data-active]) .fde-math[data-rendered] .fde-math-src {
+  display: none;
+}
+/* while editing, the preview rides below the source as a live result */
+.fde-content .fde-math-block .fde-math-preview {
+  display: block;
+  overflow-x: auto;
+}
+.fde-content .node-mathBlock[data-active] .fde-math-block[data-rendered] {
+  border-radius: 10px;
+  outline: 1px solid color-mix(in oklab, var(--color-fd-ring) 45%, var(--color-fd-border));
+  outline-offset: 2px;
+}
+
+/* =========================================================================
  * Steps: mirrors the fumadocs `fd-steps` / `fd-step` utilities.
  * ====================================================================== */
 

@@ -109,10 +109,12 @@ export function MobileBar({
   editor,
   components,
   specs,
+  math,
 }: {
   editor: Editor;
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
+  math?: boolean;
 }) {
   const { anchorRef, container } = useEditorPortal();
   const coarse = useMediaQuery("(pointer: coarse)");
@@ -278,7 +280,7 @@ export function MobileBar({
                 </button>
               ))}
             {sheet === "insert" &&
-              insertItems(components).map((item) => (
+              insertItems(components, undefined, math).map((item) => (
                 <button
                   key={item.title}
                   type="button"

@@ -17,6 +17,7 @@ import type { Syntax, ComponentSpec } from "../components/spec";
 import { createSyntax } from "../components/spec";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionToMdast } from "../syntax/directives/serialize";
+import { inlineMathToMdast, mathToMdast } from "../syntax/math/serialize";
 import { appendHeadingSuffixes } from "../syntax/heading-suffixes";
 import type { RawNode } from "./stringify";
 
@@ -92,6 +93,8 @@ function leafToPhrasing(node: JSONContent): PhrasingContent {
       };
     case "mdxTextExpression":
       return { type: "mdxTextExpression", value: String(node.attrs?.value ?? "") };
+    case "mathInline":
+      return inlineMathToMdast(textOf(node), node.attrs?.delimiter);
     case "mdxJsxTextElement":
       return {
         type: "mdxJsxTextElement",
@@ -246,6 +249,8 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
       };
     case "horizontalRule":
       return { type: "thematicBreak" };
+    case "mathBlock":
+      return mathToMdast(textOf(node), node.attrs?.meta);
     case "table":
       return tableToMdast(node);
     case "mdxJsxFlowElement":

@@ -14,6 +14,8 @@ import {
   ListOrdered,
   ListTodo,
   Minus,
+  Radical,
+  Sigma,
   SquareCode,
   TextQuote,
   ImageIcon,
@@ -80,6 +82,23 @@ const BLOCKS: SlashItem[] = [
   ),
   block("Table", <Table2 size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  ),
+];
+
+/** offered only while the math dialect is on: the nodes have no MDX form
+ * otherwise */
+const MATH_ITEMS: SlashItem[] = [
+  block("Math block", <Sigma size={15} />, (e, r) =>
+    e.chain().focus().deleteRange(r).setNode("mathBlock").run(),
+  ),
+  block("Inline math", <Radical size={15} />, (e, r) =>
+    e
+      .chain()
+      .focus()
+      .deleteRange(r)
+      .insertContentAt(r.from, { type: "mathInline" })
+      .setTextSelection(r.from + 1)
+      .run(),
   ),
 ];
 
@@ -261,8 +280,12 @@ export function suggestionRender(): {
 }
 
 /** the full insert list: block types plus registered top-level components */
-export function insertItems(specs: UiComponentSpec[], media?: MediaProvider): SlashItem[] {
-  return [...BLOCKS, imageItem(media), ...componentItems(specs)];
+export function insertItems(
+  specs: UiComponentSpec[],
+  media?: MediaProvider,
+  math?: boolean,
+): SlashItem[] {
+  return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(media), ...componentItems(specs)];
 }
 
 /**
@@ -298,8 +321,12 @@ export function entryItems(
 }
 
 /** `/` in a paragraph opens the insert menu: block types plus registered components. */
-export function slashMenu(specs: UiComponentSpec[], media?: MediaProvider): Extension {
-  const all = insertItems(specs, media);
+export function slashMenu(
+  specs: UiComponentSpec[],
+  media?: MediaProvider,
+  math?: boolean,
+): Extension {
+  const all = insertItems(specs, media, math);
   const specMap = new Map(specs.map((spec) => [spec.name, spec]));
 
   return Extension.create({

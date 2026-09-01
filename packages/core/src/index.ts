@@ -26,6 +26,7 @@ export {
   BLOCK_REGION_NODE,
 } from "./components/spec";
 export { admonitionSpec, ADMONITION_TYPES, DIRECTIVE_ADMONITION } from "./syntax/directives";
+export { MATH_INLINE_NODE, MATH_BLOCK_NODE } from "./syntax/math";
 export type {
   ComponentSpec,
   Syntax,

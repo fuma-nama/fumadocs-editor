@@ -19,6 +19,7 @@ import type { MdxAttribute } from "../extensions/mdx-nodes";
 import type { Syntax, ComponentSpec } from "../components/spec";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionAsJsx } from "../syntax/directives/parse";
+import { inlineMathToNode, mathToNode } from "../syntax/math/parse";
 import { extractHeadingSuffixes } from "../syntax/heading-suffixes";
 
 export interface FromMdastContext {
@@ -196,6 +197,9 @@ function phrasingToInline(
       case "break":
         out.push(withMarks({ type: "hardBreak" }, marks));
         break;
+      case "inlineMath":
+        out.push(withMarks(inlineMathToNode(node.value, sliceSource(node, ctx)), marks));
+        break;
       case "mdxTextExpression":
         out.push(withMarks({ type: "mdxTextExpression", attrs: { value: node.value } }, marks));
         break;
@@ -284,6 +288,7 @@ const PHRASING_TYPES = new Set([
   "linkReference",
   "imageReference",
   "textDirective",
+  "inlineMath",
 ]);
 
 /**
@@ -352,6 +357,8 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       };
     case "thematicBreak":
       return { type: "horizontalRule" };
+    case "math":
+      return mathToNode(node);
     case "table":
       return tableToNode(node, ctx);
     case "mdxJsxFlowElement": {

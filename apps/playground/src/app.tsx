@@ -49,6 +49,7 @@ function ThemeToggle() {
 // registering the admonition spec turns the `:::` directive dialect on;
 // module-level so the identity is stable for the parse cache
 const components = [...fumadocsUiComponents, admonitionSpec];
+const syntax = { math: true };
 
 // uploads land in docs/assets via the dev server; relative srcs display
 // through the asset endpoint
@@ -234,6 +235,7 @@ function Playground() {
               defaultValue={initialText}
               cacheKey={active ?? undefined}
               components={components}
+              syntax={syntax}
               onMarkdownChange={(next) => {
                 setMarkdown(next);
                 sessionRef.current?.changed();

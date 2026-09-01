@@ -5,6 +5,7 @@ import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { directiveHandlers, directiveUnsafe } from "../syntax/directives/serialize";
+import { mathHandlers, mathUnsafe } from "../syntax/math/serialize";
 import type { SyntaxOptions } from "../components/spec";
 
 /** Custom mdast node emitted for PM verbatim nodes: serialized as-is, no escaping. */
@@ -76,6 +77,7 @@ const stringifyOptions: Options = {
     raw,
     mdxJsxFlowElement: mdxJsxFlowElementTight,
     ...directiveHandlers,
+    ...mathHandlers,
   } as unknown as Options["handlers"],
   bullet: "-",
   rule: "-",
@@ -84,14 +86,28 @@ const stringifyOptions: Options = {
   fences: true,
 };
 
-/** the directive dialect's escaping rules join only while it is on */
-const directiveStringifyOptions: Options = {
-  ...stringifyOptions,
-  extensions: [...stringifyOptions.extensions!, { unsafe: directiveUnsafe }],
-};
+/**
+ * Each dialect's escaping rules join only while it is on: without the dialect
+ * they would be noise in everyone else's output. Cached per options object
+ * (stable per `Syntax`) since stringify runs per block.
+ */
+const optionsCache = new WeakMap<SyntaxOptions, Options>();
+
+function optionsFor(options: SyntaxOptions): Options {
+  if (!options.directives && !options.math) return stringifyOptions;
+  let built = optionsCache.get(options);
+  if (!built) {
+    const extensions = [...stringifyOptions.extensions!];
+    if (options.directives) extensions.push({ unsafe: directiveUnsafe });
+    if (options.math) extensions.push({ unsafe: mathUnsafe });
+    built = { ...stringifyOptions, extensions };
+    optionsCache.set(options, built);
+  }
+  return built;
+}
 
 export function stringifyRoot(root: Root, options: SyntaxOptions = {}): string {
-  return toMarkdown(root, options.directives ? directiveStringifyOptions : stringifyOptions);
+  return toMarkdown(root, optionsFor(options));
 }
 
 /** Stringify a single top-level block, without the trailing newline. */
