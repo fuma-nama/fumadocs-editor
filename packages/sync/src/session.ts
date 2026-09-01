@@ -1,10 +1,10 @@
-import type { FileState, SyncTransport } from "./transport";
+import type { FileState, OpenState, SyncTransport } from "./transport";
 import type { WsTransport } from "./client";
 
-export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline";
+export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
 export interface FileSessionOptions {
-  transport: SyncTransport & Partial<Pick<WsTransport, "onOnline">>;
+  transport: SyncTransport & Partial<Pick<WsTransport, "onStatus">>;
   path: string;
   /** the editor's current markdown, read at save time */
   getText: () => string;
@@ -16,8 +16,8 @@ export interface FileSessionOptions {
 }
 
 export interface FileSession {
-  /** read the file and adopt it as the sync base; returns its state */
-  open(): Promise<FileState>;
+  /** read the file and adopt it as the sync base; returns its state (plus any scope-derived data) */
+  open(): Promise<OpenState>;
   /** the document changed: schedules an autosave */
   changed(): void;
   /** save now if there is anything to save (blur / beforeunload / Cmd-S) */
@@ -49,12 +49,23 @@ export function createFileSession(options: FileSessionOptions): FileSession {
   let saving = false;
   let conflict = false;
   let online = true;
+  let denied = false;
   let closed = false;
   let trailing: ReturnType<typeof setTimeout> | undefined;
   let maxWait: ReturnType<typeof setTimeout> | undefined;
 
   const status = (): SessionStatus =>
-    conflict ? "conflict" : !online ? "offline" : saving ? "saving" : dirty ? "dirty" : "synced";
+    conflict
+      ? "conflict"
+      : denied
+        ? "denied"
+        : !online
+          ? "offline"
+          : saving
+            ? "saving"
+            : dirty
+              ? "dirty"
+              : "synced";
 
   // no emissions while constructing: the transport reports its online state
   // synchronously, and callers haven't seen the session object yet
@@ -127,9 +138,10 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     if (!closed && !conflict) void incoming(state);
   });
 
-  const stopOnline =
-    transport.onOnline?.((next) => {
-      online = next;
+  const stopStatus =
+    transport.onStatus?.((next) => {
+      online = next === "online";
+      denied = next === "denied";
       emit();
       if (online && dirty && !conflict) schedule();
     }) ?? (() => {});
@@ -178,7 +190,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
       closed = true;
       clearTimers();
       stopWatch();
-      stopOnline();
+      stopStatus();
     },
   };
 }

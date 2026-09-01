@@ -24,7 +24,7 @@ import { serializeDocToMdx, tryNormalize } from "@fumadocs-editor/core/serialize
 import { editorExtensions } from "@fumadocs-editor/core/extensions";
 import { mergeRemote, type MergeOp } from "./merge";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
-import type { FileState } from "./transport";
+import type { FileState, SyncUser } from "./transport";
 
 /** origin marker for Y transactions the authority applies from disk state */
 const DISK = "disk";
@@ -37,6 +37,8 @@ export interface DocAuthorityOptions<C> {
   /** unconditional write (the authority is the single writer); returns the new version */
   write(path: string, text: string): Promise<string>;
   send(conn: C, data: Uint8Array): void;
+  /** the connection's resolved permissions; gates Y writes and pins identity */
+  scope(conn: C): { user?: SyncUser; write(path: string): boolean };
 }
 
 interface DocState<C> {
@@ -96,6 +98,7 @@ export function createDocAuthority<C>({
   read,
   write,
   send,
+  scope,
 }: DocAuthorityOptions<C>): DocAuthority<C> {
   const docs = new Map<string, Promise<DocState<C>>>();
   const live = new Set<DocState<C>>();
@@ -243,11 +246,14 @@ export function createDocAuthority<C>({
       }
       return entry.then((doc) => {
         if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
-        // greet: our step1 (the reply delivers the client's buffered edits)
-        // and everyone's presence
-        const step1 = collabFrame(path, MESSAGE_SYNC);
-        syncProtocol.writeSyncStep1(step1, doc.ydoc);
-        send(conn, encoding.toUint8Array(step1));
+        // greet writers with our step1 (the reply delivers their buffered
+        // edits) — a read-only client's reply would only be refused — and
+        // everyone with the room's presence
+        if (scope(conn).write(path)) {
+          const step1 = collabFrame(path, MESSAGE_SYNC);
+          syncProtocol.writeSyncStep1(step1, doc.ydoc);
+          send(conn, encoding.toUint8Array(step1));
+        }
         const states = doc.awareness.getStates();
         if (states.size > 0) {
           const aw = collabFrame(path, MESSAGE_AWARENESS);
@@ -263,12 +269,22 @@ export function createDocAuthority<C>({
       void docs.get(frame.path)?.then((doc) => {
         if (!doc.conns.has(conn)) return;
         if (frame.kind === MESSAGE_SYNC) {
+          // step1 asks for our state (a read); step2 and update frames carry
+          // client edits and are refused without write permission
+          if (
+            decoding.peekVarUint(frame.decoder) !== syncProtocol.messageYjsSyncStep1 &&
+            !scope(conn).write(doc.path)
+          ) {
+            return;
+          }
           const reply = collabFrame(frame.path, MESSAGE_SYNC);
           const header = encoding.length(reply);
           syncProtocol.readSyncMessage(frame.decoder, reply, doc.ydoc, conn);
           if (encoding.length(reply) > header) send(conn, encoding.toUint8Array(reply));
         } else if (frame.kind === MESSAGE_AWARENESS) {
-          applyAwarenessUpdate(doc.awareness, decoding.readVarUint8Array(frame.decoder), conn);
+          const update = decoding.readVarUint8Array(frame.decoder);
+          const user = scope(conn).user;
+          applyAwarenessUpdate(doc.awareness, user ? withUser(update, user) : update, conn);
         }
       });
     },
@@ -304,6 +320,33 @@ export function createDocAuthority<C>({
       docs.clear();
     },
   };
+}
+
+/**
+ * Rewrite every state in an awareness update to carry the authenticated
+ * identity: a scope user is authoritative, so a spoofed name never reaches
+ * peers (client-chosen cosmetic fields the scope doesn't pin, like a colour,
+ * survive). Wire format per y-protocols/awareness: entry count, then
+ * (clientID, clock, JSON state) per entry.
+ */
+function withUser(update: Uint8Array, user: SyncUser): Uint8Array {
+  const decoder = decoding.createDecoder(update);
+  const encoder = encoding.createEncoder();
+  const count = decoding.readVarUint(decoder);
+  encoding.writeVarUint(encoder, count);
+  for (let i = 0; i < count; i++) {
+    encoding.writeVarUint(encoder, decoding.readVarUint(decoder));
+    encoding.writeVarUint(encoder, decoding.readVarUint(decoder));
+    const raw = decoding.readVarString(decoder);
+    const state = JSON.parse(raw) as Record<string, unknown> | null;
+    encoding.writeVarString(
+      encoder,
+      state === null
+        ? raw
+        : JSON.stringify({ ...state, user: { ...(state.user as object), ...user } }),
+    );
+  }
+  return encoding.toUint8Array(encoder);
 }
 
 /** apply block-level merge ops (indices refer to the pre-merge children) */

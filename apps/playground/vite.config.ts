@@ -8,7 +8,26 @@ import { fdeSync } from "@fumadocs-editor/sync/vite";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), fdeSync({ root: "docs" })],
+  plugins: [
+    react(),
+    tailwindcss(),
+    fdeSync({
+      root: "docs",
+      // toy auth layer for trying the scope enforcement: open the playground
+      // with ?token=editor / ?token=viewer / ?token=anything-else (denied).
+      // No token keeps the plain full-access dev flow, which is also what
+      // asset <img> requests (no header) resolve to. A real consumer verifies
+      // a session or JWT here instead.
+      authenticate: async ({ payload }) => {
+        if (payload === undefined) return { write: true };
+        if (payload === "editor")
+          return { user: { name: "Editor", color: "#2563eb" }, write: true };
+        if (payload === "viewer")
+          return { user: { name: "Viewer", color: "#059669" }, write: false };
+        return null;
+      },
+    }),
+  ],
   server: {
     port: 5199,
     // the mirrored documents are runtime data owned by the sync server;

@@ -1,9 +1,29 @@
-import type { FileEntry, FileState, SyncTransport, WriteResult } from "./transport";
+import {
+  CLOSE_DENIED,
+  type FileEntry,
+  type FileState,
+  type OpenState,
+  type SyncTransport,
+  type WriteResult,
+} from "./transport";
+
+/** "denied" is terminal: the server rejected the hello, no retry loop runs */
+export type ConnectionStatus = "online" | "offline" | "denied";
+
+export interface WsTransportOptions {
+  /**
+   * Produces the opaque payload the connection hello carries to the server's
+   * `authenticate` hook. Called on every connection attempt, so reconnects
+   * pick up fresh tokens. Cookie-based setups simply omit it.
+   */
+  auth?: () => unknown;
+}
 
 export interface WsTransport extends SyncTransport {
   close(): void;
+  status(): ConnectionStatus;
   /** connection state changes; fires immediately with the current state */
-  onOnline(listener: (online: boolean) => void): () => void;
+  onStatus(listener: (status: ConnectionStatus) => void): () => void;
   /**
    * Collab frames ride this same socket as binary messages (see `wire.ts`).
    * Sends while offline are dropped — the y-protocols handshake re-run on
@@ -16,35 +36,70 @@ export interface WsTransport extends SyncTransport {
 }
 
 /**
- * `SyncTransport` over one JSON websocket (the dev-server mirror). Requests
- * made while offline reject with "sync offline"; the connection retries
- * with backoff and re-registers every watch on reconnect — sessions listen
- * to `onOnline` to flush once it returns.
+ * `SyncTransport` over one JSON websocket (the dev-server mirror). Every
+ * connection opens with a hello frame carrying the `auth` payload; nothing
+ * else is sent until the server acknowledges it. Requests made while offline
+ * reject with "sync offline"; the connection retries with backoff and
+ * re-registers every watch on reconnect — sessions listen to `onStatus` to
+ * flush once it returns. A denied hello stops the retrying for good.
  */
-export function wsTransport(url: string): WsTransport {
+export function wsTransport(url: string, options: WsTransportOptions = {}): WsTransport {
   let socket: WebSocket | null = null;
   let nextId = 1;
   let closed = false;
+  let denied = false;
+  /** the hello was acknowledged: requests, watches and binary frames may flow */
+  let ready = false;
+  /** settles when the current connection attempt has succeeded or died */
+  let attempt = Promise.resolve();
   let backoff = 300;
   const pending = new Map<number, { resolve: (v: never) => void; reject: (e: Error) => void }>();
   const watchers = new Map<string, Set<(state: FileState) => void>>();
-  const onlineListeners = new Set<(online: boolean) => void>();
+  const statusListeners = new Set<(status: ConnectionStatus) => void>();
   const binaryListeners = new Set<(data: Uint8Array) => void>();
 
-  const online = () => socket?.readyState === WebSocket.OPEN;
-  const emitOnline = () => {
-    for (const listener of onlineListeners) listener(online());
+  const status = (): ConnectionStatus => (denied ? "denied" : ready ? "online" : "offline");
+  const emitStatus = () => {
+    const current = status();
+    for (const listener of statusListeners) listener(current);
+  };
+
+  const post = <T>(ws: WebSocket, payload: Record<string, unknown>): Promise<T> => {
+    const id = nextId++;
+    ws.send(JSON.stringify({ id, ...payload }));
+    return new Promise<T>((resolve, reject) => {
+      pending.set(id, { resolve: resolve as (v: never) => void, reject });
+    });
   };
 
   const connect = () => {
-    if (closed) return;
+    if (closed || denied) return;
     const ws = new WebSocket(url);
     ws.binaryType = "arraybuffer";
     socket = ws;
+    let settle!: () => void;
+    attempt = new Promise((resolve) => {
+      settle = resolve;
+    });
+    // resolve the payload while the socket handshakes; a fresh call per attempt
+    const payload = Promise.resolve().then(options.auth ?? (() => undefined));
+    payload.catch(() => {}); // handled in the open listener, which may never fire
     ws.addEventListener("open", () => {
-      backoff = 300;
-      for (const path of watchers.keys()) ws.send(JSON.stringify({ type: "watch", path }));
-      emitOnline();
+      payload.then(
+        (value) =>
+          post(ws, { type: "hello", payload: value }).then(
+            () => {
+              if (socket !== ws) return;
+              ready = true;
+              backoff = 300;
+              for (const path of watchers.keys()) ws.send(JSON.stringify({ type: "watch", path }));
+              settle();
+              emitStatus();
+            },
+            () => {},
+          ), // a refused hello ends in a close; that path settles
+        () => ws.close(), // auth() itself failed: retry like any dead connection
+      );
     });
     ws.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
@@ -64,12 +119,17 @@ export function wsTransport(url: string): WsTransport {
       if (message.ok) entry.resolve(message.result as never);
       else entry.reject(new Error(message.error));
     });
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       if (socket !== ws) return;
       socket = null;
-      for (const entry of pending.values()) entry.reject(new Error("sync connection lost"));
+      ready = false;
+      denied = (event as CloseEvent).code === CLOSE_DENIED;
+      const error = new Error(denied ? "sync access denied" : "sync connection lost");
+      for (const entry of pending.values()) entry.reject(error);
       pending.clear();
-      emitOnline();
+      settle();
+      emitStatus();
+      if (denied) return;
       backoff = Math.min(backoff * 2, 5000);
       setTimeout(connect, backoff);
     });
@@ -78,29 +138,14 @@ export function wsTransport(url: string): WsTransport {
   connect();
 
   const request = async <T>(payload: Record<string, unknown>): Promise<T> => {
-    const ws = socket;
-    if (ws && ws.readyState === WebSocket.CONNECTING) {
-      await new Promise<void>((resolve) => {
-        const done = () => {
-          ws.removeEventListener("open", done);
-          ws.removeEventListener("close", done);
-          resolve();
-        };
-        ws.addEventListener("open", done);
-        ws.addEventListener("close", done);
-      });
-    }
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error("sync offline");
-    const id = nextId++;
-    socket.send(JSON.stringify({ id, ...payload }));
-    return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: resolve as (v: never) => void, reject });
-    });
+    await attempt;
+    if (!ready || !socket) throw new Error(denied ? "sync access denied" : "sync offline");
+    return post<T>(socket, payload);
   };
 
   return {
     list: () => request<FileEntry[]>({ type: "list" }),
-    read: (path) => request<FileState>({ type: "read", path }),
+    read: (path) => request<OpenState>({ type: "read", path }),
     write: (path, text, baseVersion) =>
       request<WriteResult>({ type: "write", path, text, baseVersion }),
     watch(path, onChange) {
@@ -108,24 +153,25 @@ export function wsTransport(url: string): WsTransport {
       if (!set) {
         set = new Set();
         watchers.set(path, set);
-        if (online()) socket!.send(JSON.stringify({ type: "watch", path }));
+        if (ready && socket) socket.send(JSON.stringify({ type: "watch", path }));
       }
       set.add(onChange);
       return () => {
         set.delete(onChange);
         if (set.size === 0) {
           watchers.delete(path);
-          if (online()) socket!.send(JSON.stringify({ type: "unwatch", path }));
+          if (ready && socket) socket.send(JSON.stringify({ type: "unwatch", path }));
         }
       };
     },
-    onOnline(listener) {
-      onlineListeners.add(listener);
-      listener(online());
-      return () => onlineListeners.delete(listener);
+    status,
+    onStatus(listener) {
+      statusListeners.add(listener);
+      listener(status());
+      return () => statusListeners.delete(listener);
     },
     sendBinary(data) {
-      if (online()) socket!.send(data);
+      if (ready && socket) socket.send(data);
     },
     onBinary(listener) {
       binaryListeners.add(listener);
@@ -134,6 +180,7 @@ export function wsTransport(url: string): WsTransport {
     request,
     close() {
       closed = true;
+      ready = false;
       socket?.close();
       socket = null;
     },

@@ -7,7 +7,7 @@ import { hashText } from "../src/node";
 function memoryTransport() {
   const files = new Map<string, string>();
   const watchers = new Map<string, Set<(state: FileState) => void>>();
-  const onlineListeners = new Set<(online: boolean) => void>();
+  const statusListeners = new Set<(status: "online" | "offline") => void>();
   let online = true;
   const writes: string[] = [];
 
@@ -17,7 +17,7 @@ function memoryTransport() {
   };
 
   const transport: SyncTransport & {
-    onOnline: (l: (o: boolean) => void) => () => void;
+    onStatus: (l: (status: "online" | "offline") => void) => () => void;
   } = {
     list: async () => [...files.keys()].map((path) => ({ path })),
     read: async (path) => state(path),
@@ -34,10 +34,10 @@ function memoryTransport() {
       watchers.set(path, set);
       return () => set.delete(onChange);
     },
-    onOnline(listener) {
-      onlineListeners.add(listener);
-      listener(online);
-      return () => onlineListeners.delete(listener);
+    onStatus(listener) {
+      statusListeners.add(listener);
+      listener(online ? "online" : "offline");
+      return () => statusListeners.delete(listener);
     },
   };
 
@@ -52,7 +52,7 @@ function memoryTransport() {
     },
     setOnline(next: boolean) {
       online = next;
-      for (const listener of onlineListeners) listener(next);
+      for (const listener of statusListeners) listener(next ? "online" : "offline");
     },
     disk: (path: string) => files.get(path),
   };

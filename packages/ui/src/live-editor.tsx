@@ -31,6 +31,8 @@ export interface LiveEditorProps {
   onReady: (editor: Editor, serialize: SerializeFn) => void;
   /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
+  /** read-only rendering: no typing, no mutating chrome */
+  editable: boolean;
   media?: MediaProvider;
   files?: FileProvider;
   /** dialect switches; must match what the document was parsed with */
@@ -57,6 +59,7 @@ export function LiveEditor({
   onChangeRef,
   onReady,
   hidden,
+  editable,
   media,
   files,
   syntax,
@@ -93,6 +96,7 @@ export function LiveEditor({
 
   const editor = useEditor({
     extensions,
+    editable,
     // under collab the server's Y.Doc is the document; seeding content here
     // would sync a duplicate copy into it
     content: collab ? null : doc,
@@ -130,6 +134,11 @@ export function LiveEditor({
     },
   });
 
+  // `editable` is a live prop (scope data can arrive after mount)
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
+  }, [editor, editable]);
+
   // insert animations arm one painted frame after the editor shows: the
   // hydration swap must be perfectly still, only real insertions move
   const [settled, setSettled] = useState(false);
@@ -148,9 +157,9 @@ export function LiveEditor({
   return (
     <div className="relative" hidden={hidden} data-fde-settled={settled || undefined}>
       <EditorContent editor={editor} className="fde-content" />
-      {editor && <EditorBubble editor={editor} specs={specs} media={media} />}
-      {editor && <BlockMenu editor={editor} specs={specs} />}
-      {editor && (
+      {editor && editable && <EditorBubble editor={editor} specs={specs} media={media} />}
+      {editor && editable && <BlockMenu editor={editor} specs={specs} />}
+      {editor && editable && (
         <MobileBar editor={editor} components={components} specs={specs} math={syntax?.math} />
       )}
     </div>

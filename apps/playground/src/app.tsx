@@ -12,6 +12,7 @@ import {
   type SyncStatus,
 } from "@fumadocs-editor/ui";
 import {
+  AUTH_HEADER,
   createFileSession,
   wsTransport,
   type FileSession,
@@ -63,15 +64,22 @@ const collabUser = {
   color: CARET_COLORS[Math.floor(Math.random() * CARET_COLORS.length)],
 };
 
+// toy auth (see vite.config.ts): the token rides the connection hello and the
+// upload header. Read fresh per attempt — ?token=… per tab, localStorage as
+// the store a reconnect would pick a rotated token from.
+const authToken = () =>
+  new URLSearchParams(location.search).get("token") ??
+  localStorage.getItem("fde-token") ??
+  undefined;
+
 // uploads land in docs/assets via the dev server; relative srcs display
 // through the asset endpoint
 const media: MediaProvider = {
   async upload(file) {
-    const res = await fetch("/__fde_upload", {
-      method: "POST",
-      body: file,
-      headers: { "x-filename": encodeURIComponent(file.name) },
-    });
+    const headers: Record<string, string> = { "x-filename": encodeURIComponent(file.name) };
+    const token = authToken();
+    if (token !== undefined) headers[AUTH_HEADER] = JSON.stringify(token);
+    const res = await fetch("/__fde_upload", { method: "POST", body: file, headers });
     if (!res.ok) throw new Error(`upload failed: ${res.status}`);
     const { src } = (await res.json()) as { src: string };
     return src;
@@ -88,12 +96,15 @@ function Playground() {
   const [status, setStatus] = useState<SyncStatus>("synced");
   const [markdown, setMarkdown] = useState("");
   const [syncedText, setSyncedText] = useState("");
+  // consumer wiring for the auth scope: the handshake's `writable` (data the
+  // sync layer merely exposes) drives our own `editable` prop
+  const [writable, setWritable] = useState(true);
   const editorRef = useRef<MdxEditorRef>(null);
   const sessionRef = useRef<FileSession | null>(null);
 
   useEffect(() => {
     // per-mount transport: StrictMode's probe mount closes its own copy
-    const next = wsTransport(`ws://${location.host}/__fde_sync`);
+    const next = wsTransport(`ws://${location.host}/__fde_sync`, { auth: authToken });
     let open = true;
     setTransport(next);
     void next.list().then(
@@ -105,6 +116,10 @@ function Playground() {
       },
       () => {
         if (!open) return;
+        if (next.status() === "denied") {
+          setStatus("denied");
+          return;
+        }
         // no sync endpoint (static preview / production build): edit a
         // bundled document without the mirror
         next.close();
@@ -132,19 +147,20 @@ function Playground() {
         setInitialText(state.text);
         setMarkdown(state.text);
         setSyncedText(state.text);
+        setWritable(state.writable ?? true);
       },
       () => {},
     );
     const stopWatch = transport.watch(active, (state) => {
       if (open) setSyncedText(state.text);
     });
-    const stopOnline = transport.onOnline((next) => {
-      if (open) setStatus(next ? "synced" : "offline");
+    const stopStatus = transport.onStatus((next) => {
+      if (open) setStatus(next === "online" ? "synced" : next);
     });
     return () => {
       open = false;
       stopWatch();
-      stopOnline();
+      stopStatus();
     };
   }, [active, transport]);
 
@@ -180,6 +196,7 @@ function Playground() {
         setInitialText(state.text);
         setMarkdown(state.text);
         setSyncedText(state.text);
+        setWritable(state.writable ?? true);
         setStatus(session.status());
       },
       () => {},
@@ -324,7 +341,13 @@ function Playground() {
               files={fileProvider}
               collab={collab}
               sync={sync}
+              editable={writable}
             />
+          )}
+          {initialText == null && status === "denied" && (
+            <div className="rounded-xl border border-fd-border bg-fd-card px-5 py-10 text-center text-sm text-fd-muted-foreground">
+              Access denied: this token cannot open the workspace.
+            </div>
           )}
           <details className="mt-6 text-[13px]">
             <summary className="cursor-pointer text-fd-muted-foreground select-none">
