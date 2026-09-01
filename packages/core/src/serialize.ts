@@ -113,6 +113,3 @@ export function assembleMdx(normalized: string[], snapshot?: DocSnapshot): strin
 }
 
 export { createIncrementalSerializer } from "./incremental";
-export { docToMdast, nodeToMdastBlock } from "./mdast/to-mdast";
-export { stringifyRoot, stringifyBlock } from "./mdast/stringify";
-export type { DocSnapshot, SnapshotBlock } from "./document";

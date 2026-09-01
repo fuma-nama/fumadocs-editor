@@ -46,20 +46,20 @@ export interface MdxEditorRef {
 
 export type SyncStatus = "synced" | "dirty" | "saving" | "conflict" | "offline";
 
-export interface MdxEditorCollab {
-  /** the mirror websocket; the Yjs frames ride the same connection */
-  transport: WsTransport;
-  path: string;
-  /** presence identity shown at this user's caret on other clients */
-  user: { name: string; color: string };
-}
-
 export interface SyncIndicatorProps {
   status: SyncStatus;
   /** conflict resolution: overwrite the disk with the local document */
   onKeepMine: () => void;
   /** conflict resolution: drop local edits for the disk version */
   onTakeDisk: () => void;
+}
+
+export interface MdxEditorCollab {
+  /** the mirror websocket; the Yjs frames ride the same connection */
+  transport: WsTransport;
+  path: string;
+  /** presence identity shown at this user's caret on other clients */
+  user: { name: string; color: string };
 }
 
 export interface MdxEditorProps {
@@ -138,6 +138,7 @@ const SYNC_LABEL: Record<SyncStatus, string> = {
 
 const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground hover:bg-fd-accent active:bg-fd-border ${focusRing}`;
 
+/** The dot + word beside the mode tabs; conflicts surface a quiet chip. */
 function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (
     <div className="flex min-w-0 items-center gap-2 ps-1.5 text-[12px] text-fd-muted-foreground">
@@ -192,10 +193,7 @@ export const MdxEditor = memo(function MdxEditor({
   // keys on their identity, so churn is absorbed here by value comparison
   const components = useStableValue(componentsProp ?? [], sameSpecs);
   const syntax = useStableValue(syntaxProp, sameOptions);
-  const specMap = useMemo(
-    () => new Map(components.map((spec) => [spec.name, spec])),
-    [components],
-  );
+  const specMap = useMemo(() => new Map(components.map((spec) => [spec.name, spec])), [components]);
   const ambient = useEditorTheme();
   // an explicit `theme` prop wins; otherwise stay unscoped so the editor
   // inherits the provider / next-themes / OS theme from an ancestor.
