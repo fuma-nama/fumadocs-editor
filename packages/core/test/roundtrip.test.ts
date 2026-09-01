@@ -2,7 +2,13 @@ import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { admonitionSpec, createSyntax, parseMdxToDoc, serializeDocToMdx } from "../src";
+import {
+  admonitionSpec,
+  createSyntax,
+  filesFenceSpecs,
+  parseMdxToDoc,
+  serializeDocToMdx,
+} from "../src";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(dir, "fixtures");
@@ -70,7 +76,8 @@ describe.skipIf(!existsSync(corpus))("fumadocs docs corpus", () => {
     ["default", createSyntax()],
     ["directives", createSyntax([admonitionSpec])],
     ["math", createSyntax([], { math: true })],
-    ["all dialects", createSyntax([admonitionSpec], { math: true })],
+    ["files fence", createSyntax(filesFenceSpecs)],
+    ["all dialects", createSyntax([admonitionSpec, ...filesFenceSpecs], { math: true })],
   ] as const;
 
   for (const [label, syntax] of syntaxes) {

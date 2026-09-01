@@ -8,6 +8,7 @@ export { componentExtensions } from "./components/node-views";
 export { codeBlockExtension } from "./components/code-block";
 export type { UiComponentSpec, ComponentRenderProps } from "./components/spec";
 export { admonitionSpec } from "./components/admonition";
+export { filesFenceSpecs } from "./components/files-fence";
 export {
   fumadocsUiComponents,
   calloutSpec,
