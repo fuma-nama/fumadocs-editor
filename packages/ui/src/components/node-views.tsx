@@ -15,7 +15,7 @@ import {
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { UiComponentSpec } from "./spec";
-import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attributes";
+import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
 import { caretPolicy } from "./caret-policy";
 import { componentKeymap } from "./keymap";
 import { structureGuard } from "./structure";
