@@ -2,9 +2,22 @@
   "name": "@fumadocs-editor/sync",
   "version": "0.0.0",
   "description": "Filesystem mirror for the Fumadocs MDX editor: sync transport, dev server, block-level three-way merge",
+  "keywords": [
+    "collaboration",
+    "editor",
+    "fumadocs",
+    "mdx",
+    "sync",
+    "yjs"
+  ],
+  "homepage": "https://github.com/fuma-nama/fumadocs-editor",
   "license": "MIT",
   "author": "Fuma Nama",
-  "repository": "github:fuma-nama/fumadocs-editor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuma-nama/fumadocs-editor.git",
+    "directory": "packages/sync"
+  },
   "files": [
     "dist"
   ],

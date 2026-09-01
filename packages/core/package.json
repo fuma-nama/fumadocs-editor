@@ -2,9 +2,22 @@
   "name": "@fumadocs-editor/core",
   "version": "0.0.0",
   "description": "Headless MDX editor engine for Fumadocs: TipTap schema + lossless MDX round-trip",
+  "keywords": [
+    "editor",
+    "fumadocs",
+    "markdown",
+    "mdx",
+    "prosemirror",
+    "tiptap"
+  ],
+  "homepage": "https://github.com/fuma-nama/fumadocs-editor",
   "license": "MIT",
   "author": "Fuma Nama",
-  "repository": "github:fuma-nama/fumadocs-editor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuma-nama/fumadocs-editor.git",
+    "directory": "packages/core"
+  },
   "files": [
     "dist"
   ],
