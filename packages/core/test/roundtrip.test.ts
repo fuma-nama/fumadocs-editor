@@ -65,9 +65,13 @@ test("editing one block only rewrites that block", () => {
 const corpus = path.resolve(dir, "../../../../fumadocs/apps/docs/content");
 
 describe.skipIf(!existsSync(corpus))("fumadocs docs corpus", () => {
-  const files = readdirSync(corpus, { recursive: true, encoding: "utf-8" })
-    .filter((file) => file.endsWith(".mdx") || file.endsWith(".md"))
-    .map((file) => path.join(corpus, file));
+  // skipIf still evaluates this body during collection, so the scan itself
+  // must not touch the missing checkout (CI has no sibling fumadocs repo)
+  const files = existsSync(corpus)
+    ? readdirSync(corpus, { recursive: true, encoding: "utf-8" })
+        .filter((file) => file.endsWith(".mdx") || file.endsWith(".md"))
+        .map((file) => path.join(corpus, file))
+    : [];
 
   // each dialect changes how its trigger characters parse (`:` for
   // directives, `$` for math), so the corpus must hold with every dialect on
