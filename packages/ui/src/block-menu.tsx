@@ -10,12 +10,8 @@ import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import { childInsertContext, focusAt, moveComponentAt } from "./components/keymap";
 import { PropControl } from "./attributes-panel";
-import {
-  activeComponent,
-  readPropValue,
-  setComponentAttributes,
-  setPropValue,
-} from "./components/attributes";
+import { activeComponent, setComponentAttributes } from "./components/attributes";
+import { readPropValue, setPropValue } from "./components/attr-values";
 import { focusRing, itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
