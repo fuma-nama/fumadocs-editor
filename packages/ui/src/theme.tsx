@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { cn } from "./utils/cn";
@@ -29,6 +30,13 @@ function systemTheme(): ResolvedTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function subscribeSystemTheme(onChange: () => void): () => void {
+  if (!window.matchMedia) return () => {};
+  const mql = window.matchMedia("(prefers-color-scheme: dark)");
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
 /**
  * Self-contained theme context for the editor. Fumadocs sites already toggle a
  * `.dark` class (via `next-themes`) that the editor's tokens key off, so inside
@@ -50,24 +58,14 @@ export function EditorThemeProvider({
   className?: string;
 }) {
   const [theme, setThemeState] = useState<EditorTheme>(defaultTheme);
-  const [system, setSystem] = useState<ResolvedTheme>("light");
+  const system = useSyncExternalStore(subscribeSystemTheme, systemTheme, () => "light" as const);
 
   // hydrate from storage after mount (avoids an SSR mismatch)
   useEffect(() => {
-    setSystem(systemTheme());
     if (!storageKey) return;
     const stored = window.localStorage.getItem(storageKey) as EditorTheme | null;
     if (stored === "light" || stored === "dark" || stored === "system") setThemeState(stored);
   }, [storageKey]);
-
-  // keep `system` in sync with the OS while the resolved theme follows it
-  useEffect(() => {
-    if (theme !== "system" || !window.matchMedia) return;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setSystem(mql.matches ? "dark" : "light");
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [theme]);
 
   const setTheme = useCallback(
     (next: EditorTheme) => {

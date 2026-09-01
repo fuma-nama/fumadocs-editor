@@ -14,7 +14,7 @@ const cache = new Map<string, Entry>();
 const EMPTY_OPTIONS: SyntaxOptions = {};
 
 /** hosts tend to pass `syntax` as a fresh literal, so compare by value */
-function sameOptions(a: SyntaxOptions, b: SyntaxOptions): boolean {
+export function sameOptions(a: SyntaxOptions = EMPTY_OPTIONS, b: SyntaxOptions = EMPTY_OPTIONS) {
   return (
     a.directives === b.directives && a.math === b.math && a.headingSuffixes === b.headingSuffixes
   );

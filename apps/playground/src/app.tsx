@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
@@ -208,6 +208,37 @@ function Playground() {
     };
   }, [transport, active]);
 
+  // stable editor props: `markdown` updates every (debounced) keystroke, and
+  // identity-stable props let the memoized editor skip those re-renders
+  const onMarkdownChange = useCallback((next: string) => {
+    setMarkdown(next);
+    sessionRef.current?.changed();
+  }, []);
+
+  const sync = useMemo(
+    () =>
+      active == null
+        ? undefined
+        : {
+            status,
+            onKeepMine: () => void sessionRef.current?.keepMine(),
+            onTakeDisk: () =>
+              void sessionRef.current?.takeDisk().then(() => {
+                const session = sessionRef.current;
+                if (session) setMarkdown(session.syncedText());
+              }),
+          },
+    [active, status],
+  );
+
+  const collab = useMemo(
+    () =>
+      collabEnabled && transport && active
+        ? { transport, path: active, user: collabUser }
+        : undefined,
+    [transport, active],
+  );
+
   // Cmd-S and leaving the tab flush the pending autosave
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -287,31 +318,12 @@ function Playground() {
               cacheKey={active ?? undefined}
               components={components}
               syntax={syntax}
-              onMarkdownChange={(next) => {
-                setMarkdown(next);
-                sessionRef.current?.changed();
-              }}
+              onMarkdownChange={onMarkdownChange}
               ref={editorRef}
               media={media}
               files={fileProvider}
-              collab={
-                collabEnabled && transport && active
-                  ? { transport, path: active, user: collabUser }
-                  : undefined
-              }
-              sync={
-                active != null
-                  ? {
-                      status,
-                      onKeepMine: () => void sessionRef.current?.keepMine(),
-                      onTakeDisk: () =>
-                        void sessionRef.current?.takeDisk().then(() => {
-                          const session = sessionRef.current;
-                          if (session) setMarkdown(session.syncedText());
-                        }),
-                    }
-                  : undefined
-              }
+              collab={collab}
+              sync={sync}
             />
           )}
           <details className="mt-6 text-[13px]">

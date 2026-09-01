@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useEditorTheme } from "../theme";
 
 /*
@@ -24,29 +24,32 @@ function isDark(el: Element): boolean {
   return getComputedStyle(el).colorScheme.includes("dark");
 }
 
+function subscribeThemeScope(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  const mql = window.matchMedia("(prefers-color-scheme: dark)");
+  mql.addEventListener("change", onChange);
+  return () => {
+    observer.disconnect();
+    mql.removeEventListener("change", onChange);
+  };
+}
+
 export function MermaidDiagram({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState(false);
-  // provider toggles re-render us; the DOM read below resolves the truth
-  // (next-themes class flips reach us via the observer effect)
+  // provider toggles re-render us (context) and this snapshot re-reads; the
+  // subscription covers next-themes class flips and OS scheme changes
   const { resolvedTheme } = useEditorTheme();
-  const [scope, setScope] = useState(resolvedTheme === "dark");
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const read = () => setScope(isDark(el));
-    read();
-    const observer = new MutationObserver(read);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    mql.addEventListener("change", read);
-    return () => {
-      observer.disconnect();
-      mql.removeEventListener("change", read);
-    };
-  }, [resolvedTheme]);
+  const scope = useSyncExternalStore(
+    subscribeThemeScope,
+    () => {
+      const el = containerRef.current;
+      return el ? isDark(el) : resolvedTheme === "dark";
+    },
+    () => false,
+  );
 
   useEffect(() => {
     let live = true;

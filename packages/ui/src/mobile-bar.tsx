@@ -1,7 +1,7 @@
 "use client";
 // side-effect import: registers starter-kit command typings
 import "@tiptap/starter-kit";
-import { useEffect, useState, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { useEditorPortal } from "./utils/portal";
@@ -37,36 +37,59 @@ import { insertItems } from "./slash-menu";
 import { itemCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
+const readKeyboardInset = () => {
+  const viewport = window.visualViewport;
+  return viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+};
+
+const subscribeKeyboardInset = (onChange: () => void) => {
+  const viewport = window.visualViewport;
+  if (!viewport) return () => {};
+  viewport.addEventListener("resize", onChange);
+  viewport.addEventListener("scroll", onChange);
+  return () => {
+    viewport.removeEventListener("resize", onChange);
+    viewport.removeEventListener("scroll", onChange);
+  };
+};
+
 /** distance the virtual keyboard covers at the bottom of the layout viewport */
 function useKeyboardInset(): number {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const update = () =>
-      setInset(Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop));
-    viewport.addEventListener("resize", update);
-    viewport.addEventListener("scroll", update);
-    update();
-    return () => {
-      viewport.removeEventListener("resize", update);
-      viewport.removeEventListener("scroll", update);
-    };
-  }, []);
-  return inset;
+  return useSyncExternalStore(subscribeKeyboardInset, readKeyboardInset, () => 0);
 }
 
 function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(query).matches,
-  );
-  useEffect(() => {
-    const list = window.matchMedia(query);
-    const update = () => setMatches(list.matches);
-    list.addEventListener("change", update);
-    return () => list.removeEventListener("change", update);
+  const [subscribe, getSnapshot] = useMemo(() => {
+    let list: MediaQueryList | undefined;
+    const resolve = () => (list ??= window.matchMedia(query));
+    return [
+      (onChange: () => void) => {
+        resolve().addEventListener("change", onChange);
+        return () => resolve().removeEventListener("change", onChange);
+      },
+      () => resolve().matches,
+    ] as const;
   }, [query]);
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+function useEditorFocused(editor: Editor): boolean {
+  const [subscribe, getSnapshot] = useMemo(
+    () =>
+      [
+        (onChange: () => void) => {
+          editor.on("focus", onChange);
+          editor.on("blur", onChange);
+          return () => {
+            editor.off("focus", onChange);
+            editor.off("blur", onChange);
+          };
+        },
+        () => editor.isFocused,
+      ] as const,
+    [editor],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 const barButtonCls =
@@ -103,34 +126,27 @@ function BarButton({
 
 type Sheet = "turn-into" | "insert" | "component" | null;
 
-/** Touch editing surface: a fixed bar riding above the virtual keyboard. */
-export function MobileBar({
-  editor,
-  components,
-  specs,
-  math,
-}: {
+interface MobileBarProps {
   editor: Editor;
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
   math?: boolean;
-}) {
-  const { anchorRef, container } = useEditorPortal();
-  const coarse = useMediaQuery("(pointer: coarse)");
-  const inset = useKeyboardInset();
-  const [focused, setFocused] = useState(editor.isFocused);
-  const [sheet, setSheet] = useState<Sheet>(null);
+}
 
-  useEffect(() => {
-    const onFocus = () => setFocused(true);
-    const onBlur = () => setFocused(false);
-    editor.on("focus", onFocus);
-    editor.on("blur", onBlur);
-    return () => {
-      editor.off("focus", onFocus);
-      editor.off("blur", onBlur);
-    };
-  }, [editor]);
+/** Touch editing surface: a fixed bar riding above the virtual keyboard. */
+export function MobileBar(props: MobileBarProps) {
+  // gate the whole subtree, not just its output: TouchBar's editor-state
+  // selector (two can() trial runs) would otherwise run per transaction on
+  // desktop only to render null
+  const coarse = useMediaQuery("(pointer: coarse)");
+  return coarse ? <TouchBar {...props} /> : null;
+}
+
+function TouchBar({ editor, components, specs, math }: MobileBarProps) {
+  const { anchorRef, container } = useEditorPortal();
+  const inset = useKeyboardInset();
+  const focused = useEditorFocused(editor);
+  const [sheet, setSheet] = useState<Sheet>(null);
 
   const state = useEditorState({
     editor,
@@ -157,7 +173,7 @@ export function MobileBar({
     },
   });
 
-  if (!coarse || state == null) return null;
+  if (state == null) return null;
   const visible = focused || sheet != null;
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
