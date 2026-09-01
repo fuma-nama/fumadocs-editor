@@ -2,9 +2,22 @@
   "name": "@fumadocs-editor/ui",
   "version": "0.0.0",
   "description": "MDX editor for Fumadocs: React component with Base UI chrome",
+  "keywords": [
+    "editor",
+    "fumadocs",
+    "mdx",
+    "react",
+    "tiptap",
+    "wysiwyg"
+  ],
+  "homepage": "https://github.com/fuma-nama/fumadocs-editor",
   "license": "MIT",
   "author": "Fuma Nama",
-  "repository": "github:fuma-nama/fumadocs-editor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuma-nama/fumadocs-editor.git",
+    "directory": "packages/ui"
+  },
   "files": [
     "dist",
     "css"
