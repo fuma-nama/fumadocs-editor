@@ -2,7 +2,7 @@
 import type { JSONContent } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
-import { createContext, useContext, Fragment, type ReactNode } from "react";
+import { Component as ReactComponent, createContext, useContext, Fragment, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
 import { resolveSrc, type MediaProvider } from "./components/media";
@@ -31,6 +31,46 @@ function StaticImg({ node }: { node: JSONContent }) {
 }
 
 const noop = () => {};
+
+/**
+ * Contains a throwing third-party renderer to its own component: the fallback
+ * keeps that component's (still editable) regions visible while the document
+ * and the rest of the editor stay intact. Colocated here, not its own module,
+ * because both the static paint and the live node views need it and this file
+ * is already eager — module extraction on the eager path costs real bytes.
+ */
+export class RenderBoundary extends ReactComponent<
+  { resetOn?: unknown; fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidUpdate(prev: { resetOn?: unknown }) {
+    // a node update retries the renderer, so an attr fix heals the component
+    if (this.state.failed && prev.resetOn !== this.props.resetOn) this.setState({ failed: false });
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** the generic dashed card: unregistered components and crashed renderers */
+export function FallbackCard({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <div
+      data-component-fallback=""
+      className="rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
+    >
+      <div
+        className="mb-1 font-mono text-[11px] text-fd-muted-foreground select-none"
+        contentEditable={false}
+      >{`<${name}>`}</div>
+      {children}
+    </div>
+  );
+}
 
 function renderMarks(node: JSONContent, key: number): ReactNode {
   let out: ReactNode = node.text;
@@ -95,10 +135,12 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
         <div
           data-node-view-wrapper=""
           data-component={name ?? ""}
-          className="relative rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
+          className="relative"
           style={{ whiteSpace: "normal" }}
         >
-          <ContentHole>{children}</ContentHole>
+          <FallbackCard name={name ?? ""}>
+            <ContentHole>{children}</ContentHole>
+          </FallbackCard>
         </div>
       </Shell>
     );
@@ -113,15 +155,23 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
         className="relative"
         style={{ whiteSpace: "normal" }}
       >
-        <Render
-          props={readStringProps(attributes)}
-          literals={readLiterals(attributes)}
-          selected={false}
-          setProp={noop}
-          setLiteral={noop}
+        <RenderBoundary
+          fallback={
+            <FallbackCard name={spec.name}>
+              <ContentHole className="fde-component-content">{children}</ContentHole>
+            </FallbackCard>
+          }
         >
-          <ContentHole className="fde-component-content">{children}</ContentHole>
-        </Render>
+          <Render
+            props={readStringProps(attributes)}
+            literals={readLiterals(attributes)}
+            selected={false}
+            setProp={noop}
+            setLiteral={noop}
+          >
+            <ContentHole className="fde-component-content">{children}</ContentHole>
+          </Render>
+        </RenderBoundary>
       </div>
     </Shell>
   );

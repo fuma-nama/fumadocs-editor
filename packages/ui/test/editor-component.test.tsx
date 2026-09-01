@@ -2,8 +2,11 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
+import type { MdxAttribute } from "@fumadocs-editor/core";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
+import { setStringProp } from "../src/components/attr-values";
+import type { UiComponentSpec } from "../src/components/spec";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -189,6 +192,106 @@ test("editable={false}: read-only surface, typing dropped, no mutating chrome", 
   act(() => void vi.advanceTimersByTime(50));
   expect(host!.querySelector('[aria-label$="options"]')).toBeNull();
 });
+
+/** a third-party renderer that throws unless its `mode` attr is "ok" */
+const boomSpec: UiComponentSpec = {
+  name: "Boom",
+  childrenRegion: { region: "children" },
+  render: ({ props, children }) => {
+    if (props.mode !== "ok") throw new Error("renderer exploded");
+    return createElement("div", { "data-boom-ok": "" }, children);
+  },
+};
+
+/** React logs every boundary-caught error; keep the test output clean */
+const quietly = async (run: () => Promise<void>) => {
+  const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await run();
+  } finally {
+    spy.mockRestore();
+  }
+};
+
+test("a throwing renderer degrades to the fallback card; document and siblings intact", () =>
+  quietly(async () => {
+    vi.useFakeTimers();
+    const source =
+      'Intro.\n\n<Boom mode="bad">Boom body.</Boom>\n\n<Callout type="info">Callout body</Callout>\n';
+    const editorRef = { current: null as MdxEditorRef | null };
+    const onChange = vi.fn<(markdown: string) => void>();
+    const { editor } = await mount({
+      defaultValue: source,
+      components: [...fumadocsUiComponents, boomSpec],
+      onMarkdownChange: onChange,
+      ref: editorRef,
+    });
+
+    // the crashed component degraded to the card, its region text still shown
+    const fallback = host!.querySelector('[data-component="Boom"] [data-component-fallback]');
+    expect(fallback).not.toBeNull();
+    expect(fallback!.textContent).toContain("<Boom>");
+    expect(fallback!.textContent).toContain("Boom body.");
+    // the sibling renderer is unaffected
+    expect(host!.querySelector('[data-component="Callout"] [data-component-fallback]')).toBeNull();
+    expect(host!.querySelector('[data-component="Callout"]')!.textContent).toContain(
+      "Callout body",
+    );
+
+    // the document stayed lossless, and editing elsewhere still works
+    expect(editorRef.current!.getMarkdown()).toBe(source);
+    act(() => {
+      editor.commands.setTextSelection(1);
+      editor.commands.insertContent("Hey. ");
+    });
+    act(() => void vi.advanceTimersByTime(300));
+    expect(onChange.mock.calls.at(-1)?.[0]).toBe(source.replace("Intro.", "Hey. Intro."));
+  }));
+
+test("the boundary retries on the next node update: an attr fix heals the component", () =>
+  quietly(async () => {
+    vi.useFakeTimers();
+    const { editor } = await mount({
+      defaultValue: '<Boom mode="bad">Body.</Boom>\n',
+      components: [...fumadocsUiComponents, boomSpec],
+    });
+    expect(host!.querySelector("[data-component-fallback]")).not.toBeNull();
+
+    let pos = -1;
+    editor.state.doc.descendants((node, at) => {
+      if (node.type.name === "mdxComponent") pos = at;
+      return pos === -1;
+    });
+    await act(async () => {
+      const node = editor.state.doc.nodeAt(pos)!;
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          attributes: setStringProp(node.attrs.attributes as MdxAttribute[], "mode", "ok"),
+        }),
+      );
+    });
+    expect(host!.querySelector("[data-component-fallback]")).toBeNull();
+    expect(host!.querySelector("[data-boom-ok]")!.textContent).toContain("Body.");
+  }));
+
+test("a throwing renderer cannot kill the static first paint", () =>
+  quietly(async () => {
+    vi.useFakeTimers();
+    render({
+      defaultValue: 'Intro.\n\n<Boom mode="bad">Boom body.</Boom>\n',
+      components: [...fumadocsUiComponents, boomSpec],
+    });
+    await settle(); // parse chunk → static paint; the live editor never mounts
+    const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement & {
+      editor?: unknown;
+    };
+    expect(staticView.editor).toBeUndefined();
+    expect(staticView.textContent).toContain("Intro.");
+    const fallback = staticView.querySelector("[data-component-fallback]");
+    expect(fallback).not.toBeNull();
+    expect(fallback!.textContent).toContain("Boom body.");
+  }));
 
 test("unedited document round-trips byte-identical through the debounce", async () => {
   vi.useFakeTimers();
