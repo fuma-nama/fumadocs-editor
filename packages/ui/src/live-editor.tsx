@@ -75,7 +75,7 @@ export function LiveEditor({
       imageExtension(media),
       ...componentExtensions(components),
       ...mathExtensions(syntax?.math === true),
-      slashMenu(components, media, syntax?.math),
+      slashMenu(components, specs, media, syntax?.math),
       ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
       ...(collab ? collab.extensions : []),
     ],

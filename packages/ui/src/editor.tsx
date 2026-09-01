@@ -339,7 +339,7 @@ export const MdxEditor = memo(function MdxEditor({
     const snapshot = snapshotRef.current;
     if (!editor || !snapshot) {
       // nothing live yet: the disk text simply becomes the document
-      const result = await parseDocCached(undefined, text, components, syntax);
+      const result = await parseDocCached(cacheKey, text, components, syntax);
       snapshotRef.current = result.snapshot;
       setParsed(result);
       return [];
@@ -385,7 +385,7 @@ export const MdxEditor = memo(function MdxEditor({
   };
 
   const setMarkdown = async (text: string): Promise<void> => {
-    const result = await parseDocCached(undefined, text, components, syntax);
+    const result = await parseDocCached(cacheKey, text, components, syntax);
     snapshotRef.current = result.snapshot;
     setParsed(result);
     setSourceError(null);
@@ -407,7 +407,7 @@ export const MdxEditor = memo(function MdxEditor({
       return;
     }
 
-    void parseDocCached(undefined, source, components, syntax).then(
+    void parseDocCached(cacheKey, source, components, syntax).then(
       (result) => {
         snapshotRef.current = result.snapshot;
         setParsed(result);
