@@ -106,7 +106,7 @@ function optionsFor(options: SyntaxOptions): Options {
   return built;
 }
 
-export function stringifyRoot(root: Root, options: SyntaxOptions = {}): string {
+function stringifyRoot(root: Root, options: SyntaxOptions = {}): string {
   return toMarkdown(root, optionsFor(options));
 }
 

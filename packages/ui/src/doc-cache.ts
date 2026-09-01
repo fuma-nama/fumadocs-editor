@@ -27,7 +27,7 @@ let parseModule: Promise<typeof import("@fumadocs-editor/core/parse")> | undefin
  * static paint never pay for it, hosts with a `staticFallback` may never
  * fetch it, and it starts loading the moment the first editor mounts.
  */
-export function loadParse() {
+function loadParse() {
   return (parseModule ??= import("@fumadocs-editor/core/parse"));
 }
 

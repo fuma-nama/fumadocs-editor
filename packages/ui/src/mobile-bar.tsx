@@ -239,10 +239,7 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
               <BarButton label="Outdent" onClick={() => outdentEntry(editor, specs)}>
                 <IndentDecrease size={17} />
               </BarButton>
-              <BarButton
-                label="Toggle folder"
-                onClick={() => toggleEntryType(editor, specs)}
-              >
+              <BarButton label="Toggle folder" onClick={() => toggleEntryType(editor, specs)}>
                 <Folder size={17} />
               </BarButton>
               <BarButton label="New row" onClick={() => handleModEnter(editor, specs)}>

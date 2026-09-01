@@ -4,7 +4,6 @@ import type {
   DefinitionContent,
   ListItem,
   PhrasingContent,
-  Root,
   RootContent,
   TableRow,
 } from "mdast";
@@ -382,13 +381,6 @@ function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
   if (name === DIRECTIVE_ADMONITION) return admonitionToMdast(attributes, mdChildren);
 
   return { type: "mdxJsxFlowElement", name, attributes, children: mdChildren };
-}
-
-export function docToMdast(doc: JSONContent, syntax: Syntax = EMPTY_SYNTAX): Root {
-  return {
-    type: "root",
-    children: (doc.content ?? []).map((node) => nodeToMdastBlock(node, syntax)),
-  };
 }
 
 export type { RawNode, ComponentSpec };
