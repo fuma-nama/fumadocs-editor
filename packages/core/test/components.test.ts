@@ -82,7 +82,7 @@ describe("component regions", () => {
     // description is edited as body text, not kept as a separate attribute
     const body = find(card, "mdxBlockRegion", "body")!;
     expect(find(body, "paragraph")?.content?.[0].text).toBe("Add themes to your site");
-    const attrNames = (card.attrs?.attributes as { name?: string }[]).map((a) => a.name);
+    const attrNames = (card.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(attrNames).not.toContain("description");
     expect(attrNames).toContain("title");
   });

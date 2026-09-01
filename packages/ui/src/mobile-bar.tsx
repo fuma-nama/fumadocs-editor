@@ -23,13 +23,7 @@ import {
   Undo2,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
-import {
-  handleModEnter,
-  listEntryDepth,
-  outdentEntry,
-  toggleEntryType,
-  type SpecMap,
-} from "./components/keymap";
+import { handleModEnter, listEntryDepth, outdentEntry, toggleEntryType } from "./components/keymap";
 import { activeComponent } from "./components/attributes";
 import { BlockPanel } from "./block-menu";
 import { TURN_INTO } from "./bubble-menu";
