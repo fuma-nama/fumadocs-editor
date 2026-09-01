@@ -74,6 +74,50 @@ describe("structure guard", () => {
     expect(callout.node.child(1).attrs.region).toBe("body");
   });
 
+  test("a surplus body region from a paste dissolves into the real one", () => {
+    const { editor, serialize } = makeEditor(`<Callout type="info" title="Heads up">
+  Body text.
+</Callout>
+`);
+    // a multi-block paste into the title can arrive wrapped in a fresh
+    // region sitting between the title and the real body
+    const body = findNode(editor, (node) => node.type.name === "mdxBlockRegion");
+    const { schema } = editor.state;
+    const extra = schema.nodes.mdxBlockRegion.create({ region: null }, [
+      schema.nodes.paragraph.create(null, schema.text("Pasted lead")),
+    ]);
+    editor.view.dispatch(editor.state.tr.insert(body.pos, extra));
+
+    const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
+    expect(callout.node.childCount).toBe(2);
+    expect(callout.node.child(0).attrs.region).toBe("title");
+    expect(callout.node.child(1).attrs.region).toBe("body");
+    expect(callout.node.child(1).textContent).toContain("Pasted lead");
+    expect(callout.node.child(1).textContent).toContain("Body text.");
+    expect(serialize()).toContain("Pasted lead");
+  });
+
+  test("a split title region merges back into one", () => {
+    const { editor } = makeEditor(`<Callout type="info" title="Heads up">
+  Body text.
+</Callout>
+`);
+    const title = findNode(editor, (node) => node.type.name === "mdxInlineRegion");
+    const { schema } = editor.state;
+    const extra = schema.nodes.mdxInlineRegion.create({ region: "title" }, [
+      schema.text("and more"),
+    ]);
+    editor.view.dispatch(
+      editor.state.tr.insert(title.pos + title.node.nodeSize, extra),
+    );
+
+    const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
+    expect(callout.node.childCount).toBe(2);
+    expect(callout.node.child(0).attrs.region).toBe("title");
+    expect(callout.node.child(0).textContent).toBe("Heads upand more");
+    expect(callout.node.child(1).attrs.region).toBe("body");
+  });
+
   test("healing is undone together with the damage", () => {
     const { editor, serialize } = makeEditor(FILES);
     const region = findNode(

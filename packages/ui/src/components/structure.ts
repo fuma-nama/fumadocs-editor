@@ -20,7 +20,9 @@ type Fix =
   | { kind: "insert"; pos: number; node: PMNode }
   | { kind: "remove"; pos: number; size: number }
   /** move a stray block into a region (append at `target`, a pos inside it) */
-  | { kind: "fold"; pos: number; target: number };
+  | { kind: "fold"; pos: number; target: number }
+  /** dissolve a surplus region: its content moves to `target` inside the real one */
+  | { kind: "merge"; pos: number; target: number };
 
 /** missing regions inserted, present ones retagged to the spec's names in order */
 function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap, fixes: Fix[]) {
@@ -87,12 +89,32 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
       node: state.schema.nodes[INLINE_REGION_NODE].create({ region: inline[i].region }),
     });
   }
+  // a paste can split regions or smuggle wrapped ones in: a component owns
+  // exactly the spec's regions, so surplus ones dissolve into the last real
+  // one (their content survives, the duplicate identity does not)
+  if (inline.length > 0) {
+    for (let i = inline.length; i < inlinePresent.length; i++) {
+      const into = inlinePresent[inline.length - 1];
+      fixes.push({
+        kind: "merge",
+        pos: inlinePresent[i].pos,
+        target: into.pos + into.node.nodeSize - 1,
+      });
+    }
+  }
 
   if (!block) return;
   const present = blockPresent[0];
   if (present) {
     if (present.node.attrs.region !== block.region) {
       fixes.push({ kind: "retag", pos: present.pos, attrs: { region: block.region } });
+    }
+    for (let i = 1; i < blockPresent.length; i++) {
+      fixes.push({
+        kind: "merge",
+        pos: blockPresent[i].pos,
+        target: present.pos + present.node.nodeSize - 1,
+      });
     }
     // a component with a body region owns ALL its block content through it
     // (that's what childrenRegion folding means at parse time): a bare block
@@ -136,6 +158,12 @@ function applyFixes(state: EditorState, fixes: Fix[]): Transaction | null {
       if (!stray) continue;
       tr.delete(from, from + stray.nodeSize);
       tr.insert(tr.mapping.map(fix.target), stray);
+    } else if (fix.kind === "merge") {
+      const from = tr.mapping.map(fix.pos);
+      const region = tr.doc.nodeAt(from);
+      if (!region) continue;
+      tr.delete(from, from + region.nodeSize);
+      tr.insert(tr.mapping.map(fix.target), region.content);
     } else {
       const from = tr.mapping.map(fix.pos);
       const to = tr.mapping.map(fix.pos + fix.size);
