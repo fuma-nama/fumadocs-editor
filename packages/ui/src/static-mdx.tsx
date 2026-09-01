@@ -256,6 +256,34 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       );
     case "codeBlock":
       return <StaticCodeBlock key={key} node={node} />;
+    // math paints as its TeX source: the live editor looks identical until
+    // the lazy KaTeX chunk arrives, so the hydration swap stays still
+    case "mathInline":
+      return (
+        <span key={key} className="react-renderer node-mathInline">
+          <span className="fde-math fde-math-inline" data-node-view-wrapper="">
+            <span className="fde-math-src">
+              <span data-node-view-content="">{node.content?.[0]?.text ?? ""}</span>
+            </span>
+          </span>
+        </span>
+      );
+    case "mathBlock":
+      return (
+        <Shell key={key} type="mathBlock">
+          <div
+            data-node-view-wrapper=""
+            className="fde-math fde-math-block"
+            style={{ whiteSpace: "normal" }}
+          >
+            <pre className="fde-math-src">
+              <code data-node-view-content="" style={{ whiteSpace: "pre-wrap" }}>
+                {node.content?.[0]?.text ?? ""}
+              </code>
+            </pre>
+          </div>
+        </Shell>
+      );
     case "mdxComponent":
       return <Component key={key} node={node} specs={specs} />;
     case "mdxInlineRegion":

@@ -2,12 +2,13 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createSyntax, editorExtensions } from "@fumadocs-editor/core/extensions";
 import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
-import type { DocSnapshot } from "@fumadocs-editor/core/parse";
+import type { DocSnapshot, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
+import { mathExtensions } from "./components/math";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
 import { BlockMenu } from "./block-menu";
@@ -31,6 +32,8 @@ export interface LiveEditorProps {
   hidden: boolean;
   media?: MediaProvider;
   files?: FileProvider;
+  /** dialect switches; must match what the document was parsed with */
+  syntax?: SyntaxOptions;
 }
 
 /**
@@ -49,21 +52,28 @@ export function LiveEditor({
   hidden,
   media,
   files,
+  syntax,
 }: LiveEditorProps) {
   const extensions = useMemo(
     () => [
-      ...editorExtensions({ componentNodes: false, codeBlock: false, image: false }),
+      ...editorExtensions({
+        componentNodes: false,
+        codeBlock: false,
+        image: false,
+        mathNodes: false,
+      }),
       codeBlockExtension(),
       imageExtension(media),
       ...componentExtensions(components),
-      slashMenu(components, media),
+      ...mathExtensions(syntax?.math === true),
+      slashMenu(components, media, syntax?.math),
       ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
     ],
-    [components, media, files, specs],
+    [components, media, files, specs, syntax],
   );
   const serialize = useMemo(
-    () => createIncrementalSerializer(createSyntax(components)),
-    [components],
+    () => createIncrementalSerializer(createSyntax(components, syntax)),
+    [components, syntax],
   );
 
   // unchanged blocks serialize from a per-node cache, so cost tracks the
@@ -120,7 +130,9 @@ export function LiveEditor({
       <EditorContent editor={editor} className="fde-content" />
       {editor && <EditorBubble editor={editor} specs={specs} media={media} />}
       {editor && <BlockMenu editor={editor} specs={specs} />}
-      {editor && <MobileBar editor={editor} components={components} specs={specs} />}
+      {editor && (
+        <MobileBar editor={editor} components={components} specs={specs} math={syntax?.math} />
+      )}
     </div>
   );
 }

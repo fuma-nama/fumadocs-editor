@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 // entry html loads before any interaction; everything editor-shaped must
 // stay in lazy chunks.
 const EAGER_BUDGET = 100 * 1024; // gzip bytes, react vendor chunk excluded
-const LAZY_CHUNKS = ["parse", "live-editor", "code-languages"];
+const LAZY_CHUNKS = ["parse", "live-editor", "code-languages", "katex"];
 
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
 const html = readFileSync(path.join(dist, "index.html"), "utf-8");

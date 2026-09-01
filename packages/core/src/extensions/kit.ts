@@ -9,6 +9,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { mdxNodes } from "./mdx-nodes";
 import { mdxComponentNodes } from "../components/nodes";
+import { mathNodes } from "../syntax/math/nodes";
 
 /** code fences keep their info string (` ```ts tab="cli" `) */
 export const CodeBlockMdx = CodeBlock.extend({
@@ -83,12 +84,18 @@ export interface EditorExtensionsOptions {
   codeBlock?: boolean;
   /** Include the base image node; `false` when the UI ships a node view. */
   image?: boolean;
+  /**
+   * Include the base math nodes (inert either way — the dialect gate lives in
+   * `SyntaxOptions.math`); `false` when the UI ships node views.
+   */
+  mathNodes?: boolean;
 }
 
 export function editorExtensions({
   componentNodes = true,
   codeBlock = true,
   image = true,
+  mathNodes: math = true,
 }: EditorExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
@@ -119,5 +126,6 @@ export function editorExtensions({
     TableCell,
     ...mdxNodes,
     ...(componentNodes ? mdxComponentNodes : []),
+    ...(math ? mathNodes : []),
   ];
 }

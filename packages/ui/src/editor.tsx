@@ -1,5 +1,5 @@
 "use client";
-import type { DocSnapshot, ParsedDoc } from "@fumadocs-editor/core/parse";
+import type { DocSnapshot, ParsedDoc, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor } from "@tiptap/core";
 import { Tabs } from "@base-ui/react/tabs";
 import {
@@ -58,6 +58,12 @@ export interface MdxEditorProps {
   onMarkdownChange?: (markdown: string) => void;
   /** MDX components to render as WYSIWYG nodes with editable regions */
   components?: UiComponentSpec[];
+  /**
+   * Syntax dialect switches beyond the component specs (e.g. `{ math: true }`
+   * for `$…$` TeX math). Together with `components` this is the one `Syntax`
+   * the document is parsed and serialized with.
+   */
+  syntax?: SyntaxOptions;
   /**
    * Reuse the parsed document across mounts of the same document (a small
    * LRU): reopening a recently visited doc paints without reparsing.
@@ -136,6 +142,7 @@ export function MdxEditor({
   defaultValue = "",
   onMarkdownChange,
   components,
+  syntax,
   cacheKey,
   staticFallback,
   theme,
@@ -178,7 +185,7 @@ export function MdxEditor({
     if (parsed || sourceError || mode !== "visual") return;
     if (staticFallback && stage === "static") return;
     let cancelled = false;
-    parseDocCached(cacheKey, defaultValue, components ?? []).then(
+    parseDocCached(cacheKey, defaultValue, components ?? [], syntax).then(
       (result) => {
         if (cancelled) return;
         snapshotRef.current = result.snapshot;
@@ -194,7 +201,7 @@ export function MdxEditor({
     return () => {
       cancelled = true;
     };
-  }, [parsed, sourceError, mode, stage, staticFallback, cacheKey, defaultValue, components]);
+  }, [parsed, sourceError, mode, stage, staticFallback, cacheKey, defaultValue, components, syntax]);
 
   // hydrate at idle even without intent, so the first interaction is instant
   useEffect(() => {
@@ -254,7 +261,7 @@ export function MdxEditor({
     const snapshot = snapshotRef.current;
     if (!editor || !snapshot) {
       // nothing live yet: the disk text simply becomes the document
-      const result = await parseDocCached(undefined, text, components ?? []);
+      const result = await parseDocCached(undefined, text, components ?? [], syntax);
       snapshotRef.current = result.snapshot;
       setParsed(result);
       return [];
@@ -300,7 +307,7 @@ export function MdxEditor({
   };
 
   const setMarkdown = async (text: string): Promise<void> => {
-    const result = await parseDocCached(undefined, text, components ?? []);
+    const result = await parseDocCached(undefined, text, components ?? [], syntax);
     snapshotRef.current = result.snapshot;
     setParsed(result);
     setSourceError(null);
@@ -322,7 +329,7 @@ export function MdxEditor({
       return;
     }
 
-    void parseDocCached(undefined, source, components ?? []).then(
+    void parseDocCached(undefined, source, components ?? [], syntax).then(
       (result) => {
         snapshotRef.current = result.snapshot;
         setParsed(result);
@@ -367,6 +374,7 @@ export function MdxEditor({
                   doc={parsed.doc}
                   components={components ?? []}
                   specs={specMap}
+                  syntax={syntax}
                   snapshotRef={snapshotRef}
                   onChangeRef={onChangeRef}
                   hidden={stage !== "live"}

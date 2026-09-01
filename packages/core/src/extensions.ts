@@ -21,6 +21,8 @@ export {
   MdxInlineRegion,
   MdxBlockRegion,
 } from "./components/nodes";
+export { mathNodes, MathInline, MathBlock } from "./syntax/math/nodes";
+export { MATH_INLINE_NODE, MATH_BLOCK_NODE } from "./syntax/math";
 export {
   createSyntax,
   COMPONENT_NODE,

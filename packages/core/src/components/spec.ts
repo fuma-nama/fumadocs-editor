@@ -104,6 +104,12 @@ export interface SyntaxOptions {
    * Defaults to true when the admonition spec is registered.
    */
   directives?: boolean;
+  /**
+   * Parse the remark-math dialect, making `$x$` / `$$…$$` TeX math editable
+   * nodes (the `syntax/math` capsule). Off by default — it is a dialect:
+   * enabling it changes how any `$`-delimited text parses.
+   */
+  math?: boolean;
 }
 
 /**

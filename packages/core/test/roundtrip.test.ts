@@ -63,11 +63,14 @@ describe.skipIf(!existsSync(corpus))("fumadocs docs corpus", () => {
     .filter((file) => file.endsWith(".mdx") || file.endsWith(".md"))
     .map((file) => path.join(corpus, file));
 
-  // the directive dialect changes how `:`-shaped text parses, so the corpus
-  // must hold with it on as well as off
+  // each dialect changes how its trigger characters parse (`:` for
+  // directives, `$` for math), so the corpus must hold with every dialect on
+  // as well as off
   const syntaxes = [
     ["default", createSyntax()],
     ["directives", createSyntax([admonitionSpec])],
+    ["math", createSyntax([], { math: true })],
+    ["all dialects", createSyntax([admonitionSpec], { math: true })],
   ] as const;
 
   for (const [label, syntax] of syntaxes) {
