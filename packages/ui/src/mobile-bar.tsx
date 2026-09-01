@@ -109,8 +109,14 @@ function BarButton({
       className={barButtonCls}
       data-active={active || undefined}
       disabled={disabled}
-      // keep focus (and the virtual keyboard) in the editor
-      onPointerDown={(event) => event.preventDefault()}
+      // Keep focus (and the virtual keyboard) in the editor by cancelling the
+      // mouse focus transfer — but never a touch pointerdown: WebKit then
+      // suppresses the synthesized click entirely and the button goes dead on
+      // real touches. Touch taps don't focus buttons on iOS, and every action
+      // refocuses the editor through chain().focus() anyway.
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch") event.preventDefault();
+      }}
       onClick={onClick}
     >
       {children}
