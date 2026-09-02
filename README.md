@@ -18,7 +18,7 @@ Documentation lives in [`apps/docs`](apps/docs); a live playground in
 ```bash
 pnpm install
 pnpm dev          # playground with the FS mirror on docs/
-pnpm -r test
+pnpm test
 pnpm build        # includes the playground size-budget assertions
 ```
 

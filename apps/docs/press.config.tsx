@@ -1,8 +1,5 @@
 import { defineConfig } from "fumapress";
 import { fumadocsMdx } from "fumapress/adapters/mdx";
-import { flexsearchPlugin } from "fumapress/plugins/flexsearch";
-import { llmsPlugin } from "fumapress/plugins/llms.txt";
-import { takumiPlugin } from "fumapress/plugins/takumi";
 import { docs } from "./.source/server";
 
 export default defineConfig({
@@ -10,6 +7,4 @@ export default defineConfig({
   site: {
     name: "Fumadocs Editor",
   },
-})
-  .plugins(flexsearchPlugin(), llmsPlugin(), takumiPlugin())
-  .adapters(fumadocsMdx());
+}).adapters(fumadocsMdx());
