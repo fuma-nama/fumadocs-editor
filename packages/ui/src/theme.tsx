@@ -9,7 +9,6 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { cn } from "./utils/cn";
 
 export type EditorTheme = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -39,9 +38,9 @@ function subscribeSystemTheme(onChange: () => void): () => void {
 
 /**
  * Theme context for standalone hosts (plain React, Storybook, playground).
- * Fumadocs sites already toggle `.dark` via next-themes; the editor's tokens
- * key off that. Tracks `light | dark | system`, persists it, and applies the
- * class on a wrapper so `fd-*` tokens resolve.
+ * Fumadocs sites already toggle `.dark` via next-themes; the tokens key off
+ * that. Tracks `light | dark | system`, persists it, and applies the class
+ * on a wrapper.
  */
 export interface EditorThemeProviderProps {
   /** @defaultValue "system" */
@@ -88,7 +87,10 @@ export function EditorThemeProvider({
 
   return (
     <ThemeContext.Provider value={value}>
-      <div className={cn(resolvedTheme, className)} data-fde-theme={resolvedTheme}>
+      <div
+        className={className ? `${resolvedTheme} ${className}` : resolvedTheme}
+        data-fde-theme={resolvedTheme}
+      >
         {children}
       </div>
     </ThemeContext.Provider>

@@ -1,6 +1,9 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useEditorTheme } from "../theme";
+import { chrome } from "../styles/shared";
 
 /*
  * Diagram preview for `mermaid` code fences: a code-block renderer variant,
@@ -14,10 +17,25 @@ type Mermaid = typeof import("mermaid").default;
 let mermaidPromise: Promise<Mermaid> | undefined;
 let renderSeq = 0;
 
+const styles = stylex.create({
+  frame: {
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+  },
+  diagram: {
+    display: "flex",
+    justifyContent: "center",
+    overflowX: "auto",
+    padding: "1rem",
+    opacity: { default: null, ":is([data-error])": 0.6 },
+  },
+});
+
 /**
- * Whether `el` sits in a dark scope. `color-scheme` in preset.css tracks
- * every theming path (`.dark` / `.light` classes and the OS fallback), so
- * the computed value is authoritative even for nested overrides.
+ * Whether `el` sits in a dark scope. The `color-scheme` declarations in
+ * base.css track every theming path (`.dark` / `.light` classes and the OS
+ * fallback), so the computed value is authoritative even for nested overrides.
  */
 function isDark(el: Element): boolean {
   return getComputedStyle(el).colorScheme.includes("dark");
@@ -83,10 +101,10 @@ export function MermaidDiagram({ code }: { code: string }) {
   return (
     // kept mounted even before the first render: the ref is where the theme
     // scope is read from (computed styles resolve on hidden elements too)
-    <div className="border-t border-fd-border" contentEditable={false} hidden={!svg}>
+    <div {...stylex.props(chrome.static, styles.frame)} contentEditable={false} hidden={!svg}>
       <div
         ref={containerRef}
-        className="fde-mermaid flex justify-center overflow-x-auto p-4 data-[error]:opacity-60"
+        {...stylex.props(styles.diagram)}
         data-error={error || undefined}
         dangerouslySetInnerHTML={{ __html: svg }}
       />

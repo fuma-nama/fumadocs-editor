@@ -5,7 +5,7 @@ import type { ComponentRenderProps, UiComponentSpec } from "@fumadocs-editor/ui"
 function Feature({ literals, children }: ComponentRenderProps) {
   const soon = literals.soon === true;
   return (
-    <div className="rounded-xl border border-fd-border bg-fd-card p-4 [&_[data-region=title]]:font-medium">
+    <div className="rounded-xl border border-fd-border bg-fd-card p-4">
       {soon && (
         <span
           contentEditable={false}
@@ -27,6 +27,8 @@ export const featureSpec: UiComponentSpec = {
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Feature name…" }],
   childrenRegion: { region: "body", placeholder: "Describe the feature…" },
   props: [{ name: "soon", label: "Coming soon", type: "boolean", default: false }],
+  // regions render outside the renderer's tree; style them by name
+  regions: { title: "font-medium" },
   insert: () => ({
     type: "mdxComponent",
     attrs: { name: "Feature", attributes: [] },

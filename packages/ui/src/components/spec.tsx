@@ -29,4 +29,10 @@ export interface UiComponentSpec extends ComponentSpec {
   icon?: ReactNode;
   /** region holding a file path: with a FileProvider it autocompletes in place */
   filePathRegion?: string;
+  /**
+   * Class name for each editable region's element, by region name. Regions
+   * render outside the renderer's tree, so this is how a component styles
+   * them (its placeholder position follows `--fde-ph-x` / `--fde-ph-y`).
+   */
+  regions?: Record<string, string>;
 }

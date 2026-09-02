@@ -1,4 +1,7 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
+import { consts } from "../styles/consts.stylex";
 import type { Extension } from "@tiptap/core";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import {
@@ -13,8 +16,8 @@ import { Switch } from "@base-ui/react/switch";
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
-import { popupCls, switchRootCls, switchThumbCls } from "./styles";
-import { cn } from "../utils/cn";
+import { chrome } from "../styles/shared";
+import { content, contentClass } from "../styles/content";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { MermaidDiagram } from "./mermaid";
@@ -87,8 +90,103 @@ const ALIASES: Record<string, string> = {
   "": "plaintext",
 };
 
-const selectTriggerCls =
-  "inline-flex h-6 cursor-pointer select-none items-center gap-1 rounded-md px-1.5 text-xs font-medium text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent";
+const styles = stylex.create({
+  /** header controls: 24px squares, hover (and an open popup) wash in accent */
+  iconButton: {
+    display: "inline-flex",
+    width: "1.5rem",
+    height: "1.5rem",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.375rem",
+    outline: "none",
+    color: {
+      default: tokens.mutedForeground,
+      ":hover": tokens.accentForeground,
+      ":is([data-popup-open])": tokens.accentForeground,
+    },
+    backgroundColor: {
+      default: "transparent",
+      ":hover": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
+    },
+  },
+  languageTrigger: {
+    display: "inline-flex",
+    height: "1.5rem",
+    cursor: "pointer",
+    userSelect: "none",
+    alignItems: "center",
+    gap: "0.25rem",
+    borderRadius: "0.375rem",
+    paddingInline: "0.375rem",
+    fontSize: 12,
+    lineHeight: "1rem",
+    fontWeight: 500,
+    outline: "none",
+    color: {
+      default: tokens.mutedForeground,
+      ":hover": tokens.accentForeground,
+    },
+    backgroundColor: {
+      default: "transparent",
+      ":hover": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
+    },
+  },
+  titleInput: {
+    height: "1.5rem",
+    minWidth: 0,
+    flex: 1,
+    backgroundColor: "transparent",
+    paddingInline: "0.375rem",
+    fontSize: 13,
+    fontWeight: 500,
+    color: tokens.foreground,
+    outline: "none",
+    "::placeholder": {
+      color: `color-mix(in oklab, ${tokens.mutedForeground} 50%, transparent)`,
+    },
+  },
+  settingsPopup: {
+    display: "flex",
+    width: "13rem",
+    flexDirection: "column",
+    gap: "0.5rem",
+    padding: "0.5rem",
+  },
+  row: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    fontSize: 12.5,
+    color: tokens.foreground,
+  },
+  denseSwitch: { height: "1.125rem", width: "1.875rem" },
+  startAt: {
+    height: "1.5rem",
+    width: "3.5rem",
+    paddingInline: "0.375rem",
+    textAlign: "end",
+    fontSize: 12,
+  },
+  /** the fence flags this editor has no control for, shown verbatim */
+  rest: {
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+    paddingTop: "0.5rem",
+    fontFamily: consts.mono,
+    fontSize: 11,
+    color: tokens.mutedForeground,
+  },
+  /** the gutter row: line numbers beside the horizontal scroller */
+  body: { display: "flex" },
+  pointer: { cursor: "pointer" },
+});
+
+const languageTriggerClass = stylex.props(chrome.button, styles.languageTrigger).className!;
 
 /** Copies the block's text; briefly confirms with a check. Purely chrome: it
  * is `contentEditable={false}` and never mutates the document. */
@@ -98,7 +196,7 @@ function CopyButton({ getText }: { getText: () => string }) {
     <button
       type="button"
       aria-label={copied ? "Copied" : "Copy code"}
-      className="inline-flex size-6 items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground"
+      {...stylex.props(chrome.button, styles.iconButton)}
       tabIndex={-1}
       onClick={() => {
         void navigator.clipboard?.writeText(getText());
@@ -131,7 +229,7 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
       onPick={(item) => onChange(item.value)}
       align="end"
       ariaLabel="Code language"
-      triggerCls={selectTriggerCls}
+      triggerCls={languageTriggerClass}
       triggerTabIndex={-1}
     >
       {selected?.label}
@@ -149,36 +247,36 @@ function MetaSettings({
   onChange: (next: ReturnType<typeof parseCodeMeta>) => void;
 }) {
   const { anchorRef, container } = useEditorPortal();
-  const rowCls = "flex items-center justify-between gap-3 text-[12.5px] text-fd-foreground";
-  const denseSwitchCls = cn(switchRootCls, "h-4.5 w-7.5");
+  const denseSwitch = stylex.props(chrome.switchRoot, styles.denseSwitch);
+  const thumb = stylex.props(chrome.switchThumb);
   return (
     <Popover.Root>
       <Popover.Trigger
         ref={anchorRef}
         aria-label="Code block options"
         tabIndex={-1}
-        className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground outline-none hover:bg-fd-accent hover:text-fd-accent-foreground data-[popup-open]:bg-fd-accent data-[popup-open]:text-fd-accent-foreground"
+        {...stylex.props(chrome.button, styles.iconButton, styles.pointer)}
       >
         <Settings2 size={13} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner sideOffset={6} align="end">
-          <Popover.Popup className={cn(popupCls, "flex w-52 flex-col gap-2 p-2")}>
-            <label className={rowCls}>
+          <Popover.Popup {...stylex.props(chrome.popup, styles.settingsPopup)}>
+            <label {...stylex.props(styles.row)}>
               Line numbers
               <Switch.Root
-                className={denseSwitchCls}
+                {...denseSwitch}
                 checked={meta.lineNumbers !== false}
                 onCheckedChange={(on) => onChange({ ...meta, lineNumbers: on })}
               >
-                <Switch.Thumb className={switchThumbCls} />
+                <Switch.Thumb {...thumb} />
               </Switch.Root>
             </label>
             {meta.lineNumbers !== false && (
-              <label className={rowCls}>
+              <label {...stylex.props(styles.row)}>
                 Start at
                 <input
-                  className="h-6 w-14 rounded-md border border-fd-border bg-fd-background px-1.5 text-right text-[12px] outline-none focus-visible:border-fd-ring"
+                  {...stylex.props(chrome.input, chrome.field, styles.startAt)}
                   type="number"
                   min={1}
                   value={typeof meta.lineNumbers === "number" ? meta.lineNumbers : 1}
@@ -189,21 +287,17 @@ function MetaSettings({
                 />
               </label>
             )}
-            <label className={rowCls}>
+            <label {...stylex.props(styles.row)}>
               Copy button
               <Switch.Root
-                className={denseSwitchCls}
+                {...denseSwitch}
                 checked={!meta.noCopy}
                 onCheckedChange={(on) => onChange({ ...meta, noCopy: !on })}
               >
-                <Switch.Thumb className={switchThumbCls} />
+                <Switch.Thumb {...thumb} />
               </Switch.Root>
             </label>
-            {meta.rest && (
-              <p className="border-t border-fd-border pt-2 font-mono text-[11px] text-fd-muted-foreground">
-                {meta.rest}
-              </p>
-            )}
+            {meta.rest && <p {...stylex.props(styles.rest)}>{meta.rest}</p>}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -228,18 +322,11 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
   }
 
   return (
-    <NodeViewWrapper
-      as="figure"
-      dir="ltr"
-      className="fde-codeblock shiki not-prose relative my-4 overflow-hidden rounded-xl border border-fd-border bg-fd-card text-sm shadow-sm"
-    >
-      <div
-        className="flex h-9.5 items-center gap-1 border-b border-fd-border px-3 text-fd-muted-foreground"
-        contentEditable={false}
-      >
-        <SquareCode size={15} className="shrink-0 opacity-70" />
+    <NodeViewWrapper as="figure" dir="ltr" {...stylex.props(content.codeBlock)}>
+      <div {...stylex.props(chrome.static, content.codeHeader)} contentEditable={false}>
+        <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
         <input
-          className="h-6 min-w-0 flex-1 bg-transparent px-1.5 text-[13px] font-medium text-fd-foreground outline-none placeholder:text-fd-muted-foreground/50"
+          {...stylex.props(chrome.input, styles.titleInput)}
           value={meta.title}
           placeholder="Title…"
           spellCheck={false}
@@ -258,15 +345,19 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
         />
         {!meta.noCopy && <CopyButton getText={() => node.textContent} />}
       </div>
-      <div className="flex">
+      <div {...stylex.props(styles.body)}>
         {gutter != null && (
-          <pre className="fde-codeblock-lines" contentEditable={false} aria-hidden>
+          <pre
+            {...stylex.props(chrome.static, content.codeLines)}
+            contentEditable={false}
+            aria-hidden
+          >
             {gutter}
           </pre>
         )}
-        <div className="min-w-0 flex-1 overflow-auto">
-          <pre className="fde-codeblock-pre">
-            <NodeViewContent as={"code" as "div"} />
+        <div {...stylex.props(content.codeScroll)}>
+          <pre {...stylex.props(content.codePre)}>
+            <NodeViewContent as={"code" as "div"} {...stylex.props(content.codeCode)} />
           </pre>
         </div>
       </div>
@@ -290,7 +381,7 @@ export function codeBlockExtension(): Extension {
       };
     },
     addNodeView() {
-      return ReactNodeViewRenderer(CodeBlockView);
+      return ReactNodeViewRenderer(CodeBlockView, { className: contentClass.block });
     },
   }).configure({ lowlight }) as unknown as Extension;
 }

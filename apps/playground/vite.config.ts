@@ -50,16 +50,10 @@ export default defineConfig({
     // vite hand them a second React instance (breaking hooks in node-view
     // renderers like Accordion). Force a single copy.
     dedupe: ["react", "react-dom"],
-    // consume workspace package sources directly so `pnpm dev` needs no build step
+    // core and sync are consumed from source so `pnpm dev` needs no build
+    // step for them; ui is its built package (StyleX compiles at build time
+    // and emits the stylesheet), rebuilt by `tsdown --watch` under `turbo dev`
     alias: [
-      {
-        find: "@fumadocs-editor/ui/css/preset.css",
-        replacement: path.resolve(dir, "../../packages/ui/css/preset.css"),
-      },
-      {
-        find: /^@fumadocs-editor\/ui$/,
-        replacement: path.resolve(dir, "../../packages/ui/src/index.ts"),
-      },
       {
         find: /^@fumadocs-editor\/core$/,
         replacement: path.resolve(dir, "../../packages/core/src/index.ts"),

@@ -1,0 +1,243 @@
+/*
+ * The `--fde-*` design tokens (fumadocs `neutral` palette by default), and
+ * rules for markup the library does not author: ProseMirror internals,
+ * TipTap's own views (task item, table wrapper), highlight.js output.
+ * Everything the library renders is StyleX.
+ *
+ * Theming follows the host: a `.dark` class on an ancestor (fumadocs,
+ * next-themes, `EditorThemeProvider`), the OS preference when there is
+ * none. Override the variables after importing this stylesheet.
+ */
+
+:root,
+.light {
+  color-scheme: light;
+  --fde-background: hsl(0 0% 96%);
+  --fde-foreground: hsl(0 0% 3.9%);
+  --fde-muted: hsl(0 0% 96.1%);
+  --fde-muted-foreground: hsl(0 0% 45.1%);
+  --fde-popover: hsl(0 0% 98%);
+  --fde-popover-foreground: hsl(0 0% 15.1%);
+  --fde-card: hsl(0 0% 94.7%);
+  --fde-card-foreground: hsl(0 0% 3.9%);
+  --fde-border: hsla(0 0% 80% / 0.5);
+  --fde-primary: hsl(0 0% 9%);
+  --fde-primary-foreground: hsl(0 0% 98%);
+  --fde-secondary: hsl(0 0% 93.1%);
+  --fde-secondary-foreground: hsl(0 0% 9%);
+  --fde-accent: hsla(0 0% 82% / 0.5);
+  --fde-accent-foreground: hsl(0 0% 9%);
+  --fde-ring: hsl(0 0% 63.9%);
+  /* code highlighting: github light, darkened for contrast on the card */
+  --fde-hl-comment: #57606a;
+  --fde-hl-keyword: #cf222e;
+  --fde-hl-string: #0a3069;
+  --fde-hl-number: #0550ae;
+  --fde-hl-title: #8250df;
+  --fde-hl-type: #953800;
+  --fde-hl-attr: #0550ae;
+  --fde-hl-tag: #116329;
+}
+
+:root {
+  /* callout colours, the same in both schemes */
+  --fde-info: oklch(62.3% 0.214 259.815);
+  --fde-warning: oklch(76.9% 0.188 70.08);
+  --fde-error: oklch(63.7% 0.237 25.331);
+  --fde-success: oklch(72.3% 0.219 149.579);
+  --fde-idea: oklch(70.5% 0.209 60.849);
+}
+
+.dark {
+  /* form-control internals follow the UA colour scheme, not the tokens */
+  color-scheme: dark;
+  --fde-background: hsl(0 0% 7.04%);
+  --fde-foreground: hsl(0 0% 92%);
+  --fde-muted: hsl(0 0% 12.9%);
+  --fde-muted-foreground: hsla(0 0% 70% / 0.8);
+  --fde-popover: hsl(0 0% 11.6%);
+  --fde-popover-foreground: hsl(0 0% 86.9%);
+  --fde-card: hsl(0 0% 9.8%);
+  --fde-card-foreground: hsl(0 0% 98%);
+  --fde-border: hsla(0 0% 40% / 0.2);
+  --fde-primary: hsl(0 0% 98%);
+  --fde-primary-foreground: hsl(0 0% 9%);
+  --fde-secondary: hsl(0 0% 12.9%);
+  --fde-secondary-foreground: hsl(0 0% 92%);
+  --fde-accent: hsla(0 0% 40.9% / 0.3);
+  --fde-accent-foreground: hsl(0 0% 90%);
+  --fde-ring: hsl(0 0% 54.9%);
+  --fde-hl-comment: #8b949e;
+  --fde-hl-keyword: #ff7b72;
+  --fde-hl-string: #a5d6ff;
+  --fde-hl-number: #79c0ff;
+  --fde-hl-title: #d2a8ff;
+  --fde-hl-type: #ffa657;
+  --fde-hl-attr: #79c0ff;
+  --fde-hl-tag: #7ee787;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) {
+    color-scheme: dark;
+    --fde-background: hsl(0 0% 7.04%);
+    --fde-foreground: hsl(0 0% 92%);
+    --fde-muted: hsl(0 0% 12.9%);
+    --fde-muted-foreground: hsla(0 0% 70% / 0.8);
+    --fde-popover: hsl(0 0% 11.6%);
+    --fde-popover-foreground: hsl(0 0% 86.9%);
+    --fde-card: hsl(0 0% 9.8%);
+    --fde-card-foreground: hsl(0 0% 98%);
+    --fde-border: hsla(0 0% 40% / 0.2);
+    --fde-primary: hsl(0 0% 98%);
+    --fde-primary-foreground: hsl(0 0% 9%);
+    --fde-secondary: hsl(0 0% 12.9%);
+    --fde-secondary-foreground: hsl(0 0% 92%);
+    --fde-accent: hsla(0 0% 40.9% / 0.3);
+    --fde-accent-foreground: hsl(0 0% 90%);
+    --fde-ring: hsl(0 0% 54.9%);
+    --fde-hl-comment: #8b949e;
+    --fde-hl-keyword: #ff7b72;
+    --fde-hl-string: #a5d6ff;
+    --fde-hl-number: #79c0ff;
+    --fde-hl-title: #d2a8ff;
+    --fde-hl-type: #ffa657;
+    --fde-hl-attr: #79c0ff;
+    --fde-hl-tag: #7ee787;
+  }
+}
+
+/* Themed selection (chrome inputs included): the native translucent blue
+ * has almost no contrast on dark surfaces. Background only: setting
+ * `color` blanks text on node selections. */
+[data-fde-root] ::selection {
+  background: color-mix(in oklab, var(--fde-primary) 30%, transparent);
+}
+
+/* Node selections: the ring is the signal; WebKit's node range would
+ * otherwise bleed onto inter-block whitespace. */
+[data-fde-root] .ProseMirror-hideselection::selection,
+[data-fde-root] .ProseMirror-hideselection ::selection {
+  background: transparent;
+}
+
+/* TipTap blanks native ::selection on descendants while the editor is
+ * blurred; chrome inputs (TypeTable cells, code title) hold the real
+ * selection then. */
+[data-fde-root] .ProseMirror:not(.ProseMirror-focused) :is(input, textarea)::selection {
+  background: color-mix(in oklab, var(--fde-primary) 30%, transparent);
+}
+
+/* prosemirror-gapcursor draws its own element */
+[data-fde-root] .ProseMirror-gapcursor:after {
+  border-top: 1px solid var(--fde-foreground);
+}
+
+/* A component's content hole: TipTap's inner content element takes no
+ * class, so it dissolves here; the children become direct layout children
+ * of the renderer's container. */
+[data-fde-root] [data-fde-hole] > [data-node-view-content-react] {
+  display: contents;
+}
+
+/* the Selection extension marks the blurred editor's selection with this
+ * class, slightly more muted than the live native highlight */
+[data-fde-root] .ProseMirror .selection {
+  background: color-mix(in oklab, var(--fde-primary) 25%, transparent);
+  border-radius: 2px;
+}
+
+/* TipTap wraps document tables; spacing lives on the wrapper */
+[data-fde-root] .tableWrapper {
+  overflow-x: auto;
+}
+[data-fde-root] .tableWrapper:not(:first-child) {
+  margin-top: var(--fde-gap);
+}
+
+/* TaskItem's own markup: label > checkbox, then the content div. The
+ * checkbox matches the chrome checkboxes (TypeTable), not the OS. */
+[data-fde-root] ul[data-type="taskList"] > li > label {
+  flex-shrink: 0;
+  margin-top: 0.3em;
+}
+[data-fde-root] ul[data-type="taskList"] > li > div {
+  flex: 1;
+}
+[data-fde-root] ul[data-type="taskList"] input[type="checkbox"] {
+  box-sizing: border-box;
+  appearance: none;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--fde-border);
+  border-radius: 4px;
+  background: var(--fde-background);
+  cursor: pointer;
+}
+[data-fde-root] ul[data-type="taskList"] input[type="checkbox"]:checked {
+  border-color: var(--fde-primary);
+  background: var(--fde-primary);
+}
+[data-fde-root] ul[data-type="taskList"] input[type="checkbox"]:checked::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: var(--fde-primary-foreground);
+  clip-path: polygon(14% 44%, 0 62%, 38% 100%, 100% 18%, 84% 2%, 38% 68%);
+}
+
+/* highlight.js tokens (lowlight decorations) */
+[data-fde-root] .hljs-comment,
+[data-fde-root] .hljs-quote,
+[data-fde-root] .hljs-meta,
+[data-fde-root] .hljs-symbol {
+  color: var(--fde-hl-comment);
+}
+[data-fde-root] .hljs-comment,
+[data-fde-root] .hljs-quote,
+[data-fde-root] .hljs-emphasis {
+  font-style: italic;
+}
+[data-fde-root] .hljs-keyword,
+[data-fde-root] .hljs-selector-tag,
+[data-fde-root] .hljs-doctag {
+  color: var(--fde-hl-keyword);
+}
+[data-fde-root] .hljs-string,
+[data-fde-root] .hljs-meta .hljs-string,
+[data-fde-root] .hljs-regexp {
+  color: var(--fde-hl-string);
+}
+[data-fde-root] .hljs-number,
+[data-fde-root] .hljs-literal {
+  color: var(--fde-hl-number);
+}
+[data-fde-root] .hljs-title,
+[data-fde-root] .hljs-title.function_,
+[data-fde-root] .hljs-section {
+  color: var(--fde-hl-title);
+}
+[data-fde-root] .hljs-built_in,
+[data-fde-root] .hljs-type,
+[data-fde-root] .hljs-class .hljs-title {
+  color: var(--fde-hl-type);
+}
+[data-fde-root] .hljs-attr,
+[data-fde-root] .hljs-attribute,
+[data-fde-root] .hljs-property,
+[data-fde-root] .hljs-variable,
+[data-fde-root] .hljs-template-variable {
+  color: var(--fde-hl-attr);
+}
+[data-fde-root] .hljs-tag,
+[data-fde-root] .hljs-name,
+[data-fde-root] .hljs-selector-id,
+[data-fde-root] .hljs-selector-class {
+  color: var(--fde-hl-tag);
+}
+[data-fde-root] .hljs-strong {
+  font-weight: 600;
+}

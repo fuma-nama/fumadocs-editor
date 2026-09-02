@@ -1,7 +1,14 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import stylex from "@stylexjs/rollup-plugin";
 
 export default defineConfig({
+  plugins: [
+    stylex({
+      dev: false,
+      unstable_moduleResolution: { type: "commonJS", rootDir: import.meta.dirname },
+    }),
+  ],
   resolve: {
     alias: [
       {

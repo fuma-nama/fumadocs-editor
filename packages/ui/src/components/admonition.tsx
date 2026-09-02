@@ -1,7 +1,7 @@
 "use client";
 import { Megaphone } from "lucide-react";
 import { ADMONITION_TYPES, admonitionSpec as base } from "@fumadocs-editor/core";
-import { CalloutBox, type CalloutTypeItem } from "./fumadocs-ui";
+import { CalloutBox, calloutRegions, type CalloutTypeItem } from "./fumadocs-ui";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
@@ -35,5 +35,6 @@ function Admonition({ props, children, setProp }: ComponentRenderProps) {
 export const admonitionSpec: UiComponentSpec = {
   ...base,
   icon: <Megaphone size={13} />,
+  regions: calloutRegions,
   render: Admonition,
 };

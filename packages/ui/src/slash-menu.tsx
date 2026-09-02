@@ -1,4 +1,7 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
+import { consts } from "./styles/consts.stylex";
 // side-effect imports: register the extension packages' command typings
 import "@tiptap/starter-kit";
 import "@tiptap/extension-list";
@@ -26,10 +29,40 @@ import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
-import { itemCls, popupCls } from "./components/styles";
-import { cn } from "./utils/cn";
+import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
 import type { MediaProvider } from "./components/media";
+
+const muted = tokens.mutedForeground;
+
+const styles = stylex.create({
+  /** placed by hand against the caret rect, so fixed and never in flow */
+  popup: { position: "fixed", maxHeight: "18rem", width: "13rem", overflowY: "auto" },
+  empty: {
+    margin: 0,
+    paddingInline: "0.5rem",
+    paddingBlock: "0.375rem",
+    fontSize: 13,
+    color: muted,
+  },
+  group: {
+    margin: 0,
+    paddingInline: "0.5rem",
+    paddingTop: "0.375rem",
+    paddingBottom: "0.125rem",
+    fontSize: 10.5,
+    fontWeight: 600,
+    letterSpacing: "0.025em",
+    textTransform: "uppercase",
+    color: muted,
+  },
+  item: { width: "100%" },
+  title: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  mono: {
+    fontFamily: consts.mono,
+    fontSize: 12,
+  },
+});
 
 export interface SlashItem {
   title: string;
@@ -167,32 +200,24 @@ export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   }, [selected]);
 
   return (
-    <div ref={ref} className={cn(popupCls, "fixed z-50 max-h-72 w-52 overflow-y-auto")}>
-      {items.length === 0 && (
-        <p className="px-2 py-1.5 text-[13px] text-fd-muted-foreground">No results</p>
-      )}
+    <div ref={ref} {...stylex.props(chrome.popup, styles.popup)}>
+      {items.length === 0 && <p {...stylex.props(styles.empty)}>No results</p>}
       {items.map((item, index) => (
         <div key={item.title}>
           {(index === 0 || items[index - 1].group !== item.group) && (
-            <p className="px-2 pt-1.5 pb-0.5 text-[10.5px] font-semibold tracking-wide text-fd-muted-foreground uppercase">
-              {item.group}
-            </p>
+            <p {...stylex.props(styles.group)}>{item.group}</p>
           )}
           <button
             type="button"
             data-index={index}
-            className={cn(itemCls, "w-full")}
+            {...stylex.props(chrome.button, chrome.item, styles.item)}
             data-highlighted={index === selected || undefined}
             // preserve the editor selection; select on mouseup like a menu item
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(index)}
           >
-            <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
-              {item.icon}
-            </span>
-            <span className={cn("truncate", item.mono && "font-mono text-[12px]")}>
-              {item.title}
-            </span>
+            <span {...stylex.props(chrome.itemIcon)}>{item.icon}</span>
+            <span {...stylex.props(styles.title, item.mono && styles.mono)}>{item.title}</span>
           </button>
         </div>
       ))}

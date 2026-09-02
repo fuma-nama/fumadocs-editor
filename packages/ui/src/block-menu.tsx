@@ -1,4 +1,7 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
+import { consts } from "./styles/consts.stylex";
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
@@ -12,8 +15,59 @@ import { childInsertContext, focusAt, moveComponentAt } from "./components/keyma
 import { PropControl } from "./attributes-panel";
 import { activeComponent, setComponentAttributes } from "./components/attributes";
 import { readPropValue, setPropValue } from "./components/attr-values";
-import { focusRing, itemCls, popupCls } from "./components/styles";
-import { cn } from "./utils/cn";
+import { chrome } from "./styles/shared";
+
+const muted = tokens.mutedForeground;
+
+const styles = stylex.create({
+  /** sits above the component's own chrome, inside the editor wrapper */
+  handle: {
+    position: "absolute",
+    zIndex: 3,
+    display: "inline-flex",
+    width: "1.5rem",
+    height: "1.5rem",
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.375rem",
+    color: { default: muted, ":hover": tokens.foreground },
+    backgroundColor: {
+      default: "transparent",
+      ":hover": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
+    },
+  },
+  panel: { display: "flex", width: "14rem", flexDirection: "column" },
+  title: {
+    margin: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.375rem",
+    paddingInline: "0.5rem",
+    paddingTop: "0.25rem",
+    paddingBottom: "0.375rem",
+    fontFamily: consts.mono,
+    fontSize: 11,
+    fontWeight: 600,
+    color: muted,
+  },
+  fields: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    paddingInline: "0.25rem",
+    paddingBottom: "0.375rem",
+  },
+  separator: {
+    marginInline: "-0.25rem",
+    marginBottom: "0.25rem",
+    height: 1,
+    backgroundColor: tokens.border,
+  },
+  actionIcon: { width: "1rem", flexShrink: 0 },
+  danger: { color: { default: muted, ":hover": tokens.error } },
+});
 
 /**
  * A ⋯ handle at the active component's top-right: the resting affordance
@@ -79,7 +133,7 @@ export function BlockMenu({
           anchorRef(node);
         }}
         aria-label={`${spec.label ?? spec.name} options`}
-        className={`fde-block-handle absolute z-[3] inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground data-[popup-open]:bg-fd-accent ${focusRing}`}
+        {...stylex.props(chrome.button, chrome.focusRing, styles.handle)}
         draggable
         // the handle lives outside ProseMirror's DOM, so its dragstart never
         // reaches the view: stage the node drag by hand
@@ -111,8 +165,8 @@ export function BlockMenu({
         <MoreHorizontal size={15} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="end" className="z-50">
-          <Popover.Popup data-fde-popup="" className={cn(popupCls, "flex w-56 flex-col")}>
+        <Popover.Positioner sideOffset={6} align="end" {...stylex.props(chrome.layer)}>
+          <Popover.Popup data-fde-popup="" {...stylex.props(chrome.popup, styles.panel)}>
             <BlockPanel
               editor={editor}
               specs={specs}
@@ -152,12 +206,12 @@ export function BlockPanel({
 
   return (
     <>
-      <p className="flex items-center gap-1.5 px-2 pt-1 pb-1.5 font-mono text-[11px] font-semibold text-fd-muted-foreground">
+      <p {...stylex.props(styles.title)}>
         {spec.icon}
         {spec.label ?? spec.name}
       </p>
       {fields.length > 0 && (
-        <div className="flex flex-col gap-2 px-1 pb-1.5">
+        <div {...stylex.props(styles.fields)}>
           {fields.map((field) => (
             <PropControl
               key={field.name}
@@ -168,14 +222,13 @@ export function BlockPanel({
           ))}
         </div>
       )}
-      {/* not an <hr>: the panel can render inside `.fde-content`, whose
-          document styles give hr elements 2em margins */}
-      <div role="separator" className="-mx-1 mb-1 h-px bg-fd-border" />
+      {/* not an <hr>: the UA gives one its own border and margins */}
+      <div role="separator" {...stylex.props(styles.separator)} />
       {inserts?.children.map((child) => (
         <button
           key={child.name}
           type="button"
-          className={itemCls}
+          {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
             const content = child.insert?.();
             if (!content) return;
@@ -184,9 +237,7 @@ export function BlockPanel({
             focusAt(editor, inserts.insertAt + 1);
           }}
         >
-          <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
-            {child.icon}
-          </span>
+          <span {...stylex.props(chrome.itemIcon)}>{child.icon}</span>
           <span>Add {child.label ?? child.name}</span>
         </button>
       ))}
@@ -199,19 +250,19 @@ export function BlockPanel({
         <button
           key={label}
           type="button"
-          className={itemCls}
+          {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
             if (moveComponentAt(editor, active.pos, dir)) onDone();
             editor.commands.focus();
           }}
         >
-          <Icon size={13} className="w-4 shrink-0" />
+          <Icon size={13} {...stylex.props(styles.actionIcon)} />
           <span>{label}</span>
         </button>
       ))}
       <button
         type="button"
-        className={cn(itemCls, "text-fd-muted-foreground hover:text-fd-error")}
+        {...stylex.props(chrome.button, chrome.item, styles.danger)}
         onClick={() => {
           const current = editor.state.doc.nodeAt(active.pos);
           if (!current) return;
@@ -223,7 +274,7 @@ export function BlockPanel({
           onDone();
         }}
       >
-        <Trash2 size={13} className="w-4 shrink-0" />
+        <Trash2 size={13} {...stylex.props(styles.actionIcon)} />
         <span>Delete</span>
       </button>
     </>

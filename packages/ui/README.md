@@ -9,8 +9,7 @@ npm install @fumadocs-editor/ui
 
 ```css
 /* app.css */
-@import "tailwindcss";
-@import "@fumadocs-editor/ui/css/preset.css";
+@import "@fumadocs-editor/ui/styles.css";
 ```
 
 ```tsx

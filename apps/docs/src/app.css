@@ -2,7 +2,27 @@
 @import "fumadocs-ui/css/solar.css";
 @import "fumadocs-ui/css/preset.css";
 @import "fumapress/css/preset.css";
-@import "@fumadocs-editor/ui/css/preset.css";
+@import "@fumadocs-editor/ui/styles.css";
+
+/* the editor follows the site palette */
+:root {
+  --fde-background: var(--color-fd-background);
+  --fde-foreground: var(--color-fd-foreground);
+  --fde-muted: var(--color-fd-muted);
+  --fde-muted-foreground: var(--color-fd-muted-foreground);
+  --fde-popover: var(--color-fd-popover);
+  --fde-popover-foreground: var(--color-fd-popover-foreground);
+  --fde-card: var(--color-fd-card);
+  --fde-card-foreground: var(--color-fd-card-foreground);
+  --fde-border: var(--color-fd-border);
+  --fde-primary: var(--color-fd-primary);
+  --fde-primary-foreground: var(--color-fd-primary-foreground);
+  --fde-secondary: var(--color-fd-secondary);
+  --fde-secondary-foreground: var(--color-fd-secondary-foreground);
+  --fde-accent: var(--color-fd-accent);
+  --fde-accent-foreground: var(--color-fd-accent-foreground);
+  --fde-ring: var(--color-fd-ring);
+}
 
 @theme {
   --default-font-family: "Geist", sans-serif;

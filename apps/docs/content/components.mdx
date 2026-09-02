@@ -43,6 +43,8 @@ Take a `<Feature title="…" soon={true}>` card.
   `boolean` prop becomes a toggle.
 - `insert` is the fragment the slash menu inserts: every region present,
   all empty.
+- `regions` gives each region a class name. Regions render outside the
+  renderer's tree, so this is where their typography lives.
 
 </Step>
 <Step>
@@ -51,7 +53,9 @@ Take a `<Feature title="…" soon={true}>` card.
 
 <include meta='title="feature.tsx"'>../examples/component.tsx#renderer</include>
 
-`children` holds the editable regions. Everything else is chrome.
+`children` holds the editable regions. Everything else is chrome. Style it
+however your app styles things: the editor's own chrome is StyleX and never
+depends on your CSS setup.
 
 </Step>
 <Step>

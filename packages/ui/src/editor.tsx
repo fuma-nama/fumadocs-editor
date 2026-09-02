@@ -1,4 +1,6 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
 import type { DocSnapshot, ParsedDoc, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor } from "@tiptap/core";
 import { Tabs } from "@base-ui/react/tabs";
@@ -30,9 +32,10 @@ import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
 import type { UiComponentSpec } from "./components/spec";
 import { fumadocsUiComponents } from "./components/fumadocs-ui";
-import { focusRing } from "./components/styles";
+import { chrome } from "./styles/shared";
+import { consts } from "./styles/consts.stylex";
+import { contentClass } from "./styles/content";
 import { useEditorTheme, type EditorTheme } from "./theme";
-import { cn } from "./utils/cn";
 
 // TipTap + PM + node views: own chunk, fetched at idle or first intent
 const LiveEditor = lazy(() => import("./live-editor").then((m) => ({ default: m.LiveEditor })));
@@ -160,16 +163,157 @@ type Mode = "visual" | "source";
  */
 type Stage = "static" | "mounting" | "live";
 
-const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground hover:bg-fd-background/70 hover:text-fd-foreground data-[active]:bg-fd-background data-[active]:text-fd-foreground data-[active]:shadow-sm ${focusRing}`;
+const pulse = stylex.keyframes({ "50%": { opacity: 0.5 } });
 
-const SYNC_DOT: Record<SessionStatus, string> = {
-  synced: "bg-fd-success",
-  dirty: "bg-fd-warning",
-  saving: "bg-fd-warning animate-pulse",
-  conflict: "bg-fd-error",
-  offline: "bg-fd-muted-foreground",
-  denied: "bg-fd-error",
-};
+const styles = stylex.create({
+  root: {
+    boxSizing: "border-box",
+    WebkitTapHighlightColor: "transparent",
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: {
+      default: tokens.border,
+      ":focus-within": `color-mix(in oklab, ${tokens.ring} 60%, transparent)`,
+    },
+    backgroundColor: tokens.background,
+    color: tokens.foreground,
+    fontSize: 15,
+    lineHeight: 1.625,
+    boxShadow: consts.shadowSm,
+  },
+  bar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    borderStartStartRadius: "inherit",
+    borderStartEndRadius: "inherit",
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.border,
+    backgroundColor: `color-mix(in oklab, ${tokens.card} 40%, transparent)`,
+    paddingInline: "0.5rem",
+    paddingBlock: "0.25rem",
+  },
+  tabs: {
+    boxSizing: "border-box",
+    display: "flex",
+    flexShrink: 0,
+    gap: "0.125rem",
+    borderRadius: "0.5rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: tokens.border,
+    backgroundColor: tokens.muted,
+    padding: "0.125rem",
+  },
+  tab: {
+    boxSizing: "border-box",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+    paddingInline: "0.75rem",
+    paddingBlock: "0.125rem",
+    fontSize: 12.5,
+    fontWeight: 500,
+    outline: "none",
+    color: {
+      default: tokens.mutedForeground,
+      ":hover": tokens.foreground,
+      ":is([data-active])": tokens.foreground,
+    },
+    backgroundColor: {
+      default: "transparent",
+      ":hover": `color-mix(in oklab, ${tokens.background} 70%, transparent)`,
+      ":is([data-active])": tokens.background,
+    },
+    boxShadow: {
+      default: null,
+      ":is([data-active])": consts.shadowSm,
+      ":focus-visible": consts.focusRing,
+    },
+  },
+  status: {
+    display: "flex",
+    minWidth: 0,
+    alignItems: "center",
+    gap: "0.5rem",
+    paddingInlineStart: "0.375rem",
+    fontSize: 12,
+    color: tokens.mutedForeground,
+  },
+  dot: { width: "0.375rem", height: "0.375rem", flexShrink: 0, borderRadius: 9999 },
+  synced: { backgroundColor: tokens.success },
+  dirty: { backgroundColor: tokens.warning },
+  saving: {
+    backgroundColor: tokens.warning,
+    animationName: pulse,
+    animationDuration: "2s",
+    animationTimingFunction: "cubic-bezier(0.4, 0, 0.6, 1)",
+    animationIterationCount: "infinite",
+    animationPlayState: { default: null, [consts.reduceMotion]: "paused" },
+  },
+  conflict: { backgroundColor: tokens.error },
+  offline: { backgroundColor: tokens.mutedForeground },
+  denied: { backgroundColor: tokens.error },
+  label: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  actions: { display: "flex", flexShrink: 0, alignItems: "center", gap: "0.25rem" },
+  conflictBtn: {
+    boxSizing: "border-box",
+    cursor: "pointer",
+    borderRadius: "0.375rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: tokens.border,
+    backgroundColor: {
+      default: tokens.background,
+      ":hover": tokens.accent,
+      ":active": tokens.border,
+    },
+    paddingInline: "0.5rem",
+    paddingBlock: "0.125rem",
+    fontSize: 11.5,
+    fontWeight: 500,
+    color: tokens.foreground,
+  },
+  body: { position: "relative" },
+  staticView: { cursor: "text", outline: "none" },
+  source: { display: "flex", flex: 1, flexDirection: "column" },
+  sourceError: {
+    margin: 0,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.border,
+    backgroundColor: `color-mix(in oklab, ${tokens.error} 10%, transparent)`,
+    paddingInline: "1.25rem",
+    paddingBlock: "0.625rem",
+    fontFamily: consts.mono,
+    fontSize: 13,
+    whiteSpace: "pre-wrap",
+    color: tokens.error,
+  },
+  textarea: {
+    boxSizing: "border-box",
+    minHeight: 420,
+    flex: 1,
+    resize: "vertical",
+    backgroundColor: tokens.background,
+    paddingInline: "1.25rem",
+    paddingBlock: "1rem",
+    fontFamily: consts.mono,
+    fontSize: 13,
+    lineHeight: 1.625,
+    color: tokens.foreground,
+    outline: "none",
+    tabSize: 2,
+    boxShadow: {
+      default: null,
+      ":focus-visible": `inset 0 0 0 1px color-mix(in oklab, ${tokens.ring} 40%, transparent)`,
+    },
+  },
+});
 
 const SYNC_LABEL: Record<SessionStatus, string> = {
   synced: "Saved",
@@ -180,20 +324,26 @@ const SYNC_LABEL: Record<SessionStatus, string> = {
   denied: "No access",
 };
 
-const conflictBtnCls = `cursor-pointer rounded-md border border-fd-border bg-fd-background px-2 py-0.5 text-[11.5px] font-medium text-fd-foreground hover:bg-fd-accent active:bg-fd-border ${focusRing}`;
-
 /** Status beside the mode tabs. */
 function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (
-    <div className="flex min-w-0 items-center gap-2 ps-1.5 text-[12px] text-fd-muted-foreground">
-      <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", SYNC_DOT[status])} />
-      <span className="truncate">{SYNC_LABEL[status]}</span>
+    <div {...stylex.props(styles.status)}>
+      <span aria-hidden {...stylex.props(styles.dot, styles[status])} />
+      <span {...stylex.props(styles.label)}>{SYNC_LABEL[status]}</span>
       {status === "conflict" && (
-        <span className="flex shrink-0 items-center gap-1">
-          <button type="button" className={conflictBtnCls} onClick={onKeepMine}>
+        <span {...stylex.props(styles.actions)}>
+          <button
+            type="button"
+            {...stylex.props(chrome.button, styles.conflictBtn, chrome.focusRing)}
+            onClick={onKeepMine}
+          >
             Keep mine
           </button>
-          <button type="button" className={conflictBtnCls} onClick={onTakeDisk}>
+          <button
+            type="button"
+            {...stylex.props(chrome.button, styles.conflictBtn, chrome.focusRing)}
+            onClick={onTakeDisk}
+          >
             Take disk
           </button>
         </span>
@@ -460,15 +610,15 @@ const EditorView = memo(function EditorView({
 
   const providers = useMemo(() => ({ media, files }), [media, files]);
 
+  let rootClass = stylex.props(styles.root).className!;
+  if (scoped) rootClass += ` ${scoped}`;
+  if (className) rootClass += ` ${className}`;
+
   return (
     <ProvidersContext.Provider value={providers}>
       <div
         data-fde-root=""
-        className={cn(
-          scoped,
-          "flex flex-col rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
-          className,
-        )}
+        className={rootClass}
         onKeyDown={(event) => {
           if (sync?.onFlush && (event.metaKey || event.ctrlKey) && event.key === "s") {
             event.preventDefault();
@@ -479,21 +629,25 @@ const EditorView = memo(function EditorView({
         <Tabs.Root
           value={mode}
           onValueChange={(value) => switchMode(value as Mode)}
-          className="flex items-center justify-between gap-3 rounded-t-[inherit] border-b border-fd-border bg-fd-card/40 px-2 py-1"
+          {...stylex.props(styles.bar)}
         >
           {sync ? <SyncIndicator {...sync} /> : <span />}
-          <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
-            <Tabs.Tab className={modeTabCls} value="visual">
+          <Tabs.List {...stylex.props(styles.tabs)}>
+            <Tabs.Tab {...stylex.props(chrome.button, styles.tab)} value="visual">
               Visual
             </Tabs.Tab>
             {/* raw source has no merge with a live shared doc */}
-            <Tabs.Tab className={modeTabCls} value="source" disabled={collab != null}>
+            <Tabs.Tab
+              {...stylex.props(chrome.button, styles.tab)}
+              value="source"
+              disabled={collab != null}
+            >
               MDX
             </Tabs.Tab>
           </Tabs.List>
         </Tabs.Root>
         {mode === "visual" ? (
-          <div className="relative">
+          <div {...stylex.props(styles.body)}>
             {stage !== "static" && parsed && (!collab || collabRuntime) && (
               <Suspense fallback={null}>
                 <LiveEditor
@@ -519,7 +673,7 @@ const EditorView = memo(function EditorView({
             )}
             {stage !== "live" && (
               <div
-                className="fde-content cursor-text outline-none"
+                {...stylex.props(styles.staticView)}
                 tabIndex={0}
                 onPointerDown={(event) => {
                   captureRef.current.point = { x: event.clientX, y: event.clientY };
@@ -545,20 +699,16 @@ const EditorView = memo(function EditorView({
                   (parsed ? (
                     <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
                   ) : (
-                    <div className="ProseMirror" aria-hidden />
+                    <div className={`ProseMirror ${contentClass.root}`} aria-hidden />
                   ))}
               </div>
             )}
           </div>
         ) : (
-          <div className="flex flex-1 flex-col">
-            {sourceError != null && (
-              <div className="border-b border-fd-border bg-fd-error/10 px-5 py-2.5 font-mono text-[13px] whitespace-pre-wrap text-fd-error">
-                {sourceError}
-              </div>
-            )}
+          <div {...stylex.props(styles.source)}>
+            {sourceError != null && <div {...stylex.props(styles.sourceError)}>{sourceError}</div>}
             <textarea
-              className="min-h-[420px] flex-1 resize-y bg-fd-background px-5 py-4 font-mono text-[13px] leading-relaxed text-fd-foreground outline-none [tab-size:2] focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-fd-ring/40"
+              {...stylex.props(chrome.input, styles.textarea)}
               value={source}
               readOnly={!editable}
               spellCheck={false}

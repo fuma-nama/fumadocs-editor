@@ -1,15 +1,30 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
-@import "@fumadocs-editor/ui/css/preset.css";
+@import "@fumadocs-editor/ui/styles.css";
 
 @theme {
   --font-sans: "Geist Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 }
 
-/* consume workspace source directly, so component class names are discovered */
-@source '../../../packages/ui/src/**/*.{ts,tsx}';
+/* the app's own chrome uses `fd-*` utilities, aliased to the editor's
+ * tokens so the two always agree (a Fumadocs site maps the other way) */
+@theme inline reference {
+  --color-fd-background: var(--fde-background);
+  --color-fd-foreground: var(--fde-foreground);
+  --color-fd-muted-foreground: var(--fde-muted-foreground);
+  --color-fd-card: var(--fde-card);
+  --color-fd-border: var(--fde-border);
+  --color-fd-primary: var(--fde-primary);
+  --color-fd-primary-foreground: var(--fde-primary-foreground);
+  --color-fd-accent: var(--fde-accent);
+  --color-fd-ring: var(--fde-ring);
+  --color-fd-error: var(--fde-error);
+  --color-fd-success: var(--fde-success);
+  --color-fd-warning: var(--fde-warning);
+}
+
 /* the FS-mirror documents are runtime data, not class sources: scanning them
  * would make every save invalidate the CSS and reload the page mid-edit */
 @source not '../docs';

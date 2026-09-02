@@ -1,4 +1,6 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
 import {
   Extension,
   InputRule,
@@ -21,17 +23,56 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { useEffect, useState } from "react";
+import { content } from "../styles/content";
+import { chrome } from "../styles/shared";
+import { math } from "../styles/markers.stylex";
 
 /*
  * UI slice of the remark-math syntax (core/src/syntax/math): in-place TeX
  * source editing with a KaTeX preview, matching fumadocs' rehype-katex.
  * Caret position drives which face shows: a plugin sets `data-active` on
- * the math node holding the caret, and preset.css swaps source/preview
- * from that attribute, so activation never re-renders React. KaTeX (and
- * its stylesheet) load in their own chunk on the first math node rendered.
+ * the math node holding the caret and the styles below swap source and
+ * preview from that attribute, so activation never re-renders React. KaTeX
+ * (and its stylesheet) load in their own chunk on the first math node.
  */
 
 type Katex = typeof import("katex").default;
+
+const styles = stylex.create({
+  /* Once a preview exists the source only shows while the caret is inside,
+   * so these re-declare the element's own display alongside the swap. */
+  srcInline: {
+    display: {
+      default: "inline-block",
+      [stylex.when.ancestor(":not([data-active])", math)]: "none",
+    },
+  },
+  srcBlock: {
+    display: { default: "block", [stylex.when.ancestor(":not([data-active])", math)]: "none" },
+  },
+  /** inline preview: replaced by the source while editing */
+  preview: {
+    cursor: "text",
+    display: { default: null, [stylex.when.ancestor("[data-active]", math)]: "none" },
+  },
+  /** block preview: sits below the source while editing */
+  previewBlock: { cursor: "text", display: "block", overflowX: "auto" },
+  /** ring around a block being edited, where both faces are visible */
+  blockActive: {
+    borderRadius: { default: null, [stylex.when.ancestor("[data-active]", math)]: 10 },
+    outline: {
+      default: null,
+      [stylex.when.ancestor("[data-active]", math)]:
+        `1px solid color-mix(in oklab, ${tokens.ring} 45%, ${tokens.border})`,
+    },
+    outlineOffset: { default: null, [stylex.when.ancestor("[data-active]", math)]: 2 },
+  },
+});
+
+/* The `.react-renderer` wrapper takes the `data-active` decoration, so it is
+ * also the marker its faces key off. */
+const inlineClass = stylex.props(content.mathInline, math).className;
+const blockClass = stylex.props(content.block, math).className;
 
 let katexModule: Katex | null = null;
 let katexPromise: Promise<void> | undefined;
@@ -75,7 +116,7 @@ function Preview({
   });
   return (
     <span
-      className="fde-math-preview"
+      {...stylex.props(chrome.static, display ? styles.previewBlock : styles.preview)}
       contentEditable={false}
       onClick={onClick}
       dangerouslySetInnerHTML={{ __html: html }}
@@ -98,14 +139,13 @@ function MathInlineView(props: NodeViewProps) {
   const { node } = props;
   const katex = useKatex();
   const empty = node.content.size === 0;
+  const rendered = katex != null && !empty;
   return (
-    <NodeViewWrapper
-      as="span"
-      className="fde-math fde-math-inline"
-      data-rendered={(katex && !empty) || undefined}
-      data-empty={empty || undefined}
-    >
-      <span className="fde-math-src">
+    <NodeViewWrapper as="span">
+      <span
+        {...stylex.props(content.mathInlineSrc, rendered && styles.srcInline)}
+        data-empty={empty || undefined}
+      >
         <NodeViewContent as={"span" as "div"} />
       </span>
       {katex && !empty && (
@@ -124,13 +164,14 @@ function MathBlockView(props: NodeViewProps) {
   const { node } = props;
   const katex = useKatex();
   const empty = node.content.size === 0;
+  const rendered = katex != null && !empty;
   return (
-    <NodeViewWrapper
-      className="fde-math fde-math-block"
-      data-rendered={(katex && !empty) || undefined}
-    >
-      <pre className="fde-math-src" data-empty={empty || undefined}>
-        <NodeViewContent as={"code" as "div"} />
+    <NodeViewWrapper {...stylex.props(content.mathBlock, rendered && styles.blockActive)}>
+      <pre
+        {...stylex.props(content.mathBlockSrc, rendered && styles.srcBlock)}
+        data-empty={empty || undefined}
+      >
+        <NodeViewContent as={"code" as "div"} {...stylex.props(content.codeCode)} />
       </pre>
       {katex && !empty && (
         <Preview
@@ -232,7 +273,7 @@ function enterBlock(editor: Editor, dir: 1 | -1, axis: "h" | "v"): boolean {
 export function mathExtensions(enabled: boolean): Extensions {
   return [
     MathInline.extend({
-      addNodeView: () => ReactNodeViewRenderer(MathInlineView),
+      addNodeView: () => ReactNodeViewRenderer(MathInlineView, { className: inlineClass }),
       addInputRules() {
         if (!enabled) return [];
         return [
@@ -273,7 +314,7 @@ export function mathExtensions(enabled: boolean): Extensions {
       },
     }),
     MathBlock.extend({
-      addNodeView: () => ReactNodeViewRenderer(MathBlockView),
+      addNodeView: () => ReactNodeViewRenderer(MathBlockView, { className: blockClass }),
       addInputRules() {
         if (!enabled) return [];
         return [textblockTypeInputRule({ find: /^\$\$\s$/, type: this.type })];

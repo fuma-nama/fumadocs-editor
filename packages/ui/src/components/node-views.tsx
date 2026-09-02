@@ -1,4 +1,5 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
 import { Extension as ExtensionBase, type Extension, type Node } from "@tiptap/core";
 import {
   MdxBlockRegion,
@@ -20,6 +21,7 @@ import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./
 import { caretPolicy } from "./caret-policy";
 import { componentKeymap } from "./keymap";
 import { structureGuard } from "./structure";
+import { content, contentClass } from "../styles/content";
 
 type SpecMap = Map<string, UiComponentSpec>;
 
@@ -40,6 +42,8 @@ function stopEvent({ event }: { event: Event }): boolean {
 
 /* ---- node views ---- */
 
+const hole = <NodeViewContent {...stylex.props(content.hole)} data-fde-hole="" />;
+
 function makeComponentView(specs: SpecMap) {
   return function ComponentNodeView(props: NodeViewProps) {
     const { node, editor, getPos, updateAttributes, selected } = props;
@@ -55,10 +59,8 @@ function makeComponentView(specs: SpecMap) {
 
     if (!spec) {
       return (
-        <NodeViewWrapper className="relative isolate" data-component={name ?? ""}>
-          <FallbackCard name={name ?? ""}>
-            <NodeViewContent />
-          </FallbackCard>
+        <NodeViewWrapper {...stylex.props(content.nodeWrapper)} data-component={name ?? ""}>
+          <FallbackCard name={name ?? ""}>{hole}</FallbackCard>
         </NodeViewWrapper>
       );
     }
@@ -71,17 +73,13 @@ function makeComponentView(specs: SpecMap) {
 
     return (
       <NodeViewWrapper
-        className="relative isolate data-[selected]:rounded-xl data-[selected]:bg-fd-primary/10 data-[selected]:outline-2 data-[selected]:outline-offset-2 data-[selected]:outline-fd-primary/50"
+        {...stylex.props(content.nodeWrapper)}
         data-component={name}
         data-selected={ringed || undefined}
       >
         <RenderBoundary
           resetOn={node}
-          fallback={
-            <FallbackCard name={spec.name}>
-              <NodeViewContent className="fde-component-content" />
-            </FallbackCard>
-          }
+          fallback={<FallbackCard name={spec.name}>{hole}</FallbackCard>}
         >
           <Render
             props={readStringProps(attributes)}
@@ -90,7 +88,7 @@ function makeComponentView(specs: SpecMap) {
             setProp={setProp}
             setLiteral={setLiteral}
           >
-            <NodeViewContent className="fde-component-content" />
+            {hole}
           </Render>
         </RenderBoundary>
       </NodeViewWrapper>
@@ -98,13 +96,19 @@ function makeComponentView(specs: SpecMap) {
   };
 }
 
-function makeRegionView(kind: "inline" | "block", placeholders: Map<string, string>) {
+function makeRegionView(
+  kind: "inline" | "block",
+  specs: SpecMap,
+  placeholders: Map<string, string>,
+) {
   return function RegionView({ node, editor, getPos }: NodeViewProps) {
     const region = (node.attrs.region as string | null) ?? "";
     const empty = node.textContent.length === 0;
-    // region names (title / body) repeat across components, so the placeholder
-    // is keyed by the enclosing component: resolve it from the doc position
-    let placeholder = "";
+    // region names (title / body) repeat across components, so placeholder
+    // and styles are keyed by the enclosing component: resolve it from the
+    // doc position
+    let placeholder: string | undefined;
+    let className: string | undefined;
     try {
       const pos = typeof getPos === "function" ? getPos() : null;
       if (typeof pos === "number") {
@@ -112,7 +116,9 @@ function makeRegionView(kind: "inline" | "block", placeholders: Map<string, stri
         for (let depth = $pos.depth; depth >= 0; depth--) {
           const ancestor = $pos.node(depth);
           if (ancestor.type.name === COMPONENT) {
-            placeholder = placeholders.get(`${ancestor.attrs.name}:${region}`) ?? "";
+            const name = ancestor.attrs.name as string;
+            placeholder = placeholders.get(`${name}:${region}`);
+            className = specs.get(name)?.regions?.[region];
             break;
           }
         }
@@ -120,13 +126,14 @@ function makeRegionView(kind: "inline" | "block", placeholders: Map<string, stri
     } catch {
       /* getPos can throw mid-transaction; fall back to no placeholder */
     }
+    const sx = stylex.props(content.region, kind === "block" && content.regionBlock);
     return (
       <NodeViewWrapper
         as="div"
-        className={`fde-region fde-region-${kind}`}
+        className={className ? `${sx.className} ${className}` : sx.className}
         data-region={region}
         data-empty={empty || undefined}
-        data-placeholder={placeholder}
+        data-placeholder={empty && placeholder ? placeholder : undefined}
       >
         <NodeViewContent as="div" />
       </NodeViewWrapper>
@@ -206,16 +213,15 @@ export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
   const map: SpecMap = new Map(specs.map((spec) => [spec.name, spec]));
   const ComponentView = makeComponentView(map);
   const placeholders = collectPlaceholders(specs);
-  const InlineRegionView = makeRegionView("inline", placeholders);
-  const BlockRegionView = makeRegionView("block", placeholders);
+  const InlineRegionView = makeRegionView("inline", map, placeholders);
+  const BlockRegionView = makeRegionView("block", map, placeholders);
 
   return [
     MdxComponent.extend({
-      // `relative isolate`: a dragged element's ghost is rasterized from its
-      // own paint layer; without one Chromium snapshots the whole page. This
-      // wrapper is what ProseMirror marks draggable on mousedown.
+      // the wrapper is what ProseMirror marks draggable on mousedown; its
+      // styles (own paint layer, insert motion) are `content.component`
       addNodeView: () =>
-        ReactNodeViewRenderer(ComponentView, { stopEvent, className: "relative isolate" }),
+        ReactNodeViewRenderer(ComponentView, { stopEvent, className: contentClass.component }),
     }),
     MdxInlineRegion.extend({
       addNodeView: () => ReactNodeViewRenderer(InlineRegionView, { stopEvent }),

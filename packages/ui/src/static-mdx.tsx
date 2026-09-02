@@ -1,4 +1,6 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
 import type { JSONContent } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
@@ -12,12 +14,15 @@ import {
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
 import { resolveSrc, type MediaProvider } from "./components/media";
+import { content, contentClass } from "./styles/content";
+import { consts } from "./styles/consts.stylex";
+import { chrome } from "./styles/shared";
 
 /**
  * Stage-0 paint: the parsed PM document as plain React, no TipTap and no
- * ProseMirror. Same DOM shape as the live editor (`.react-renderer` /
- * `data-node-view-*` shells) so preset.css styles both and the swap has
- * no visible shift.
+ * ProseMirror. Same DOM shape and classes as the live editor
+ * (`.react-renderer` / `data-node-view-*` shells) so the swap has no
+ * visible shift.
  */
 
 type SpecMap = Map<string, UiComponentSpec>;
@@ -28,6 +33,7 @@ function StaticImg({ node }: { node: JSONContent }) {
   const media = useContext(MediaContext);
   return (
     <img
+      className={contentClass.image}
       src={resolveSrc(media, String(node.attrs?.src ?? ""))}
       alt={(node.attrs?.alt as string) ?? ""}
       title={(node.attrs?.title as string) ?? undefined}
@@ -61,17 +67,42 @@ export class RenderBoundary extends ReactComponent<
   }
 }
 
+const styles = stylex.create({
+  fallback: {
+    boxSizing: "border-box",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: tokens.border,
+    paddingInline: "0.75rem",
+    paddingBlock: "0.625rem",
+  },
+  fallbackName: {
+    marginBottom: "0.25rem",
+    fontFamily: consts.mono,
+    fontSize: 11,
+    color: tokens.mutedForeground,
+  },
+  wrapper: { whiteSpace: "normal" },
+  hole: { whiteSpace: "pre-wrap" },
+  holeInner: { whiteSpace: "inherit" },
+  codeLang: {
+    paddingInline: "0.375rem",
+    fontSize: 12,
+    lineHeight: "1rem",
+    fontWeight: 500,
+  },
+  spacer: { flex: 1 },
+  root: { whiteSpace: "pre-wrap" },
+});
+
 /** the generic dashed card: unregistered components and crashed renderers */
 export function FallbackCard({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <div
-      data-component-fallback=""
-      className="rounded-[10px] border border-dashed border-fd-border px-3 py-2.5"
-    >
-      <div
-        className="mb-1 font-mono text-[11px] text-fd-muted-foreground select-none"
-        contentEditable={false}
-      >{`<${name}>`}</div>
+    <div data-component-fallback="" {...stylex.props(styles.fallback)}>
+      <div {...stylex.props(chrome.static, styles.fallbackName)} contentEditable={false}>
+        {`<${name}>`}
+      </div>
       {children}
     </div>
   );
@@ -91,11 +122,15 @@ function renderMarks(node: JSONContent, key: number): ReactNode {
         out = <s>{out}</s>;
         break;
       case "code":
-        out = <code>{out}</code>;
+        out = <code className={contentClass.code}>{out}</code>;
         break;
       case "link":
         out = (
-          <a href={mark.attrs?.href as string} title={(mark.attrs?.title as string) ?? undefined}>
+          <a
+            className={contentClass.link}
+            href={mark.attrs?.href as string}
+            title={(mark.attrs?.title as string) ?? undefined}
+          >
             {out}
           </a>
         );
@@ -105,23 +140,43 @@ function renderMarks(node: JSONContent, key: number): ReactNode {
   return <Fragment key={key}>{out}</Fragment>;
 }
 
-function renderChildren(nodes: JSONContent[] | undefined, specs: SpecMap): ReactNode {
+function renderChildren(
+  nodes: JSONContent[] | undefined,
+  specs: SpecMap,
+  parent?: UiComponentSpec,
+): ReactNode {
   if (!nodes || nodes.length === 0) return null;
   const out: ReactNode[] = [];
-  for (let i = 0; i < nodes.length; i++) out.push(renderNode(nodes[i], specs, i));
+  for (let i = 0; i < nodes.length; i++) out.push(renderNode(nodes[i], specs, i, parent));
   return out;
 }
 
 /** the per-node shell @tiptap/react wraps every React node view in */
-function Shell({ type, children }: { type: string; children: ReactNode }) {
-  return <div className={`react-renderer node-${type}`}>{children}</div>;
+function Shell({
+  type,
+  className,
+  children,
+}: {
+  type: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={
+        className ? `react-renderer node-${type} ${className}` : `react-renderer node-${type}`
+      }
+    >
+      {children}
+    </div>
+  );
 }
 
 /** static twin of NodeViewContent + its inner React content wrapper */
-function ContentHole({ className, children }: { className?: string; children: ReactNode }) {
+function ContentHole({ children }: { children: ReactNode }) {
   return (
-    <div className={className} data-node-view-content="" style={{ whiteSpace: "pre-wrap" }}>
-      <div data-node-view-content-react="" style={{ whiteSpace: "inherit" }}>
+    <div {...stylex.props(content.hole, styles.hole)} data-fde-hole="" data-node-view-content="">
+      <div {...stylex.props(styles.holeInner)} data-node-view-content-react="">
         {children}
       </div>
     </div>
@@ -132,16 +187,15 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
   const name = (node.attrs?.name as string | null) ?? null;
   const spec = name ? specs.get(name) : undefined;
   const attributes = (node.attrs?.attributes ?? []) as MdxAttribute[];
-  const children = renderChildren(node.content, specs);
+  const children = renderChildren(node.content, specs, spec);
 
   if (!spec) {
     return (
-      <Shell type="mdxComponent">
+      <Shell type="mdxComponent" className={contentClass.component}>
         <div
           data-node-view-wrapper=""
           data-component={name ?? ""}
-          className="relative"
-          style={{ whiteSpace: "normal" }}
+          {...stylex.props(content.nodeWrapper, styles.wrapper)}
         >
           <FallbackCard name={name ?? ""}>
             <ContentHole>{children}</ContentHole>
@@ -153,17 +207,16 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
 
   const Render = spec.render;
   return (
-    <Shell type="mdxComponent">
+    <Shell type="mdxComponent" className={contentClass.component}>
       <div
         data-node-view-wrapper=""
         data-component={name}
-        className="relative"
-        style={{ whiteSpace: "normal" }}
+        {...stylex.props(content.nodeWrapper, styles.wrapper)}
       >
         <RenderBoundary
           fallback={
             <FallbackCard name={spec.name}>
-              <ContentHole className="fde-component-content">{children}</ContentHole>
+              <ContentHole>{children}</ContentHole>
             </FallbackCard>
           }
         >
@@ -174,7 +227,7 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
             setProp={noop}
             setLiteral={noop}
           >
-            <ContentHole className="fde-component-content">{children}</ContentHole>
+            <ContentHole>{children}</ContentHole>
           </Render>
         </RenderBoundary>
       </div>
@@ -182,15 +235,26 @@ function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
   );
 }
 
-function Region({ node, specs, kind }: { node: JSONContent; specs: SpecMap; kind: string }) {
+function Region({
+  node,
+  specs,
+  kind,
+  parent,
+}: {
+  node: JSONContent;
+  specs: SpecMap;
+  kind: "inline" | "block";
+  parent?: UiComponentSpec;
+}) {
   const region = (node.attrs?.region as string) ?? "";
+  const sx = stylex.props(content.region, kind === "block" && content.regionBlock, styles.wrapper);
+  const own = parent?.regions?.[region];
   return (
     <Shell type={kind === "inline" ? "mdxInlineRegion" : "mdxBlockRegion"}>
       <div
         data-node-view-wrapper=""
-        className={`fde-region fde-region-${kind}`}
+        className={own ? `${sx.className} ${own}` : sx.className}
         data-region={region}
-        style={{ whiteSpace: "normal" }}
       >
         <ContentHole>{renderChildren(node.content, specs)}</ContentHole>
       </div>
@@ -202,21 +266,20 @@ function Region({ node, specs, kind }: { node: JSONContent; specs: SpecMap; kind
 function StaticCodeBlock({ node }: { node: JSONContent }) {
   const language = (node.attrs?.language as string | null) ?? "";
   return (
-    <Shell type="codeBlock">
+    <Shell type="codeBlock" className={contentClass.block}>
       <figure
         data-node-view-wrapper=""
         dir="ltr"
-        className="fde-codeblock shiki not-prose relative my-4 overflow-hidden rounded-xl border border-fd-border bg-fd-card text-sm shadow-sm"
-        style={{ whiteSpace: "normal" }}
+        {...stylex.props(content.codeBlock, styles.wrapper)}
       >
-        <div className="flex h-9.5 items-center gap-1 border-b border-fd-border px-3 text-fd-muted-foreground">
-          <SquareCode size={15} className="shrink-0 opacity-70" />
-          <div className="flex-1" />
-          <span className="px-1.5 text-xs font-medium">{language || "plaintext"}</span>
+        <div {...stylex.props(content.codeHeader)}>
+          <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+          <div {...stylex.props(styles.spacer)} />
+          <span {...stylex.props(styles.codeLang)}>{language || "plaintext"}</span>
         </div>
-        <div className="overflow-auto">
-          <pre className="fde-codeblock-pre">
-            <code data-node-view-content="" style={{ whiteSpace: "pre-wrap" }}>
+        <div {...stylex.props(content.codeScroll)}>
+          <pre {...stylex.props(content.codePre)}>
+            <code {...stylex.props(content.codeCode, styles.hole)} data-node-view-content="">
               {node.content?.[0]?.text ?? ""}
             </code>
           </pre>
@@ -226,18 +289,29 @@ function StaticCodeBlock({ node }: { node: JSONContent }) {
   );
 }
 
-function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
+function renderNode(
+  node: JSONContent,
+  specs: SpecMap,
+  key: number,
+  parent?: UiComponentSpec,
+): ReactNode {
   const children = () => renderChildren(node.content, specs);
   switch (node.type) {
     case "text":
       return renderMarks(node, key);
     case "paragraph":
-      return <p key={key}>{children()}</p>;
+      return (
+        <p key={key} className={contentClass.paragraph}>
+          {children()}
+        </p>
+      );
     case "heading": {
-      const Tag = `h${(node.attrs?.level as number) ?? 1}` as "h1";
+      const level = (node.attrs?.level as number) ?? 1;
+      const Tag = `h${level}` as "h1";
       return (
         <Tag
           key={key}
+          className={contentClass.heading(level)}
           data-anchor={(node.attrs?.anchor as string) ?? undefined}
           data-toc={(node.attrs?.toc as string) ?? undefined}
         >
@@ -248,44 +322,61 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
     case "hardBreak":
       return <br key={key} />;
     case "bulletList":
-      return <ul key={key}>{children()}</ul>;
+      return (
+        <ul key={key} className={contentClass.bulletList}>
+          {children()}
+        </ul>
+      );
     case "orderedList":
       return (
-        <ol key={key} start={(node.attrs?.start as number) ?? undefined}>
+        <ol
+          key={key}
+          className={contentClass.orderedList}
+          start={(node.attrs?.start as number) ?? undefined}
+        >
           {children()}
         </ol>
       );
     case "listItem":
-      return <li key={key}>{children()}</li>;
+      return (
+        <li key={key} className={contentClass.listItem}>
+          {children()}
+        </li>
+      );
     case "taskList":
       return (
-        <ul key={key} data-type="taskList">
+        <ul key={key} className={contentClass.taskList} data-type="taskList">
           {children()}
         </ul>
       );
     case "taskItem": {
       const checked = node.attrs?.checked === true;
       return (
-        <li key={key} data-type="taskItem" data-checked={checked}>
+        <li key={key} className={contentClass.taskItem} data-type="taskItem" data-checked={checked}>
           <label>
             <input type="checkbox" defaultChecked={checked} disabled />
-            <span />
           </label>
           <div>{children()}</div>
         </li>
       );
     }
     case "blockquote":
-      return <blockquote key={key}>{children()}</blockquote>;
+      return (
+        <blockquote key={key} className={contentClass.blockquote}>
+          {children()}
+        </blockquote>
+      );
     case "horizontalRule":
-      return <hr key={key} />;
+      return <hr key={key} className={contentClass.horizontalRule} />;
     case "image":
       return <StaticImg key={key} node={node} />;
     case "table":
       return (
-        <table key={key}>
-          <tbody>{children()}</tbody>
-        </table>
+        <div key={key} className="tableWrapper">
+          <table className={contentClass.table}>
+            <tbody>{children()}</tbody>
+          </table>
+        </div>
       );
     case "tableRow":
       return <tr key={key}>{children()}</tr>;
@@ -293,6 +384,7 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       return (
         <th
           key={key}
+          className={contentClass.tableHeader}
           colSpan={node.attrs?.colspan as number}
           rowSpan={node.attrs?.rowspan as number}
         >
@@ -303,6 +395,7 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       return (
         <td
           key={key}
+          className={contentClass.tableCell}
           colSpan={node.attrs?.colspan as number}
           rowSpan={node.attrs?.rowspan as number}
         >
@@ -316,8 +409,8 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
     case "mathInline":
       return (
         <span key={key} className="react-renderer node-mathInline">
-          <span className="fde-math fde-math-inline" data-node-view-wrapper="">
-            <span className="fde-math-src">
+          <span {...stylex.props(content.mathInline)} data-node-view-wrapper="">
+            <span {...stylex.props(content.mathInlineSrc)}>
               <span data-node-view-content="">{node.content?.[0]?.text ?? ""}</span>
             </span>
           </span>
@@ -325,14 +418,10 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       );
     case "mathBlock":
       return (
-        <Shell key={key} type="mathBlock">
-          <div
-            data-node-view-wrapper=""
-            className="fde-math fde-math-block"
-            style={{ whiteSpace: "normal" }}
-          >
-            <pre className="fde-math-src">
-              <code data-node-view-content="" style={{ whiteSpace: "pre-wrap" }}>
+        <Shell key={key} type="mathBlock" className={contentClass.block}>
+          <div data-node-view-wrapper="" {...stylex.props(content.mathBlock, styles.wrapper)}>
+            <pre {...stylex.props(content.mathBlockSrc)}>
+              <code {...stylex.props(styles.hole)} data-node-view-content="">
                 {node.content?.[0]?.text ?? ""}
               </code>
             </pre>
@@ -342,12 +431,17 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
     case "mdxComponent":
       return <Component key={key} node={node} specs={specs} />;
     case "mdxInlineRegion":
-      return <Region key={key} node={node} specs={specs} kind="inline" />;
+      return <Region key={key} node={node} specs={specs} kind="inline" parent={parent} />;
     case "mdxBlockRegion":
-      return <Region key={key} node={node} specs={specs} kind="block" />;
+      return <Region key={key} node={node} specs={specs} kind="block" parent={parent} />;
     case "mdxJsxFlowElement":
       return (
-        <div key={key} data-mdx-flow="" data-component={(node.attrs?.name as string) ?? "Fragment"}>
+        <div
+          key={key}
+          className={contentClass.mdxJsxFlowElement}
+          data-mdx-flow=""
+          data-component={(node.attrs?.name as string) ?? "Fragment"}
+        >
           {children()}
         </div>
       );
@@ -355,6 +449,7 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
       return (
         <span
           key={key}
+          className={contentClass.mdxJsxTextElement}
           data-mdx-inline=""
           data-component={(node.attrs?.name as string) ?? "Fragment"}
         >
@@ -362,29 +457,26 @@ function renderNode(node: JSONContent, specs: SpecMap, key: number): ReactNode {
         </span>
       );
     case "mdxTextExpression":
-      return <code key={key} data-mdx-expression="">{`{${String(node.attrs?.value ?? "")}}`}</code>;
+      return (
+        <code key={key} className={contentClass.mdxTextExpression} data-mdx-expression="">
+          {`{${String(node.attrs?.value ?? "")}}`}
+        </code>
+      );
     case "verbatimInline":
       return (
-        <code key={key} data-mdx-verbatim="">
+        <code key={key} className={contentClass.verbatimInline} data-mdx-verbatim="">
           {String(node.attrs?.value ?? "")}
         </code>
       );
     case "mdxFlowExpression":
     case "mdxjsEsm":
     case "frontmatter":
-    case "verbatim": {
-      const attr = {
-        mdxFlowExpression: "data-mdx-expression",
-        mdxjsEsm: "data-mdx-esm",
-        frontmatter: "data-mdx-frontmatter",
-        verbatim: "data-mdx-verbatim",
-      }[node.type];
+    case "verbatim":
       return (
-        <pre key={key} {...{ [attr]: "" }}>
+        <pre key={key} className={contentClass[node.type]}>
           <code>{String(node.attrs?.value ?? "")}</code>
         </pre>
       );
-    }
     default:
       return <div key={key}>{children()}</div>;
   }
@@ -401,7 +493,10 @@ export function StaticMdx({
 }) {
   return (
     <MediaContext.Provider value={media}>
-      <div className="ProseMirror" style={{ whiteSpace: "pre-wrap" }} aria-label="Loading editor">
+      <div
+        className={`ProseMirror ${stylex.props(content.root, styles.root).className}`}
+        aria-label="Loading editor"
+      >
         {renderChildren(doc.content, specs)}
       </div>
     </MediaContext.Provider>

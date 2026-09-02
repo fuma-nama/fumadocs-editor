@@ -95,7 +95,7 @@ test("the static view paints first and captures keystrokes for replay", async ()
   await settle(); // parse chunk resolves; the live editor is still unmounted
 
   // before hydration: the static paint is up, no live editor exists
-  const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement & {
+  const staticView = host!.querySelector(".ProseMirror[aria-label]") as HTMLElement & {
     editor?: unknown;
   };
   expect(staticView.editor).toBeUndefined();
@@ -174,7 +174,7 @@ test("editable={false}: read-only surface, typing dropped, no mutating chrome", 
   await settle();
 
   // typing on the static view must not queue a replay
-  const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement;
+  const staticView = host!.querySelector(".ProseMirror[aria-label]") as HTMLElement;
   act(() => {
     staticView.parentElement!.dispatchEvent(
       new KeyboardEvent("keydown", { key: "X", bubbles: true }),
@@ -284,7 +284,7 @@ test("a throwing renderer cannot kill the static first paint", () =>
       components: [...fumadocsUiComponents, boomSpec],
     });
     await settle(); // parse chunk → static paint; the live editor never mounts
-    const staticView = host!.querySelector(".fde-content .ProseMirror") as HTMLElement & {
+    const staticView = host!.querySelector(".ProseMirror[aria-label]") as HTMLElement & {
       editor?: unknown;
     };
     expect(staticView.editor).toBeUndefined();

@@ -10,7 +10,7 @@ blocks come back byte-for-byte.
 | [`@fumadocs-editor/core`](packages/core) | parse, serialize, component specs |
 | [`@fumadocs-editor/sync`](packages/sync) | FS mirror, collab, auth           |
 
-Docs: [`apps/docs`](apps/docs). Playground: [`apps/playground`](apps/playground).
+Docs: https://editor.fumadocs.dev.
 
 ## Development
 

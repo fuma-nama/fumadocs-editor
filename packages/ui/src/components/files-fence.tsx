@@ -18,5 +18,6 @@ const renderers = [filesSpec, folderSpec, fileSpec];
 export const filesFenceSpecs: UiComponentSpec[] = base.map((spec, index) => ({
   ...spec,
   icon: renderers[index].icon,
+  regions: renderers[index].regions,
   render: renderers[index].render,
 }));

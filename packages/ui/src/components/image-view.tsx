@@ -1,11 +1,34 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
 import { Image } from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import type { Editor, Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { ImageIcon } from "lucide-react";
-import { cn } from "../utils/cn";
+import { content } from "../styles/content";
 import { resolveSrc, type MediaProvider } from "./media";
+
+const styles = stylex.create({
+  wrapper: { display: "inline-block", maxWidth: "100%" },
+  /** empty-source chip: the node stays visible until a src is set */
+  placeholder: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    borderRadius: "0.5rem",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: tokens.border,
+    backgroundColor: tokens.card,
+    paddingInline: "0.75rem",
+    paddingBlock: "0.5rem",
+    fontSize: 13,
+    color: tokens.mutedForeground,
+  },
+  /** `content.atom`'s ring, driven by the node view's `selected` prop */
+  selected: { outline: `2px solid ${tokens.ring}`, outlineOffset: 2 },
+});
 
 /** insert the files' images at `pos` after uploading them */
 export async function insertImages(
@@ -31,25 +54,17 @@ function makeImageView(media: MediaProvider | undefined) {
   return function ImageView({ node, selected }: NodeViewProps) {
     const src = (node.attrs.src as string) ?? "";
     return (
-      <NodeViewWrapper as="span" data-image="" className="inline-block max-w-full">
+      <NodeViewWrapper as="span" data-image="" {...stylex.props(styles.wrapper)}>
         {src ? (
           <img
             src={resolveSrc(media, src)}
             alt={(node.attrs.alt as string) ?? ""}
             title={(node.attrs.title as string) ?? undefined}
             draggable={false}
-            className={cn(
-              "max-w-full rounded-lg border border-fd-border",
-              selected && "outline-2 outline-offset-2 outline-fd-primary/60",
-            )}
+            {...stylex.props(content.img, selected && styles.selected)}
           />
         ) : (
-          <span
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg border border-dashed border-fd-border bg-fd-card px-3 py-2 text-[13px] text-fd-muted-foreground",
-              selected && "outline-2 outline-offset-2 outline-fd-primary/60",
-            )}
-          >
+          <span {...stylex.props(styles.placeholder, selected && styles.selected)}>
             <ImageIcon size={14} />
             No image yet. Set a source from the bubble
           </span>

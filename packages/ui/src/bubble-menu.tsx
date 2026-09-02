@@ -1,4 +1,7 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
+import { consts } from "./styles/consts.stylex";
 // side-effect imports: register starter-kit + table command typings
 import "@tiptap/starter-kit";
 import "@tiptap/extension-table";
@@ -42,10 +45,97 @@ import { updateAtomAttributes } from "./components/attributes";
 import { OPEN_COMPONENT_MENU } from "./components/caret-policy";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
-import { fieldCls, ghostSelectCls, iconButtonCls, itemCls, popupCls } from "./components/styles";
-import { cn } from "./utils/cn";
+import { chrome } from "./styles/shared";
 
 type Chain = ReturnType<Editor["chain"]>;
+
+const muted = tokens.mutedForeground;
+const border = tokens.border;
+
+const styles = stylex.create({
+  /* The bubble is a popup surface laid out as a toolbar row: it hugs its
+   * controls, and stays under the popovers it opens. */
+  bubble: { zIndex: 40, minWidth: 0, display: "flex", alignItems: "center", gap: "0.125rem" },
+  linkPopup: {
+    display: "flex",
+    width: "16rem",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.5rem",
+  },
+  /** the path suggestions track the input's width */
+  linkList: { maxHeight: "16rem", width: "var(--anchor-width)", overflowY: "auto" },
+  mono: { fontFamily: consts.mono, fontSize: 12 },
+  muted: { color: muted },
+  tablePopup: { display: "flex", width: "11rem", flexDirection: "column" },
+  imageRow: { display: "flex", alignItems: "center", gap: "0.375rem" },
+  imageSrc: { width: "13rem" },
+  imageAlt: { width: "9rem" },
+  yaml: {
+    minHeight: "6rem",
+    width: "18rem",
+    resize: "vertical",
+    borderRadius: "0.375rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: { default: border, ":focus-visible": tokens.ring },
+    backgroundColor: tokens.background,
+    padding: "0.5rem",
+    fontFamily: consts.mono,
+    fontSize: 12,
+    lineHeight: 1.625,
+    color: tokens.foreground,
+    outline: "none",
+  },
+  headingOptions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.375rem",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: border,
+    padding: "0.5rem",
+  },
+  tocSelect: {
+    height: "1.75rem",
+    width: "100%",
+    cursor: "pointer",
+    /** keeps the native disclosure arrow that chrome.input's reset removes */
+    appearance: "auto",
+    borderRadius: "0.375rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: { default: border, ":focus-visible": tokens.ring },
+    backgroundColor: tokens.background,
+    paddingInline: "0.375rem",
+    fontSize: 12.5,
+    color: tokens.foreground,
+    outline: "none",
+  },
+  /** the active component's chip: reads as a label until hovered */
+  chip: {
+    display: "inline-flex",
+    height: "1.75rem",
+    cursor: "pointer",
+    alignItems: "center",
+    gap: "0.375rem",
+    borderRadius: "0.5rem",
+    paddingInline: "0.5rem",
+    fontSize: 12.5,
+    fontWeight: 500,
+    color: tokens.foreground,
+    outline: "none",
+    backgroundColor: {
+      default: "transparent",
+      ":hover": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
+    },
+  },
+  chipIcon: { display: "inline-flex", color: muted },
+  panel: { display: "flex", width: "14rem", flexDirection: "column" },
+});
+
+const ghostSelectClass = stylex.props(chrome.button, chrome.ghostSelect).className!;
 
 /** The turn-into list: every block a text selection can become. */
 export const TURN_INTO = [
@@ -179,7 +269,7 @@ function MarkButton({
     <button
       type="button"
       aria-label={label}
-      className={iconButtonCls}
+      {...stylex.props(chrome.button, chrome.iconButton)}
       data-active={active || undefined}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
@@ -228,14 +318,14 @@ function LinkControl({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label="Link"
-        className={iconButtonCls}
+        {...stylex.props(chrome.button, chrome.iconButton)}
         data-active={href != null || undefined}
       >
         <Link2 size={15} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="start" className="z-50">
-          <Popover.Popup className={cn(popupCls, "flex w-64 items-center gap-2 p-2")}>
+        <Popover.Positioner sideOffset={6} align="start" {...stylex.props(chrome.layer)}>
+          <Popover.Popup {...stylex.props(chrome.popup, styles.linkPopup)}>
             <Autocomplete.Root
               items={paths}
               value={draft}
@@ -248,7 +338,7 @@ function LinkControl({
               }}
             >
               <Autocomplete.Input
-                className={fieldCls}
+                {...stylex.props(chrome.input, chrome.field)}
                 placeholder="https://… or ./page.mdx"
                 spellCheck={false}
                 autoFocus
@@ -264,16 +354,14 @@ function LinkControl({
                 }}
               />
               <Autocomplete.Portal container={container}>
-                <Autocomplete.Positioner sideOffset={6} className="z-50">
-                  <Autocomplete.Popup
-                    className={cn(popupCls, "max-h-64 w-(--anchor-width) overflow-y-auto")}
-                  >
+                <Autocomplete.Positioner sideOffset={6} {...stylex.props(chrome.layer)}>
+                  <Autocomplete.Popup {...stylex.props(chrome.popup, styles.linkList)}>
                     <Autocomplete.List>
                       {(path: string) => (
                         <Autocomplete.Item
                           key={path}
                           value={path}
-                          className={cn(itemCls, "font-mono text-[12px]")}
+                          {...stylex.props(chrome.item, styles.mono)}
                         >
                           {path}
                         </Autocomplete.Item>
@@ -287,7 +375,7 @@ function LinkControl({
               <button
                 type="button"
                 aria-label="Remove link"
-                className={iconButtonCls}
+                {...stylex.props(chrome.button, chrome.iconButton)}
                 onClick={() => {
                   editor.chain().focus().extendMarkRange("link").unsetLink().run();
                   setOpen(false);
@@ -321,17 +409,20 @@ function TableControl({
   const [open, setOpen] = useState(false);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger aria-label="Table options" className={iconButtonCls}>
+      <Popover.Trigger
+        aria-label="Table options"
+        {...stylex.props(chrome.button, chrome.iconButton)}
+      >
         <Table2 size={15} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="start" className="z-50">
-          <Popover.Popup className={cn(popupCls, "flex w-44 flex-col")}>
+        <Popover.Positioner sideOffset={6} align="start" {...stylex.props(chrome.layer)}>
+          <Popover.Popup {...stylex.props(chrome.popup, styles.tablePopup)}>
             {TABLE_OPS.map((op) => (
               <button
                 key={op.label}
                 type="button"
-                className={itemCls}
+                {...stylex.props(chrome.button, chrome.item)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   op.run(editor.chain().focus()).run();
@@ -353,16 +444,16 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex items-center gap-1.5">
+    <div {...stylex.props(styles.imageRow)}>
       <input
-        className={cn(fieldCls, "w-52")}
+        {...stylex.props(chrome.input, chrome.field, styles.imageSrc)}
         placeholder="Image source…"
         value={(attrs.src as string) ?? ""}
         spellCheck={false}
         onChange={(event) => updateAtomAttributes(editor, "image", { src: event.target.value })}
       />
       <input
-        className={cn(fieldCls, "w-36")}
+        {...stylex.props(chrome.input, chrome.field, styles.imageAlt)}
         placeholder="Alt text"
         value={(attrs.alt as string) ?? ""}
         onChange={(event) => updateAtomAttributes(editor, "image", { alt: event.target.value })}
@@ -372,7 +463,7 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
           <button
             type="button"
             aria-label="Upload image"
-            className={iconButtonCls}
+            {...stylex.props(chrome.button, chrome.iconButton)}
             onClick={() => fileRef.current?.click()}
           >
             <Upload size={14} />
@@ -396,7 +487,7 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
       <button
         type="button"
         aria-label="Remove image"
-        className={iconButtonCls}
+        {...stylex.props(chrome.button, chrome.iconButton)}
         onClick={() => editor.chain().focus().deleteSelection().run()}
       >
         <Trash2 size={14} />
@@ -410,7 +501,7 @@ function FrontmatterPanel({ editor }: { editor: Editor }) {
   const value = (editor.getAttributes("frontmatter").value as string) ?? "";
   return (
     <textarea
-      className="min-h-24 w-72 resize-y rounded-md border border-fd-border bg-fd-background p-2 font-mono text-[12px] leading-relaxed text-fd-foreground outline-none focus-visible:border-fd-ring"
+      {...stylex.props(chrome.input, styles.yaml)}
       value={value}
       spellCheck={false}
       onChange={(event) =>
@@ -523,7 +614,7 @@ export function EditorBubble({
         const { format, active: current, atom } = bubbleState(editorState, specs);
         return format || current != null || atom != null;
       }}
-      className="z-40 flex items-center gap-0.5 rounded-[10px] border border-fd-border bg-fd-popover p-1 text-fd-popover-foreground shadow-lg"
+      {...stylex.props(chrome.popup, styles.bubble)}
     >
       {state?.format && (
         <>
@@ -534,18 +625,18 @@ export function EditorBubble({
             open={turnIntoOpen}
             onOpenChange={setTurnIntoOpen}
             ariaLabel="Block type"
-            triggerCls={ghostSelectCls}
+            triggerCls={ghostSelectClass}
             container={panelContainer}
             lead={(item) => (
-              <span className="inline-flex w-4 shrink-0 justify-center text-fd-muted-foreground">
+              <span {...stylex.props(chrome.itemIcon)}>
                 <item.icon size={15} />
               </span>
             )}
             footer={
               state.block.startsWith("h") ? (
-                <div className="flex flex-col gap-1.5 border-t border-fd-border p-2">
+                <div {...stylex.props(styles.headingOptions)}>
                   <input
-                    className={cn(fieldCls, "font-mono text-[12px]")}
+                    {...stylex.props(chrome.input, chrome.field, styles.mono)}
                     placeholder="#anchor-id"
                     spellCheck={false}
                     value={String(editor.getAttributes("heading").anchor ?? "")}
@@ -556,7 +647,7 @@ export function EditorBubble({
                     }
                   />
                   <select
-                    className="h-7 w-full cursor-pointer rounded-md border border-fd-border bg-fd-background px-1.5 text-[12.5px] text-fd-foreground outline-none focus-visible:border-fd-ring"
+                    {...stylex.props(chrome.input, styles.tocSelect)}
                     value={String(editor.getAttributes("heading").toc ?? "")}
                     onChange={(event) =>
                       editor.commands.updateAttributes("heading", {
@@ -573,9 +664,9 @@ export function EditorBubble({
             }
           >
             {TURN_INTO.find((item) => item.value === state.block)?.label ?? "Paragraph"}
-            <ChevronDown size={13} className="text-fd-muted-foreground" />
+            <ChevronDown size={13} {...stylex.props(styles.muted)} />
           </Picker>
-          <span className="mx-0.5 h-4 w-px bg-fd-border" />
+          <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={15} />
           </MarkButton>
@@ -608,19 +699,19 @@ export function EditorBubble({
       {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
       {active && spec && (
         <>
-          {state?.format && <span className="mx-0.5 h-4 w-px bg-fd-border" />}
+          {state?.format && <span {...stylex.props(chrome.divider)} />}
           <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
             <Popover.Trigger
               aria-label={`${spec.label ?? spec.name} options`}
-              className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-fd-foreground outline-none hover:bg-fd-accent data-[popup-open]:bg-fd-accent"
+              {...stylex.props(chrome.button, styles.chip)}
             >
-              <span className="inline-flex text-fd-muted-foreground">{spec.icon}</span>
+              <span {...stylex.props(styles.chipIcon)}>{spec.icon}</span>
               {spec.label ?? spec.name}
-              <ChevronDown size={12} className="text-fd-muted-foreground" />
+              <ChevronDown size={12} {...stylex.props(styles.muted)} />
             </Popover.Trigger>
             <Popover.Portal container={panelContainer}>
-              <Popover.Positioner sideOffset={6} align="end" className="z-50">
-                <Popover.Popup data-fde-popup="" className={cn(popupCls, "flex w-56 flex-col")}>
+              <Popover.Positioner sideOffset={6} align="end" {...stylex.props(chrome.layer)}>
+                <Popover.Popup data-fde-popup="" {...stylex.props(chrome.popup, styles.panel)}>
                   <BlockPanel
                     editor={editor}
                     specs={specs}

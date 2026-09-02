@@ -27,21 +27,443 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@base-ui/react/checkbox";
 import { Select } from "@base-ui/react/select";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
+import { consts } from "../styles/consts.stylex";
 import type { CSSProperties, ReactNode } from "react";
-import { cn } from "../utils/cn";
-import { itemCls, itemIndicatorCls, popupCls } from "./styles";
+import { chrome } from "../styles/shared";
+import {
+  accordion as accordionMarker,
+  folder as folderMarker,
+  row,
+} from "../styles/markers.stylex";
 import { useEditorPortal } from "../utils/portal";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
  * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
- * component's markup: same Tailwind utilities, same `fd-*` tokens, so the
- * editor matches the site. The editor never renders through fumadocs-ui:
- * those components own state and interactivity (tabs, collapse, navigation)
- * that conflict with always-editable regions, and we stay free of the
- * dependency. Custom components work the same way: a lightweight editor
- * renderer, with editable regions as `children` in document order.
+ * component's chrome on the editor's own `--fde-*` tokens, so a host that
+ * maps them to its palette matches the site. The editor never renders
+ * through fumadocs-ui: those components own
+ * state and interactivity (tabs, collapse, navigation) that conflict with
+ * always-editable regions, and we stay free of the dependency. Custom
+ * components work the same way: a lightweight editor renderer, with
+ * editable regions as `children` in document order.
+ *
+ * A component's content hole dissolves (`display: contents`), so the
+ * regions and child components are the renderer root's own layout
+ * children: containers space them with `gap` and zero the document rhythm
+ * (`--fde-gap`). A region renders outside this tree, so its styles travel
+ * through the spec's `regions` map.
  */
+
+const muted = tokens.mutedForeground;
+const border = tokens.border;
+const card = tokens.card;
+const barTint = "color-mix(in oklab, var(--callout-color) 50%, transparent)";
+const calloutWash = "color-mix(in oklab, var(--callout-color) 15%, transparent)";
+
+const styles = stylex.create({
+  callout: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    padding: "0.75rem",
+    paddingInlineStart: "0.25rem",
+    fontSize: "0.925em",
+    color: tokens.cardForeground,
+    boxShadow: consts.shadowMd,
+  },
+  calloutBar: {
+    width: "0.125rem",
+    alignSelf: "stretch",
+    borderRadius: "0.25rem",
+    backgroundColor: barTint,
+  },
+  contents: { display: "contents" },
+  calloutTrigger: {
+    marginInline: "-0.125rem",
+    marginTop: 1,
+    display: "inline-flex",
+    flexShrink: 0,
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.375rem",
+    padding: "0.125rem",
+    outline: "none",
+    backgroundColor: {
+      default: "transparent",
+      ":hover": calloutWash,
+      ":is([data-popup-open])": calloutWash,
+    },
+  },
+  calloutTriggerIdea: { color: "var(--callout-color)" },
+  calloutTriggerPlain: { color: card },
+  calloutIcon: { fill: "var(--callout-color)" },
+  calloutTitle: { fontWeight: 500, lineHeight: 1.4 },
+  calloutBody: { marginTop: 6, color: muted },
+  body: { minWidth: 0, flex: 1 },
+
+  card: {
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    padding: "1rem",
+    color: tokens.cardForeground,
+    transition: {
+      default: `color 150ms ${consts.ease}, background-color 150ms ${consts.ease}`,
+      [consts.reduceMotion]: "none",
+    },
+  },
+  cardLink: {
+    backgroundColor: {
+      default: card,
+      ":hover": `color-mix(in oklab, ${tokens.accent} 80%, transparent)`,
+    },
+  },
+  cardTitle: { fontSize: "0.95em", fontWeight: 500 },
+  cardBody: { marginTop: 6, fontSize: "0.9em", color: muted },
+  cards: {
+    display: "grid",
+    gridTemplateColumns: {
+      default: "repeat(2, minmax(0, 1fr))",
+      "@media (max-width: 560px)": "repeat(1, minmax(0, 1fr))",
+    },
+    gap: "0.75rem",
+    "--fde-gap": "0px",
+  },
+
+  /** the rail the step markers hang off; the gutter is its own width */
+  steps: {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.25rem",
+    counterReset: "step",
+    marginInlineStart: { default: "0.5rem", "@media (min-width: 640px)": "1rem" },
+    "--fde-steps-gutter": { default: "1.5rem", "@media (min-width: 640px)": "1.75rem" },
+    paddingInlineStart: "var(--fde-steps-gutter)",
+    borderInlineStartWidth: 1,
+    borderInlineStartStyle: "solid",
+    borderInlineStartColor: border,
+    "--fde-gap": "0px",
+  },
+  step: {
+    position: "relative",
+    "::before": {
+      content: "counter(step)",
+      counterIncrement: "step",
+      position: "absolute",
+      top: 0,
+      insetInlineStart: "calc(-1 * (var(--fde-steps-gutter) + 1px + 1rem))",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "2rem",
+      height: "2rem",
+      borderRadius: 9999,
+      backgroundColor: tokens.secondary,
+      color: tokens.secondaryForeground,
+      fontSize: "0.875rem",
+      lineHeight: "1.25rem",
+    },
+  },
+
+  accordions: {
+    overflow: "hidden",
+    borderRadius: "0.5rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    "--fde-gap": "0px",
+  },
+  /** the divider is a shadow, so the container's overflow clips the first */
+  accordion: { position: "relative", boxShadow: `0 -1px 0 0 ${border}` },
+  accordionChevron: {
+    position: "absolute",
+    insetInlineStart: "0.75rem",
+    top: "0.6rem",
+    display: "inline-flex",
+    cursor: "pointer",
+    borderRadius: "0.25rem",
+    color: muted,
+    outline: "none",
+    transform: {
+      default: "rotate(0deg)",
+      [stylex.when.ancestor("[data-open]", accordionMarker)]: "rotate(90deg)",
+    },
+    transition: { default: "transform 200ms", [consts.reduceMotion]: "none" },
+  },
+  accordionAnchor: {
+    position: "absolute",
+    insetInlineEnd: "0.75rem",
+    top: "0.75rem",
+    display: "inline-flex",
+    color: muted,
+  },
+  accordionTitle: {
+    fontWeight: 500,
+    padding: "0.625rem 2.5rem 0.625rem 2.25rem",
+    "--fde-ph-x": "2.25rem",
+    "--fde-ph-y": "0.625rem",
+  },
+  accordionBody: {
+    display: {
+      default: null,
+      [stylex.when.ancestor(":not([data-open])", accordionMarker)]: "none",
+    },
+    padding: "0 1rem 0.75rem 2.25rem",
+    fontSize: "0.9375rem",
+    color: muted,
+    "--fde-ph-x": "2.25rem",
+  },
+
+  files: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    padding: "0.5rem",
+    fontSize: "0.9em",
+    color: tokens.cardForeground,
+    "--fde-gap": "0px",
+  },
+  entry: { position: "relative" },
+  folder: { display: "flex", flexDirection: "column", gap: 2, "--fde-gap": "0px" },
+  entryIcon: {
+    position: "absolute",
+    insetInlineStart: "0.5rem",
+    top: "0.5rem",
+    zIndex: 1,
+    display: "inline-flex",
+    cursor: { default: "grab", ":active": "grabbing" },
+    color: muted,
+  },
+  entryName: {
+    padding: "0.3rem 0.5rem 0.3rem 1.875rem",
+    borderRadius: "0.375rem",
+    "--fde-ph-x": "1.875rem",
+    "--fde-ph-y": "0.3rem",
+  },
+
+  tabs: {
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: tokens.secondary,
+    "--fde-gap": "0px",
+  },
+  tabLabel: {
+    boxSizing: "border-box",
+    display: "inline-block",
+    margin: "8px 16px 0",
+    // room for a caret while the label is still empty
+    minWidth: { default: null, ":is([data-empty])": "4ch" },
+    paddingBottom: 5,
+    fontSize: "0.875em",
+    fontWeight: 500,
+    color: tokens.primary,
+    borderBottomWidth: 2,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.primary,
+  },
+  tabBody: {
+    backgroundColor: tokens.background,
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: border,
+    padding: "12px 16px",
+  },
+
+  include: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: border,
+    backgroundColor: card,
+    paddingInline: "0.75rem",
+    paddingBlock: "0.5rem",
+    fontSize: "0.9em",
+  },
+  includeLead: { display: "flex", flexShrink: 0, alignItems: "center", gap: "0.5rem" },
+  includeTag: {
+    fontFamily: consts.mono,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: "0.025em",
+    color: muted,
+  },
+  includeLang: {
+    flexShrink: 0,
+    borderRadius: "0.375rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: tokens.muted,
+    paddingInline: "0.375rem",
+    paddingBlock: "0.125rem",
+    fontFamily: consts.mono,
+    fontSize: 11,
+    color: muted,
+  },
+  includePath: { fontFamily: consts.mono, fontSize: "0.875em" },
+
+  /** the summary chrome shared by the dynamic TypeTable and GithubInfo */
+  infoCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    padding: "0.75rem",
+    fontSize: 14,
+    lineHeight: "1.25rem",
+  },
+  shrink: { flexShrink: 0 },
+  infoIcon: { flexShrink: 0, color: muted },
+  infoTitle: { margin: 0, fontWeight: 500 },
+  infoNote: { margin: 0, fontSize: 12, color: muted },
+  truncate: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  minWidth0: { minWidth: 0 },
+
+  typeTable: {
+    overflowX: "auto",
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    fontSize: 13,
+  },
+  table: { margin: 0, width: "100%", borderCollapse: "collapse" },
+  head: {
+    boxSizing: "border-box",
+    paddingInline: "0.75rem",
+    paddingBlock: "0.5rem",
+    textAlign: "left",
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.025em",
+    color: muted,
+  },
+  narrow: { width: 0 },
+  // the focus wash paints the whole cell, not the input's text box
+  cell: {
+    boxSizing: "border-box",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: border,
+    paddingInline: "0.75rem",
+    paddingBlock: "0.375rem",
+    backgroundColor: {
+      default: null,
+      ":has(:focus)": `color-mix(in oklab, ${tokens.accent} 40%, transparent)`,
+    },
+  },
+  cellName: { width: "18%", minWidth: "7rem" },
+  cellType: { width: "22%", minWidth: "8rem" },
+  cellDefault: { width: "15%", minWidth: "5rem" },
+  cellRemove: { paddingRight: "0.5rem", paddingLeft: 0 },
+  input: {
+    width: "100%",
+    outline: "none",
+    "::placeholder": {
+      color: `color-mix(in oklab, ${tokens.mutedForeground} 50%, transparent)`,
+    },
+  },
+  monoSmall: { fontFamily: consts.mono, fontSize: 12 },
+  checkbox: {
+    marginInline: "auto",
+    display: "flex",
+    width: "1rem",
+    height: "1rem",
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.25rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: { default: border, ":is([data-checked])": tokens.primary },
+    backgroundColor: {
+      default: tokens.background,
+      ":is([data-checked])": tokens.primary,
+    },
+    color: tokens.primaryForeground,
+  },
+  flex: { display: "flex" },
+  removeButton: {
+    display: "inline-flex",
+    width: "1.25rem",
+    height: "1.25rem",
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.25rem",
+    visibility: { default: "hidden", [stylex.when.ancestor(":hover", row)]: "visible" },
+    color: { default: muted, ":hover": tokens.error },
+    backgroundColor: { default: "transparent", ":hover": tokens.accent },
+  },
+  addButton: {
+    display: "flex",
+    width: "100%",
+    cursor: "pointer",
+    alignItems: "center",
+    gap: "0.375rem",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: border,
+    paddingInline: "0.75rem",
+    paddingBlock: "0.375rem",
+    fontSize: 12,
+    color: { default: muted, ":hover": tokens.foreground },
+    backgroundColor: { default: "transparent", ":hover": tokens.accent },
+  },
+
+  inlineToc: {
+    borderRadius: "0.75rem",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
+    backgroundColor: card,
+    paddingInline: "1rem",
+    paddingBlock: "0.75rem",
+    fontSize: 14,
+    lineHeight: "1.25rem",
+  },
+  inlineTocIcon: {
+    float: "right",
+    display: "inline-flex",
+    marginInlineStart: "0.5rem",
+    color: muted,
+  },
+});
+
+/** a region renders outside the renderer's tree: it takes a class, not props */
+const regionClass = (style: stylex.StyleXStyles) => stylex.props(style).className!;
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
   info: Info,
@@ -90,27 +512,28 @@ function CalloutTypeSelect({
         ref={anchorRef}
         aria-label="Callout type"
         tabIndex={-1}
-        className={cn(
-          "-mx-0.5 mt-px inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-0.5 outline-none hover:bg-(--callout-color)/15 data-[popup-open]:bg-(--callout-color)/15 [&_svg]:fill-(--callout-color)",
-          isIdea ? "text-(--callout-color)" : "text-fd-card",
+        {...stylex.props(
+          chrome.button,
+          styles.calloutTrigger,
+          isIdea ? styles.calloutTriggerIdea : styles.calloutTriggerPlain,
         )}
       >
-        <Current size={20} strokeWidth={2} />
+        <Current size={20} strokeWidth={2} {...stylex.props(styles.calloutIcon)} />
       </Select.Trigger>
       <Select.Portal container={container}>
         <Select.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
-          <Select.Popup className={popupCls}>
+          <Select.Popup {...stylex.props(chrome.popup)}>
             {items.map((item) => {
               const Icon = CALLOUT_ICONS[item.visual] ?? Info;
               return (
-                <Select.Item key={item.value} value={item.value} className={itemCls}>
+                <Select.Item key={item.value} value={item.value} {...stylex.props(chrome.item)}>
                   <Icon
                     size={15}
-                    className="shrink-0"
-                    style={{ color: `var(--color-fd-${item.visual})` }}
+                    {...stylex.props(styles.shrink)}
+                    style={{ color: `var(--fde-${item.visual})` }}
                   />
                   <Select.ItemText>{item.label}</Select.ItemText>
-                  <Select.ItemIndicator className={itemIndicatorCls}>
+                  <Select.ItemIndicator {...stylex.props(chrome.itemIndicator)}>
                     <Check size={14} />
                   </Select.ItemIndicator>
                 </Select.Item>
@@ -139,19 +562,19 @@ export function CalloutBox({
 }) {
   return (
     <div
-      className="fde-callout flex items-start gap-2 rounded-xl border border-fd-border bg-fd-card p-3 ps-1 text-[0.925em] text-fd-card-foreground shadow-md"
-      style={{ "--callout-color": `var(--color-fd-${visual})` } as CSSProperties}
+      {...stylex.props(styles.callout)}
+      style={{ "--callout-color": `var(--fde-${visual})` } as CSSProperties}
       data-type={value}
     >
       <div
         role="none"
-        className="w-0.5 self-stretch rounded-sm bg-(--callout-color)/50"
+        {...stylex.props(chrome.static, styles.calloutBar)}
         contentEditable={false}
       />
-      <span className="contents" contentEditable={false}>
+      <span {...stylex.props(styles.contents)} contentEditable={false}>
         <CalloutTypeSelect value={value} visual={visual} items={items} onChange={onChange} />
       </span>
-      <div className="min-w-0 flex-1">{children}</div>
+      <div {...stylex.props(styles.body)}>{children}</div>
     </div>
   );
 }
@@ -173,10 +596,7 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
 function Card({ props, children }: ComponentRenderProps) {
   return (
     <div
-      className={cn(
-        "fde-card rounded-xl border border-fd-border bg-fd-card p-4 text-fd-card-foreground transition-colors",
-        props.href && "hover:bg-fd-accent/80",
-      )}
+      {...stylex.props(styles.card, Boolean(props.href) && styles.cardLink)}
       data-has-href={props.href ? "" : undefined}
     >
       {children}
@@ -185,47 +605,36 @@ function Card({ props, children }: ComponentRenderProps) {
 }
 
 function Cards({ children }: ComponentRenderProps) {
-  return <div className="fde-cards grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">{children}</div>;
+  return <div {...stylex.props(styles.cards)}>{children}</div>;
 }
 
 function Steps({ children }: ComponentRenderProps) {
-  return <div className="fde-steps">{children}</div>;
+  return <div {...stylex.props(styles.steps)}>{children}</div>;
 }
 
 function Step({ children }: ComponentRenderProps) {
-  return <div className="fde-step">{children}</div>;
+  return <div {...stylex.props(styles.step)}>{children}</div>;
 }
 
 function Accordions({ children }: ComponentRenderProps) {
-  return (
-    <div className="fde-accordions divide-y divide-fd-border overflow-hidden rounded-lg border border-fd-border bg-fd-card">
-      {children}
-    </div>
-  );
+  return <div {...stylex.props(styles.accordions)}>{children}</div>;
 }
 
 function Files({ children }: ComponentRenderProps) {
-  return (
-    <div className="fde-files rounded-xl border border-fd-border bg-fd-card p-2 text-[0.9em] text-fd-card-foreground">
-      {children}
-    </div>
-  );
+  return <div {...stylex.props(styles.files)}>{children}</div>;
 }
 
 /**
  * File and Folder rows share one geometry; the icon reads as the drag grip
  * (cursor only: pressing any chrome drags the row via the node's native
- * draggability). `z-[1]` lifts it above the name region (`position:
+ * draggability). `zIndex: 1` lifts it above the name region (`position:
  * relative`, later in DOM order), which would otherwise swallow every
  * pointer event aimed at it.
  */
-const entryIconCls =
-  "absolute start-2 top-2 z-[1] cursor-grab text-fd-muted-foreground active:cursor-grabbing";
-
 function File({ children }: ComponentRenderProps) {
   return (
-    <div className="fde-file relative">
-      <span className={entryIconCls} contentEditable={false}>
+    <div {...stylex.props(styles.entry)}>
+      <span {...stylex.props(chrome.static, styles.entryIcon)} contentEditable={false}>
         <FileIcon size={15} />
       </span>
       {children}
@@ -235,8 +644,8 @@ function File({ children }: ComponentRenderProps) {
 
 function Folder({ children }: ComponentRenderProps) {
   return (
-    <div className="fde-folder relative">
-      <span className={entryIconCls} contentEditable={false}>
+    <div {...stylex.props(styles.entry, styles.folder, folderMarker)} data-folder="">
+      <span {...stylex.props(chrome.static, styles.entryIcon)} contentEditable={false}>
         <FolderIcon size={15} />
       </span>
       {children}
@@ -251,7 +660,7 @@ function Accordion({ props, children }: ComponentRenderProps) {
   // node-view renderers can't hold React hook state reliably.
   const anchor = props.id;
   return (
-    <div className="fde-accordion" data-open="">
+    <div {...stylex.props(styles.accordion, accordionMarker)} data-accordion="" data-open="">
       <button
         type="button"
         aria-label="Toggle"
@@ -259,17 +668,17 @@ function Accordion({ props, children }: ComponentRenderProps) {
         contentEditable={false}
         onMouseDown={(event) => event.preventDefault()}
         onClick={(event) => {
-          const item = event.currentTarget.closest(".fde-accordion");
+          const item = event.currentTarget.closest("[data-accordion]");
           if (item?.hasAttribute("data-open")) item.removeAttribute("data-open");
           else item?.setAttribute("data-open", "");
         }}
-        className="fde-accordion-chevron outline-none"
+        {...stylex.props(chrome.button, chrome.static, styles.accordionChevron)}
       >
         <ChevronRight size={16} />
       </button>
       {anchor ? (
         <span
-          className="fde-accordion-anchor"
+          {...stylex.props(chrome.static, styles.accordionAnchor)}
           contentEditable={false}
           title={`#${anchor}`}
           aria-hidden
@@ -283,32 +692,23 @@ function Accordion({ props, children }: ComponentRenderProps) {
 }
 
 function Tabs({ children }: ComponentRenderProps) {
-  return (
-    <div className="fde-tabs flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-secondary">
-      {children}
-    </div>
-  );
+  return <div {...stylex.props(styles.tabs)}>{children}</div>;
 }
 
 function Tab({ children }: ComponentRenderProps) {
-  return <div className="fde-tab">{children}</div>;
+  return <div>{children}</div>;
 }
 
 function Include({ props, children }: ComponentRenderProps) {
   return (
-    <div className="fde-include flex items-center gap-2 rounded-xl border border-dashed border-fd-border bg-fd-card px-3 py-2 text-[0.9em]">
-      <span className="flex shrink-0 items-center gap-2" contentEditable={false}>
-        <FileInput size={15} className="text-fd-muted-foreground" />
-        <span className="font-mono text-[11px] font-semibold tracking-wide text-fd-muted-foreground">
-          include
-        </span>
+    <div {...stylex.props(styles.include)}>
+      <span {...stylex.props(chrome.static, styles.includeLead)} contentEditable={false}>
+        <FileInput size={15} {...stylex.props(styles.infoIcon)} />
+        <span {...stylex.props(styles.includeTag)}>include</span>
       </span>
-      {children}
+      <span {...stylex.props(styles.body)}>{children}</span>
       {props.lang ? (
-        <span
-          className="shrink-0 rounded-md border border-fd-border bg-fd-muted px-1.5 py-0.5 font-mono text-[11px] text-fd-muted-foreground"
-          contentEditable={false}
-        >
+        <span {...stylex.props(chrome.static, styles.includeLang)} contentEditable={false}>
           {props.lang}
         </span>
       ) : null}
@@ -326,8 +726,6 @@ function typeTableRows(value: unknown): TypeTableRows | null {
   return value as TypeTableRows;
 }
 
-const typeCellCls = "w-full bg-transparent outline-none placeholder:text-fd-muted-foreground/50";
-
 /** one editable cell of the type table */
 function TypeCell({
   value,
@@ -342,7 +740,7 @@ function TypeCell({
 }) {
   return (
     <input
-      className={cn(typeCellCls, mono && "font-mono text-[12px]")}
+      {...stylex.props(chrome.input, styles.input, mono && styles.monoSmall)}
       value={typeof value === "string" ? value : (value?.toString() ?? "")}
       placeholder={placeholder}
       spellCheck={false}
@@ -364,14 +762,11 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
 
   if (!rows) {
     return (
-      <div
-        className="fde-typetable flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
-        contentEditable={false}
-      >
-        <Table2 size={16} className="shrink-0 text-fd-muted-foreground" />
-        <div className="min-w-0">
-          <p className="font-medium">TypeTable</p>
-          <p className="truncate font-mono text-[12px] text-fd-muted-foreground">
+      <div {...stylex.props(chrome.static, styles.infoCard)} contentEditable={false}>
+        <Table2 size={16} {...stylex.props(styles.infoIcon)} />
+        <div {...stylex.props(styles.minWidth0)}>
+          <p {...stylex.props(styles.infoTitle)}>TypeTable</p>
+          <p {...stylex.props(styles.infoNote, styles.truncate, styles.monoSmall)}>
             dynamic type={"{…}"}; edit the expression via the ⋯ menu
           </p>
         </div>
@@ -394,33 +789,25 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
       next[index][1] = def;
     });
 
-  const headCls =
-    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-fd-muted-foreground";
-  // the focus wash paints the whole cell, not the input's text box
-  const cellCls = "border-t border-fd-border px-3 py-1.5 has-[:focus]:bg-fd-accent/40";
-
   return (
-    <div
-      className="fde-typetable overflow-x-auto rounded-xl border border-fd-border bg-fd-card text-[13px]"
-      contentEditable={false}
-    >
-      <table className="w-full border-collapse">
+    <div {...stylex.props(chrome.static, styles.typeTable)} contentEditable={false}>
+      <table {...stylex.props(styles.table)}>
         <thead>
           <tr>
-            <th className={headCls}>Prop</th>
-            <th className={headCls}>Type</th>
-            <th className={headCls}>Default</th>
-            <th className={headCls}>Description</th>
-            <th className={cn(headCls, "w-0")} aria-label="Required">
+            <th {...stylex.props(styles.head)}>Prop</th>
+            <th {...stylex.props(styles.head)}>Type</th>
+            <th {...stylex.props(styles.head)}>Default</th>
+            <th {...stylex.props(styles.head)}>Description</th>
+            <th {...stylex.props(styles.head, styles.narrow)} aria-label="Required">
               Req
             </th>
-            <th className="w-0" />
+            <th {...stylex.props(styles.narrow)} />
           </tr>
         </thead>
         <tbody>
           {entries.map(([name, def], index) => (
-            <tr key={index} className="group/row">
-              <td className={cn(cellCls, "w-[18%] min-w-28")}>
+            <tr key={index} {...stylex.props(row)}>
+              <td {...stylex.props(styles.cell, styles.cellName)}>
                 <TypeCell
                   value={name}
                   placeholder="name"
@@ -428,7 +815,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => write((rows) => (rows[index][0] = next))}
                 />
               </td>
-              <td className={cn(cellCls, "w-[22%] min-w-32")}>
+              <td {...stylex.props(styles.cell, styles.cellType)}>
                 <TypeCell
                   value={def.type}
                   placeholder="string"
@@ -436,7 +823,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => patch(index, "type", next)}
                 />
               </td>
-              <td className={cn(cellCls, "w-[15%] min-w-20")}>
+              <td {...stylex.props(styles.cell, styles.cellDefault)}>
                 <TypeCell
                   value={def.default}
                   placeholder="–"
@@ -444,31 +831,31 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => patch(index, "default", next)}
                 />
               </td>
-              <td className={cellCls}>
+              <td {...stylex.props(styles.cell)}>
                 <TypeCell
                   value={def.description}
                   placeholder="Description…"
                   onChange={(next) => patch(index, "description", next)}
                 />
               </td>
-              <td className={cellCls}>
+              <td {...stylex.props(styles.cell)}>
                 <Checkbox.Root
                   aria-label={`${name} required`}
                   tabIndex={-1}
                   checked={def.required === true}
                   onCheckedChange={(on) => patch(index, "required", on === true)}
-                  className="mx-auto flex size-4 cursor-pointer items-center justify-center rounded border border-fd-border bg-fd-background text-fd-primary-foreground data-[checked]:border-fd-primary data-[checked]:bg-fd-primary"
+                  {...stylex.props(chrome.button, styles.checkbox)}
                 >
-                  <Checkbox.Indicator className="flex">
+                  <Checkbox.Indicator {...stylex.props(styles.flex)}>
                     <Check size={11} strokeWidth={3} />
                   </Checkbox.Indicator>
                 </Checkbox.Root>
               </td>
-              <td className={cn(cellCls, "pr-2 pl-0")}>
+              <td {...stylex.props(styles.cell, styles.cellRemove)}>
                 <button
                   type="button"
                   aria-label={`Remove ${name}`}
-                  className="invisible inline-flex size-5 cursor-pointer items-center justify-center rounded text-fd-muted-foreground group-hover/row:visible hover:bg-fd-accent hover:text-fd-error"
+                  {...stylex.props(chrome.button, styles.removeButton)}
                   tabIndex={-1}
                   onClick={() => write((rows) => rows.splice(index, 1))}
                 >
@@ -481,7 +868,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
       </table>
       <button
         type="button"
-        className="flex w-full cursor-pointer items-center gap-1.5 border-t border-fd-border px-3 py-1.5 text-[12px] text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
+        {...stylex.props(chrome.button, styles.addButton)}
         tabIndex={-1}
         onClick={() => write((rows) => rows.push([`prop${rows.length + 1}`, { type: "string" }]))}
       >
@@ -493,16 +880,13 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
 
 function GithubInfoBox({ props }: ComponentRenderProps) {
   return (
-    <div
-      className="fde-github flex items-center gap-3 rounded-xl border border-fd-border bg-fd-card p-3 text-sm"
-      contentEditable={false}
-    >
-      <GitBranch size={16} className="shrink-0 text-fd-muted-foreground" />
-      <div className="min-w-0">
-        <p className="truncate font-medium">
+    <div {...stylex.props(chrome.static, styles.infoCard)} contentEditable={false}>
+      <GitBranch size={16} {...stylex.props(styles.infoIcon)} />
+      <div {...stylex.props(styles.minWidth0)}>
+        <p {...stylex.props(styles.infoTitle, styles.truncate)}>
           {props.owner || "owner"}/{props.repo || "repo"}
         </p>
-        <p className="text-[12px] text-fd-muted-foreground">GitHub repository</p>
+        <p {...stylex.props(styles.infoNote)}>GitHub repository</p>
       </div>
     </div>
   );
@@ -510,8 +894,8 @@ function GithubInfoBox({ props }: ComponentRenderProps) {
 
 function InlineTOC({ children }: ComponentRenderProps) {
   return (
-    <div className="fde-inline-toc rounded-xl border border-fd-border bg-fd-card px-4 py-3 text-sm">
-      <span className="float-right ms-2 text-fd-muted-foreground" contentEditable={false}>
+    <div {...stylex.props(styles.inlineToc)}>
+      <span {...stylex.props(chrome.static, styles.inlineTocIcon)} contentEditable={false}>
         <ChevronDown size={16} />
       </span>
       {children}
@@ -519,12 +903,19 @@ function InlineTOC({ children }: ComponentRenderProps) {
   );
 }
 
+/** shared with the `:::` directive mirror, which draws the same box */
+export const calloutRegions = {
+  title: regionClass(styles.calloutTitle),
+  body: regionClass(styles.calloutBody),
+};
+
 export const calloutSpec: UiComponentSpec = {
   name: "Callout",
   label: "Callout",
   icon: <Info size={13} />,
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Title…" }],
   childrenRegion: { region: "body", placeholder: "Write the callout…" },
+  regions: calloutRegions,
   props: [
     {
       name: "type",
@@ -568,6 +959,7 @@ export const cardSpec: UiComponentSpec = {
   // `description` attribute is folded into the body rather than shown separately.
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Card title…" }],
   childrenRegion: { region: "body", placeholder: "Write the card…", fromAttribute: "description" },
+  regions: { title: regionClass(styles.cardTitle), body: regionClass(styles.cardBody) },
   props: [
     { name: "href", label: "Link", type: "string", placeholder: "/docs/…" },
     { name: "external", label: "Open in new tab", type: "boolean" },
@@ -648,6 +1040,7 @@ export const accordionSpec: UiComponentSpec = {
   label: "Accordion",
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Question…" }],
   childrenRegion: { region: "body", placeholder: "Answer…" },
+  regions: { title: regionClass(styles.accordionTitle), body: regionClass(styles.accordionBody) },
   props: [
     // the `id` attribute is the accordion's anchor (deep-link target)
     { name: "id", label: "Anchor (id)", type: "string", placeholder: "section-id" },
@@ -689,6 +1082,7 @@ export const fileSpec: UiComponentSpec = {
   label: "File",
   icon: <FileIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
+  regions: { "file-name": regionClass(styles.entryName) },
   render: File,
   insert: entryInsert("File", "file-name"),
 };
@@ -698,6 +1092,7 @@ export const folderSpec: UiComponentSpec = {
   label: "Folder",
   icon: <FolderIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
+  regions: { "folder-name": regionClass(styles.entryName) },
   // a folder holds files and further folders: needs the array child form
   childComponent: ["File", "Folder"],
   listLike: true,
@@ -775,6 +1170,9 @@ export const tabSpec: UiComponentSpec = {
   name: "Tab",
   label: "Tab",
   childrenRegion: { region: "body", placeholder: "Tab content…" },
+  // the label region is contributed by the Tabs `items` attribute, but it
+  // renders inside a Tab: its styles belong to this spec
+  regions: { label: regionClass(styles.tabLabel), body: regionClass(styles.tabBody) },
   props: [
     { name: "value", label: "Value", type: "string", placeholder: "derived from label" },
     { name: "id", label: "Anchor (id)", type: "string", placeholder: "tab-id" },
@@ -820,6 +1218,7 @@ export const includeSpec: UiComponentSpec = {
   icon: <FileInput size={13} />,
   contentRegion: { region: "path", placeholder: "./path/to/file.mdx" },
   filePathRegion: "path",
+  regions: { path: regionClass(styles.includePath) },
   props: [
     { name: "lang", label: "Language", type: "string", placeholder: "auto" },
     { name: "meta", label: "Code meta", type: "string", placeholder: 'title="…"' },

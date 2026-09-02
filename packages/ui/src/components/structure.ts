@@ -4,6 +4,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { childNames, childOnlyNames, type SpecMap } from "./keymap";
+import { contentClass } from "../styles/content";
 
 /*
  * Structural invariants the schema can't express: a component's regions are
@@ -324,7 +325,7 @@ function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
           const rect = ref.getBoundingClientRect();
           if (!line) {
             line = document.createElement("div");
-            line.className = "fde-drop-indicator";
+            line.className = contentClass.dropIndicator;
             (view.dom.closest("[data-fde-root]") ?? document.body).appendChild(line);
           }
           line.style.left = `${rect.left}px`;

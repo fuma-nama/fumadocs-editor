@@ -30,17 +30,24 @@ app, mount it from a file marked `'use client'`.
 
 ### Add the styles
 
-The editor is styled with Tailwind CSS v4 and the fumadocs `fd-*` tokens.
-Import the preset after Tailwind:
+One stylesheet, no build plugin. The editor is styled with StyleX, compiled
+ahead of time, and never depends on your CSS setup:
 
 ```css title="app.css"
-@import "tailwindcss";
-@import "@fumadocs-editor/ui/css/preset.css";
+@import "@fumadocs-editor/ui/styles.css";
 ```
 
-The preset registers the `--color-fd-*` tokens (the fumadocs `neutral`
-palette) and tells Tailwind to scan the package. On a Fumadocs site, the
-site's own theme keeps precedence.
+It ships a neutral palette as `--fde-*` variables, with a `.dark` block for
+the dark theme. To match a Fumadocs site, alias them to the site's tokens
+after the import:
+
+```css title="app.css"
+:root {
+  --fde-background: var(--color-fd-background);
+  --fde-primary: var(--color-fd-primary);
+  /* ... */
+}
+```
 
 </Step>
 <Step>
@@ -77,7 +84,7 @@ autosave and merge loop for you:
 
 ## Theming
 
-The `fd-*` tokens follow a `.dark` class on an ancestor, so a Fumadocs or
+The `--fde-*` tokens follow a `.dark` class on an ancestor, so a Fumadocs or
 `next-themes` site themes the editor with no extra setup. Standalone, wrap
 it in `EditorThemeProvider`:
 

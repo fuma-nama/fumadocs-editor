@@ -1,15 +1,54 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "../styles/tokens.stylex";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
-import { itemCls, itemIndicatorCls, popupCls } from "./styles";
-import { cn } from "../utils/cn";
+import { chrome } from "../styles/shared";
 import { useEditorPortal } from "../utils/portal";
 
 export interface PickerItem {
   value: string;
   label: string;
 }
+
+const styles = stylex.create({
+  /** the picker pads each section itself, so the popup keeps none */
+  popup: { width: "13rem", overflow: "hidden", padding: 0 },
+  /* the inline padding puts the input text on the item labels' left edge
+   * (list padding 0.25rem + item padding 0.5rem) */
+  input: {
+    height: "2rem",
+    width: "100%",
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.border,
+    backgroundColor: "transparent",
+    paddingInline: "0.75rem",
+    fontSize: 13,
+    color: tokens.foreground,
+    outline: "none",
+    "::placeholder": {
+      color: `color-mix(in oklab, ${tokens.mutedForeground} 60%, transparent)`,
+    },
+  },
+  /* Empty stays mounted while there are matches, so it must collapse or it
+   * reads as padding */
+  empty: {
+    display: { default: "block", ":empty": "none" },
+    paddingInline: "0.75rem",
+    paddingBlock: "0.5rem",
+    fontSize: 12.5,
+    color: tokens.mutedForeground,
+  },
+  list: {
+    boxSizing: "border-box",
+    maxHeight: "20rem",
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    padding: "0.25rem",
+  },
+});
 
 /**
  * Combobox for long lists (block types, code languages): trigger button,
@@ -37,6 +76,7 @@ export function Picker<T extends PickerItem>({
   onOpenChange?: (open: boolean) => void;
   align?: "start" | "end";
   ariaLabel?: string;
+  /** the trigger is a native button: include `chrome.button` in this class */
   triggerCls: string;
   triggerTabIndex?: number;
   /** overrides the default `[data-fde-root]` portal (the bubble menu portals
@@ -69,24 +109,16 @@ export function Picker<T extends PickerItem>({
         {children}
       </Combobox.Trigger>
       <Combobox.Portal container={container ?? portal.container}>
-        <Combobox.Positioner sideOffset={6} align={align} className="z-50">
-          <Combobox.Popup className={cn(popupCls, "w-52 overflow-hidden p-0")}>
-            {/* px-3 puts the input text on the item labels' left edge (list
-             * p-1 + item px-2); Empty stays mounted while there are matches,
-             * so it must collapse (`empty:hidden`) or it reads as padding */}
-            <Combobox.Input
-              placeholder="Filter…"
-              className="h-8 w-full border-b border-fd-border bg-transparent px-3 text-[13px] text-fd-foreground outline-none placeholder:text-fd-muted-foreground/60"
-            />
-            <Combobox.Empty className="px-3 py-2 text-[12.5px] text-fd-muted-foreground empty:hidden">
-              No matches
-            </Combobox.Empty>
-            <Combobox.List className="max-h-80 overflow-y-auto overscroll-contain p-1">
+        <Combobox.Positioner sideOffset={6} align={align} {...stylex.props(chrome.layer)}>
+          <Combobox.Popup {...stylex.props(chrome.popup, styles.popup)}>
+            <Combobox.Input placeholder="Filter…" {...stylex.props(chrome.input, styles.input)} />
+            <Combobox.Empty {...stylex.props(styles.empty)}>No matches</Combobox.Empty>
+            <Combobox.List {...stylex.props(styles.list)}>
               {(item: T) => (
-                <Combobox.Item key={item.value} value={item} className={itemCls}>
+                <Combobox.Item key={item.value} value={item} {...stylex.props(chrome.item)}>
                   {lead?.(item)}
                   {item.label}
-                  <Combobox.ItemIndicator className={itemIndicatorCls}>
+                  <Combobox.ItemIndicator {...stylex.props(chrome.itemIndicator)}>
                     <Check size={14} />
                   </Combobox.ItemIndicator>
                 </Combobox.Item>

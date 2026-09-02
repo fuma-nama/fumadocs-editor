@@ -1,4 +1,5 @@
 "use client";
+import * as stylex from "@stylexjs/stylex";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createSyntax, editorExtensions } from "@fumadocs-editor/core/extensions";
 import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
@@ -18,6 +19,11 @@ import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
 import type { FileProvider, MediaProvider } from "./components/media";
 import type { EditorCollab } from "./collab";
+import { contentClass } from "./styles/content";
+import { contentStyles } from "./components/content-styles";
+import { settled as settledMarker } from "./styles/markers.stylex";
+
+const styles = stylex.create({ frame: { position: "relative" } });
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 
@@ -74,6 +80,7 @@ export function LiveEditor({
         mathNodes: false,
         history: !collab,
       }),
+      contentStyles,
       codeBlockExtension(),
       imageExtension(media),
       ...componentExtensions(components),
@@ -105,7 +112,12 @@ export function LiveEditor({
     // file names, props and code everywhere: browser text assistance only
     // paints false positives and mutates DOM the schema has to heal
     editorProps: {
-      attributes: { spellcheck: "false", autocorrect: "off", autocapitalize: "off" },
+      attributes: {
+        class: contentClass.root,
+        spellcheck: "false",
+        autocorrect: "off",
+        autocapitalize: "off",
+      },
     },
     onCreate({ editor }) {
       // hold the static → live swap until the shared doc has arrived, so the
@@ -155,8 +167,12 @@ export function LiveEditor({
   }, [hidden, editor]);
 
   return (
-    <div className="relative" hidden={hidden} data-fde-settled={settled || undefined}>
-      <EditorContent editor={editor} className="fde-content" />
+    <div
+      {...stylex.props(styles.frame, settledMarker)}
+      hidden={hidden}
+      data-fde-settled={settled || undefined}
+    >
+      <EditorContent editor={editor} />
       {editor && editable && <EditorBubble editor={editor} specs={specs} media={media} />}
       {editor && editable && <BlockMenu editor={editor} specs={specs} />}
       {editor && editable && (

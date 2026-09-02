@@ -1,6 +1,9 @@
 "use client";
 // side-effect import: registers starter-kit command typings
 import "@tiptap/starter-kit";
+import * as stylex from "@stylexjs/stylex";
+import { tokens } from "./styles/tokens.stylex";
+import { consts } from "./styles/consts.stylex";
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
@@ -28,8 +31,101 @@ import { activeComponent } from "./components/attributes";
 import { BlockPanel } from "./block-menu";
 import { TURN_INTO } from "./bubble-menu";
 import { insertItems } from "./slash-menu";
-import { itemCls } from "./components/styles";
-import { cn } from "./utils/cn";
+import { chrome } from "./styles/shared";
+
+const SHEET_EASE = "cubic-bezier(0.2, 0, 0, 1)";
+
+const styles = stylex.create({
+  bar: {
+    boxSizing: "border-box",
+    position: "fixed",
+    insetInlineStart: 0,
+    insetInlineEnd: 0,
+    bottom: 0,
+    zIndex: 40,
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+    backgroundColor: tokens.popover,
+    color: tokens.popoverForeground,
+    transition: { default: `transform 200ms ${SHEET_EASE}`, [consts.reduceMotion]: "none" },
+    paddingBottom: "env(safe-area-inset-bottom)",
+  },
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.125rem",
+    overflowX: "auto",
+    paddingInline: "0.375rem",
+    paddingBlock: "0.125rem",
+  },
+  /** touch target: 44px square minimum */
+  button: {
+    display: "inline-flex",
+    height: "2.75rem",
+    minWidth: "2.75rem",
+    flexShrink: 0,
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.5rem",
+    color: {
+      default: tokens.mutedForeground,
+      ":is([data-active])": tokens.foreground,
+    },
+    backgroundColor: {
+      default: "transparent",
+      ":active": tokens.accent,
+      ":is([data-active])": tokens.accent,
+    },
+    opacity: { default: null, ":disabled": 0.35 },
+  },
+  divider: { height: "1.25rem" },
+  spacer: { minWidth: "0.25rem", flex: 1 },
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 40,
+    backgroundColor: "rgb(0 0 0 / 0.4)",
+    transition: { default: `opacity 150ms ${consts.ease}`, [consts.reduceMotion]: "none" },
+    opacity: { default: 1, ":is([data-starting-style])": 0, ":is([data-ending-style])": 0 },
+  },
+  sheet: {
+    boxSizing: "border-box",
+    position: "fixed",
+    insetInlineStart: 0,
+    insetInlineEnd: 0,
+    bottom: 0,
+    zIndex: 50,
+    display: "flex",
+    maxHeight: "70vh",
+    flexDirection: "column",
+    gap: "0.5rem",
+    overflowY: "auto",
+    borderStartStartRadius: "1rem",
+    borderStartEndRadius: "1rem",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+    backgroundColor: tokens.popover,
+    padding: "0.75rem",
+    paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+    color: tokens.popoverForeground,
+    boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+    transition: { default: `translate 220ms ${SHEET_EASE}`, [consts.reduceMotion]: "none" },
+    translate: {
+      default: null,
+      ":is([data-starting-style])": "0 100%",
+      ":is([data-ending-style])": "0 100%",
+    },
+    scrollbarColor: `${tokens.border} transparent`,
+    scrollbarWidth: "thin",
+  },
+  /* chrome.item leaves the resting background undeclared, which on a
+   * <button> would let the UA button face through */
+  sheetItem: { height: "2.75rem", flexShrink: 0 },
+  sheetIcon: { width: "1.25rem" },
+});
 
 const readKeyboardInset = () => {
   const viewport = window.visualViewport;
@@ -86,9 +182,6 @@ function useEditorFocused(editor: Editor): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
-const barButtonCls =
-  "inline-flex h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-fd-muted-foreground active:bg-fd-accent disabled:opacity-35 data-[active]:bg-fd-accent data-[active]:text-fd-foreground";
-
 function BarButton({
   label,
   active,
@@ -106,7 +199,7 @@ function BarButton({
     <button
       type="button"
       aria-label={label}
-      className={barButtonCls}
+      {...stylex.props(chrome.button, styles.button)}
       data-active={active || undefined}
       disabled={disabled}
       // Keep focus (and the virtual keyboard) in the editor by cancelling the
@@ -184,12 +277,12 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
     <>
       <div
         ref={anchorRef}
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-fd-border bg-fd-popover text-fd-popover-foreground transition-transform duration-200 ease-[cubic-bezier(0.2,0,0,1)] pb-[env(safe-area-inset-bottom)]"
+        {...stylex.props(styles.bar)}
         style={{
           transform: visible ? `translateY(-${inset}px)` : "translateY(100%)",
         }}
       >
-        <div className="flex items-center gap-0.5 overflow-x-auto px-1.5 py-0.5">
+        <div {...stylex.props(styles.row)}>
           <BarButton
             label="Turn into"
             disabled={state.inInlineRegion}
@@ -200,7 +293,7 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
           <BarButton label="Insert" onClick={() => setSheet("insert")}>
             <Plus size={17} />
           </BarButton>
-          <span className="mx-0.5 h-5 w-px shrink-0 bg-fd-border" />
+          <span {...stylex.props(chrome.divider, styles.divider)} />
           <BarButton
             label="Bold"
             active={state.bold}
@@ -235,7 +328,7 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
           </BarButton>
           {state.listEntry && (
             <>
-              <span className="mx-0.5 h-5 w-px shrink-0 bg-fd-border" />
+              <span {...stylex.props(chrome.divider, styles.divider)} />
               <BarButton label="Outdent" onClick={() => outdentEntry(editor, specs)}>
                 <IndentDecrease size={17} />
               </BarButton>
@@ -249,20 +342,20 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
           )}
           {state.active && (
             <>
-              <span className="mx-0.5 h-5 w-px shrink-0 bg-fd-border" />
+              <span {...stylex.props(chrome.divider, styles.divider)} />
               <BarButton label="Component options" onClick={() => setSheet("component")}>
                 <Settings2 size={17} />
               </BarButton>
             </>
           )}
-          <span className="mx-0.5 h-5 w-px shrink-0 bg-fd-border" />
+          <span {...stylex.props(chrome.divider, styles.divider)} />
           <BarButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
             <Undo2 size={17} />
           </BarButton>
           <BarButton label="Redo" disabled={!state.canRedo} onClick={() => run((c) => c.redo())}>
             <Redo2 size={17} />
           </BarButton>
-          <span className="min-w-1 flex-1" />
+          <span {...stylex.props(styles.spacer)} />
           <BarButton label="Done" onClick={() => editor.commands.blur()}>
             <CornerDownLeft size={17} />
           </BarButton>
@@ -271,23 +364,20 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
 
       <Dialog.Root open={sheet != null} onOpenChange={(next) => !next && setSheet(null)}>
         <Dialog.Portal container={container}>
-          <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 transition-opacity duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-          <Dialog.Popup
-            data-fde-popup=""
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-fd-border bg-fd-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-fd-popover-foreground shadow-xl transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[starting-style]:translate-y-full data-[ending-style]:translate-y-full [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]"
-          >
+          <Dialog.Backdrop {...stylex.props(styles.backdrop)} />
+          <Dialog.Popup data-fde-popup="" {...stylex.props(styles.sheet)}>
             {sheet === "turn-into" &&
               TURN_INTO.map((item) => (
                 <button
                   key={item.value}
                   type="button"
-                  className={cn(itemCls, "h-11 shrink-0")}
+                  {...stylex.props(chrome.button, chrome.item, styles.sheetItem)}
                   onClick={() => {
                     item.run(editor.chain().focus()).run();
                     setSheet(null);
                   }}
                 >
-                  <span className="inline-flex w-5 shrink-0 justify-center text-fd-muted-foreground">
+                  <span {...stylex.props(chrome.itemIcon, styles.sheetIcon)}>
                     <item.icon size={16} />
                   </span>
                   <span>{item.label}</span>
@@ -298,16 +388,14 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
                 <button
                   key={item.title}
                   type="button"
-                  className={cn(itemCls, "h-11 shrink-0")}
+                  {...stylex.props(chrome.button, chrome.item, styles.sheetItem)}
                   onClick={() => {
                     const { from } = editor.state.selection;
                     item.run(editor, { from, to: from });
                     setSheet(null);
                   }}
                 >
-                  <span className="inline-flex w-5 shrink-0 justify-center text-fd-muted-foreground">
-                    {item.icon}
-                  </span>
+                  <span {...stylex.props(chrome.itemIcon, styles.sheetIcon)}>{item.icon}</span>
                   <span>{item.title}</span>
                 </button>
               ))}
