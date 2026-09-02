@@ -200,12 +200,6 @@ export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   );
 }
 
-/**
- * Suggestion `render` for trigger-driven popups (`/` inserts, `[[` page
- * links): SlashPopup inside the editor root. A body mount would escape
- * the theme scope (position: fixed, so the root's overflow-hidden cannot
- * clip it). Includes list keyboard handling.
- */
 export function suggestionRender(): {
   onStart: (props: SuggestionProps<SlashItem, SlashItem>) => void;
   onUpdate: (props: SuggestionProps<SlashItem, SlashItem>) => void;

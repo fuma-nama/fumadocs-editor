@@ -312,6 +312,10 @@
   font-size: 0.925em;
 }
 
+.fde-content .tableWrapper {
+  overflow-x: auto;
+}
+
 .fde-content :is(th, td):not(.fde-typetable *) {
   border: 1px solid var(--color-fd-border);
   padding: 7px 12px;

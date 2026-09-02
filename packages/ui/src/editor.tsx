@@ -466,7 +466,7 @@ const EditorView = memo(function EditorView({
         data-fde-root=""
         className={cn(
           scoped,
-          "flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
+          "flex flex-col rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
           className,
         )}
         onKeyDown={(event) => {
@@ -476,19 +476,21 @@ const EditorView = memo(function EditorView({
           }
         }}
       >
-        <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
-          <div className="flex items-center justify-between gap-3 border-b border-fd-border bg-fd-card/40 px-2 py-1">
-            {sync ? <SyncIndicator {...sync} /> : <span />}
-            <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
-              <Tabs.Tab className={modeTabCls} value="visual">
-                Visual
-              </Tabs.Tab>
-              {/* raw source has no merge with a live shared doc */}
-              <Tabs.Tab className={modeTabCls} value="source" disabled={collab != null}>
-                MDX
-              </Tabs.Tab>
-            </Tabs.List>
-          </div>
+        <Tabs.Root
+          value={mode}
+          onValueChange={(value) => switchMode(value as Mode)}
+          className="flex items-center justify-between gap-3 rounded-t-[inherit] border-b border-fd-border bg-fd-card/40 px-2 py-1"
+        >
+          {sync ? <SyncIndicator {...sync} /> : <span />}
+          <Tabs.List className="flex shrink-0 gap-0.5 rounded-lg border border-fd-border bg-fd-muted p-0.5">
+            <Tabs.Tab className={modeTabCls} value="visual">
+              Visual
+            </Tabs.Tab>
+            {/* raw source has no merge with a live shared doc */}
+            <Tabs.Tab className={modeTabCls} value="source" disabled={collab != null}>
+              MDX
+            </Tabs.Tab>
+          </Tabs.List>
         </Tabs.Root>
         {mode === "visual" ? (
           <div className="relative">
