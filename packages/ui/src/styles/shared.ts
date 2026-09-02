@@ -149,7 +149,7 @@ export const chrome = stylex.create({
     borderColor: { default: tokens.border, ":focus-visible": tokens.ring },
     backgroundColor: tokens.background,
     paddingInline: "0.5rem",
-    fontSize: 13,
+    fontSize: tokens.fieldSize,
     color: tokens.foreground,
     outline: "none",
     "::placeholder": {

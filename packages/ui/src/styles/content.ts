@@ -374,12 +374,22 @@ export const content = stylex.create({
   regionBlock: { "--fde-gap": "0.5em" },
   /** drag preview line, placed by the drop-indicator plugin at the target */
   dropIndicator: {
-    position: "fixed",
+    position: "absolute",
+    top: 0,
+    left: 0,
     zIndex: 50,
     height: 3,
     borderRadius: 2,
     backgroundColor: tokens.primary,
     pointerEvents: "none",
+    willChange: "transform",
+  },
+  /** the copy of a block riding under the finger of a touch drag:
+   * rasterized once, then moved on the compositor */
+  dragGhost: {
+    opacity: 0.9,
+    boxShadow: consts.shadowLg,
+    willChange: "transform",
   },
   /* Peer carets (CollaborationCaret): 2px colored bar in the text flow
    * (user color inline) with a name flag above. The flag is chrome: never
@@ -453,4 +463,5 @@ export const contentClass = {
   component: cls(content.block, content.component),
   atom: cls(content.atom),
   dropIndicator: cls(content.dropIndicator),
+  dragGhost: cls(content.dragGhost),
 };

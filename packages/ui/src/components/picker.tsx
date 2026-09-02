@@ -25,7 +25,7 @@ const styles = stylex.create({
     borderBottomColor: tokens.border,
     backgroundColor: "transparent",
     paddingInline: "0.75rem",
-    fontSize: 13,
+    fontSize: tokens.fieldSize,
     color: tokens.foreground,
     outline: "none",
     "::placeholder": {

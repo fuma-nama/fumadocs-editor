@@ -2,21 +2,37 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { consts } from "./styles/consts.stylex";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+  type TouchEvent,
+} from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { useEditorPortal } from "./utils/portal";
 import { NodeSelection } from "@tiptap/pm/state";
+import { startTouchDrag } from "./components/structure";
 import type { MdxAttribute } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
-import { ArrowDown, ArrowUp, IndentDecrease, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  EllipsisVertical,
+  IndentDecrease,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import {
   childInsertContext,
   entryParentFolder,
   entryToggleTarget,
   focusAt,
-  moveComponentAt,
+  handleBlock,
+  moveBlockAt,
   outdentEntry,
   toggleEntryType,
 } from "./components/keymap";
@@ -36,6 +52,7 @@ const styles = stylex.create({
     width: "1.5rem",
     height: "1.5rem",
     cursor: "pointer",
+    touchAction: "none",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: "0.375rem",
@@ -77,11 +94,154 @@ const styles = stylex.create({
   danger: { color: { default: muted, ":hover": tokens.error } },
 });
 
+/** the handle's drag wiring: the browser's drag for a mouse, the editor's own for a touch */
+function dragProps(editor: Editor, pos: number, specs: Map<string, UiComponentSpec>) {
+  return {
+    draggable: true,
+    // a touch drags through the editor's own touch drag; the browser's
+    // long-press drag must not start on top of it
+    onTouchStart(event: TouchEvent<HTMLButtonElement>) {
+      const dom = editor.view.nodeDOM(pos);
+      if (!(dom instanceof HTMLElement)) return;
+      event.currentTarget.draggable = false;
+      startTouchDrag(editor.view, pos, dom, event.nativeEvent, specs);
+    },
+    onTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+      event.currentTarget.draggable = true;
+    },
+    onTouchCancel(event: TouchEvent<HTMLButtonElement>) {
+      event.currentTarget.draggable = true;
+    },
+    // the handle lives outside ProseMirror's DOM, so its dragstart never
+    // reaches the view: stage the node drag by hand
+    onDragStart(event: DragEvent<HTMLButtonElement>) {
+      if (!event.dataTransfer || editor.state.doc.nodeAt(pos) == null) return;
+      const selection = NodeSelection.create(editor.state.doc, pos);
+      editor.view.dispatch(editor.state.tr.setSelection(selection));
+      event.dataTransfer.setData("text/plain", "");
+      event.dataTransfer.effectAllowed = "copyMove";
+      const dom = editor.view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) {
+        // the browser sizes the image to the node's box including every
+        // descendant, and Base UI's visually hidden inputs are position:
+        // fixed at the viewport corner: out of the picture while it captures
+        const fixed: HTMLElement[] = [];
+        for (const el of dom.querySelectorAll<HTMLElement>("*")) {
+          if (getComputedStyle(el).position === "fixed") fixed.push(el);
+        }
+        for (const el of fixed) el.hidden = true;
+        // the image stays over the block: the cursor keeps its grab point
+        const rect = dom.getBoundingClientRect();
+        event.dataTransfer.setDragImage(dom, event.clientX - rect.left, event.clientY - rect.top);
+        setTimeout(() => {
+          for (const el of fixed) el.hidden = false;
+        });
+      }
+      // carry the dragged node like ProseMirror's own drags do: the drop
+      // deletes by this remapped range, never by the live selection,
+      // which the browser can collapse mid-drag
+      editor.view.dragging = {
+        slice: selection.content(),
+        move: true,
+        node: selection,
+      } as unknown as typeof editor.view.dragging;
+    },
+    // ProseMirror clears `dragging` from its own dragend handler; a drag
+    // from here ends outside its DOM, so clear a cancelled one ourselves
+    onDragEnd() {
+      window.setTimeout(() => {
+        editor.view.dragging = null;
+      }, 50);
+    },
+  };
+}
+
 /**
- * A ⋯ handle at the active component's top-right: the resting affordance
- * while the caret sits inside a component (the bubble appears only for
- * selections). Click or Mod-. opens the panel; dragging the handle moves
- * the component.
+ * A ⋯ handle beside the block at `pos`: at a component's top-right corner
+ * (`align: "end"`), or in the gutter left of any other block's first line.
+ * Click (or Mod-. on the primary one) opens its panel; dragging it moves
+ * the block.
+ */
+function Handle({
+  editor,
+  specs,
+  pos,
+  align,
+  label,
+  shortcut,
+  children,
+}: {
+  editor: Editor;
+  specs: Map<string, UiComponentSpec>;
+  pos: number;
+  align: "start" | "end";
+  label: string;
+  shortcut: boolean;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const { anchorRef, container } = useEditorPortal();
+
+  useEffect(() => {
+    const button = buttonRef.current;
+    const wrapper = button?.offsetParent;
+    const dom = editor.view.nodeDOM(pos);
+    if (!button || !wrapper || !(dom instanceof HTMLElement)) return;
+    const rect = dom.getBoundingClientRect();
+    const base = wrapper.getBoundingClientRect();
+    if (align === "end") {
+      button.style.top = `${rect.top - base.top + 2}px`;
+      button.style.left = `${rect.right - base.left - 26}px`;
+    } else {
+      const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
+      button.style.top = `${rect.top - base.top + (line - 24) / 2}px`;
+      button.style.left = `${rect.left - base.left - 24}px`;
+    }
+  }, [editor, pos, align]);
+
+  // Mod-. opens the menu from the keyboard
+  useEffect(() => {
+    if (!shortcut) return;
+    const dom = editor.view.dom;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "." && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setOpen((prev) => !prev);
+      }
+    };
+    dom.addEventListener("keydown", onKeyDown);
+    return () => dom.removeEventListener("keydown", onKeyDown);
+  }, [editor, shortcut]);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        ref={(node: HTMLButtonElement | null) => {
+          buttonRef.current = node;
+          anchorRef(node);
+        }}
+        aria-label={label}
+        {...stylex.props(chrome.button, chrome.focusRing, styles.handle)}
+        {...dragProps(editor, pos, specs)}
+      >
+        {align === "end" ? <MoreHorizontal size={15} /> : <EllipsisVertical size={15} />}
+      </Popover.Trigger>
+      <Popover.Portal container={container}>
+        <Popover.Positioner sideOffset={6} align={align} {...stylex.props(chrome.layer)}>
+          <Popover.Popup data-fde-popup="" {...stylex.props(chrome.popup, styles.panel)}>
+            {children(() => setOpen(false))}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/**
+ * The resting affordances while the caret sits in a block (the bubble
+ * appears only for selections): a handle for the innermost component, and
+ * one for the innermost plain block in the document or a body region.
  */
 export function BlockMenu({
   editor,
@@ -94,97 +254,39 @@ export function BlockMenu({
     editor,
     selector: ({ editor: current }) => (current ? activeComponent(current.state) : null),
   });
-
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const { anchorRef, container } = useEditorPortal();
-
-  // place the handle at the active component's top-right corner
-  useEffect(() => {
-    const button = buttonRef.current;
-    if (!button || active == null) return;
-    const wrapper = button.offsetParent;
-    const dom = editor.view.nodeDOM(active.pos);
-    if (!wrapper || !(dom instanceof Element)) return;
-    const rect = dom.getBoundingClientRect();
-    const base = wrapper.getBoundingClientRect();
-    button.style.top = `${rect.top - base.top + 2}px`;
-    button.style.left = `${rect.right - base.left - 26}px`;
-  }, [editor, active]);
-
-  useEffect(() => {
-    if (active == null) setOpen(false);
-  }, [active]);
-
-  // Mod-. opens the menu from the keyboard
-  useEffect(() => {
-    const dom = editor.view.dom;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "." && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setOpen((prev) => !prev);
-      }
-    };
-    dom.addEventListener("keydown", onKeyDown);
-    return () => dom.removeEventListener("keydown", onKeyDown);
-  }, [editor]);
-
-  if (active == null) return null;
-  const spec = specs.get(active.name);
-  if (!spec) return null;
+  const block = useEditorState({
+    editor,
+    selector: ({ editor: current }) => (current ? handleBlock(current.state.selection) : null),
+  });
+  const spec = active ? specs.get(active.name) : undefined;
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        ref={(node: HTMLButtonElement | null) => {
-          buttonRef.current = node;
-          anchorRef(node);
-        }}
-        aria-label={`${spec.label ?? spec.name} options`}
-        {...stylex.props(chrome.button, chrome.focusRing, styles.handle)}
-        draggable
-        // the handle lives outside ProseMirror's DOM, so its dragstart never
-        // reaches the view: stage the node drag by hand
-        onDragStart={(event) => {
-          if (!event.dataTransfer || editor.state.doc.nodeAt(active.pos) == null) return;
-          const selection = NodeSelection.create(editor.state.doc, active.pos);
-          editor.view.dispatch(editor.state.tr.setSelection(selection));
-          event.dataTransfer.setData("text/plain", "");
-          event.dataTransfer.effectAllowed = "copyMove";
-          const dom = editor.view.nodeDOM(active.pos);
-          if (dom instanceof Element) event.dataTransfer.setDragImage(dom, 0, 0);
-          // carry the dragged node like ProseMirror's own drags do: the drop
-          // deletes by this remapped range, never by the live selection,
-          // which the browser can collapse mid-drag
-          editor.view.dragging = {
-            slice: selection.content(),
-            move: true,
-            node: selection,
-          } as unknown as typeof editor.view.dragging;
-        }}
-        // ProseMirror clears `dragging` from its own dragend handler; a drag
-        // from here ends outside its DOM, so clear a cancelled one ourselves
-        onDragEnd={() => {
-          window.setTimeout(() => {
-            editor.view.dragging = null;
-          }, 50);
-        }}
-      >
-        <MoreHorizontal size={15} />
-      </Popover.Trigger>
-      <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="end" {...stylex.props(chrome.layer)}>
-          <Popover.Popup data-fde-popup="" {...stylex.props(chrome.popup, styles.panel)}>
-            <BlockPanel
-              editor={editor}
-              specs={specs}
-              active={active}
-              onDone={() => setOpen(false)}
-            />
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+    <>
+      {active && spec && (
+        <Handle
+          editor={editor}
+          specs={specs}
+          pos={active.pos}
+          align="end"
+          label={`${spec.label ?? spec.name} options`}
+          shortcut
+        >
+          {(close) => <BlockPanel editor={editor} specs={specs} active={active} onDone={close} />}
+        </Handle>
+      )}
+      {block && (
+        <Handle
+          editor={editor}
+          specs={specs}
+          pos={block.pos}
+          align="start"
+          label="Block options"
+          shortcut={!spec}
+        >
+          {(close) => <BlockActions editor={editor} pos={block.pos} onDone={close} />}
+        </Handle>
+      )}
+    </>
   );
 }
 
@@ -288,6 +390,23 @@ export function BlockPanel({
           <span>Move out of {folder.label ?? folder.name}</span>
         </button>
       )}
+      <BlockActions editor={editor} pos={active.pos} onDone={onDone} />
+    </>
+  );
+}
+
+/** move and delete: the tail of a component's panel, and all of a block's */
+function BlockActions({
+  editor,
+  pos,
+  onDone,
+}: {
+  editor: Editor;
+  pos: number;
+  onDone: () => void;
+}) {
+  return (
+    <>
       {(
         [
           [-1, "Move up", ArrowUp],
@@ -299,7 +418,7 @@ export function BlockPanel({
           type="button"
           {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
-            if (moveComponentAt(editor, active.pos, dir)) onDone();
+            if (moveBlockAt(editor, pos, dir)) onDone();
             editor.view.focus();
           }}
         >
@@ -311,9 +430,9 @@ export function BlockPanel({
         type="button"
         {...stylex.props(chrome.button, chrome.item, styles.danger)}
         onClick={() => {
-          const current = editor.state.doc.nodeAt(active.pos);
+          const current = editor.state.doc.nodeAt(pos);
           if (!current) return;
-          editor.commands.deleteRange({ from: active.pos, to: active.pos + current.nodeSize });
+          editor.commands.deleteRange({ from: pos, to: pos + current.nodeSize });
           onDone();
           editor.view.focus();
         }}

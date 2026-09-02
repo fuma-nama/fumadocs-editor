@@ -116,6 +116,9 @@ function regionDepth($from: ResolvedPos): number {
 }
 
 /** depth of the innermost enclosing component, or -1 */
+/** the YAML frontmatter atom: pinned first, so never moved or moved past */
+export const FRONTMATTER_NODE = "frontmatter";
+
 function componentDepth($from: ResolvedPos): number {
   for (let depth = $from.depth; depth > 0; depth--) {
     if ($from.node(depth).type.name === COMPONENT_NODE) return depth;
@@ -465,25 +468,27 @@ function handleTab(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean {
   return navigateRegion(editor, dir);
 }
 
-/* ---- moving components ---- */
+/* ---- moving blocks ---- */
 
 /**
- * Swap the component at `pos` with its previous/next sibling: the keyboard
- * and touch counterpart of dragging a row. Regions are not siblings a
- * component may cross (a row never moves above its folder's name), so those
- * swaps are refused.
+ * Swap the block at `pos` with its previous/next sibling: the keyboard and
+ * touch counterpart of dragging it. Regions are not siblings a block may
+ * cross (a row never moves above its folder's name), nor is the
+ * frontmatter, so those swaps are refused.
  */
-export function moveComponentAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
+export function moveBlockAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
   const { state } = editor;
   const node = state.doc.nodeAt(pos);
-  if (!node || node.type.name !== COMPONENT_NODE) return false;
+  if (!node) return false;
   const $pos = state.doc.resolve(pos);
   const index = $pos.index();
   const siblingIndex = index + dir;
   if (siblingIndex < 0 || siblingIndex >= $pos.parent.childCount) return false;
   const sibling = $pos.parent.child(siblingIndex);
   const name = sibling.type.name;
-  if (name === INLINE_REGION_NODE || name === BLOCK_REGION_NODE) return false;
+  if (name === INLINE_REGION_NODE || name === BLOCK_REGION_NODE || name === FRONTMATTER_NODE) {
+    return false;
+  }
 
   const end = pos + node.nodeSize;
   const newStart = dir === -1 ? pos - sibling.nodeSize : pos + sibling.nodeSize;
@@ -502,15 +507,39 @@ export function moveComponentAt(editor: Editor, pos: number, dir: 1 | -1): boole
   return true;
 }
 
-/** Alt-Arrow: move the innermost component containing the selection */
+/**
+ * The block the ⋯ handle serves: the innermost block around the selection
+ * that sits directly in the document or in a body region, unless that is a
+ * component (it carries its own handle) or the frontmatter.
+ */
+export function handleBlock(selection: Selection): { pos: number; type: string } | null {
+  const { $from } = selection;
+  const pick = (node: PMNode, parent: PMNode, pos: number) => {
+    if (parent.type.name !== "doc" && parent.type.name !== BLOCK_REGION_NODE) return undefined;
+    const type = node.type.name;
+    return type === COMPONENT_NODE || type === FRONTMATTER_NODE ? null : { pos, type };
+  };
+  if (selection instanceof NodeSelection) {
+    const hit = pick(selection.node, $from.parent, $from.pos);
+    if (hit !== undefined) return hit;
+  }
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const hit = pick($from.node(depth), $from.node(depth - 1), $from.before(depth));
+    if (hit !== undefined) return hit;
+  }
+  return null;
+}
+
+/** Alt-Arrow: move the innermost component containing the selection, else the block the handle serves */
 function handleMove(editor: Editor, dir: 1 | -1): boolean {
   const { selection } = editor.state;
   if (selection instanceof NodeSelection && selection.node.type.name === COMPONENT_NODE) {
-    return moveComponentAt(editor, selection.from, dir);
+    return moveBlockAt(editor, selection.from, dir);
   }
   const depth = componentDepth(selection.$from);
-  if (depth === -1) return false;
-  return moveComponentAt(editor, selection.$from.before(depth), dir);
+  if (depth !== -1) return moveBlockAt(editor, selection.$from.before(depth), dir);
+  const block = handleBlock(selection);
+  return block ? moveBlockAt(editor, block.pos, dir) : false;
 }
 
 /* ---- Backspace / Delete ---- */

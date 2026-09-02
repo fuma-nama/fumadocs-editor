@@ -3,15 +3,7 @@
 import "@tiptap/starter-kit";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
-import { consts } from "./styles/consts.stylex";
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { Fragment, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
@@ -26,30 +18,19 @@ import { insertItems } from "./slash-menu";
 import { chrome } from "./styles/shared";
 
 const styles = stylex.create({
-  /* Fixed above the on-screen keyboard while the editor is being edited.
-   * The keyboard covers the bottom of the layout viewport on every mobile
-   * browser and no CSS knows its height, so `bottom` is written from the
-   * visual viewport on its own events (see `useKeyboardOffset`), directly
-   * on the element and without a transition on that axis. The visual
-   * viewport already excludes iOS Safari's keyboard accessory bar, so the
-   * bar sits right above it. Its popups portal into it and open upward. */
+  /* Heads the editor and sticks to the top of the viewport while scrolling,
+   * below a site header by `--fde-sticky-top`. Its popups portal into it
+   * and hang below. */
   bar: {
     boxSizing: "border-box",
-    position: "fixed",
-    bottom: 0,
-    insetInlineStart: 0,
-    insetInlineEnd: 0,
-    zIndex: 50,
-    paddingBottom: "env(safe-area-inset-bottom)",
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: tokens.border,
+    position: "sticky",
+    top: tokens.stickyTop,
+    zIndex: 40,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.border,
     backgroundColor: tokens.popover,
     color: tokens.popoverForeground,
-    // slides away rather than vanishing: a tap that blurs the editor still
-    // lands on the button it aimed at
-    transition: { default: `translate 150ms ${consts.ease}`, [consts.reduceMotion]: "none" },
-    translate: { default: null, ":is([data-hidden])": "0 100%" },
   },
   row: {
     display: "flex",
@@ -91,7 +72,7 @@ const styles = stylex.create({
   chipIcon: { display: "inline-flex", color: tokens.mutedForeground },
   divider: { height: "1.25rem" },
   spacer: { minWidth: "0.25rem", flex: 1 },
-  /* popups hang below the bar; capped so they stay above the keyboard */
+  /* popups hang below the bar; capped so they stay usable with the keyboard up */
   insertPopup: {
     display: "flex",
     width: "15rem",
@@ -129,43 +110,6 @@ function useMediaQuery(query: string): boolean {
       () => resolve().matches,
     ] as const;
   }, [query]);
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
-
-/** keep `bottom` on the visual viewport's bottom edge: above the keyboard */
-function useKeyboardOffset(bar: HTMLElement | null) {
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!bar || !viewport) return;
-    const place = () => {
-      bar.style.bottom = `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`;
-    };
-    place();
-    viewport.addEventListener("resize", place);
-    viewport.addEventListener("scroll", place);
-    return () => {
-      viewport.removeEventListener("resize", place);
-      viewport.removeEventListener("scroll", place);
-    };
-  }, [bar]);
-}
-
-function useEditorFocused(editor: Editor): boolean {
-  const [subscribe, getSnapshot] = useMemo(
-    () =>
-      [
-        (onChange: () => void) => {
-          editor.on("focus", onChange);
-          editor.on("blur", onChange);
-          return () => {
-            editor.off("focus", onChange);
-            editor.off("blur", onChange);
-          };
-        },
-        () => editor.isFocused,
-      ] as const,
-    [editor],
-  );
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
@@ -212,7 +156,7 @@ interface MobileBarProps {
   math?: boolean;
 }
 
-/** Touch editing surface: a toolbar above the on-screen keyboard. */
+/** Touch editing surface: a toolbar heading the editor, stuck to the top while scrolling. */
 export function MobileBar(props: MobileBarProps) {
   // gate the whole subtree, not just its output: TouchBar's editor-state
   // selector (two can() trial runs) would otherwise run per transaction on
@@ -225,8 +169,6 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
   // popups portal into the bar itself: inside the theme scope, and moving
   // with it rather than repositioned on every scroll
   const [bar, setBar] = useState<HTMLElement | null>(null);
-  useKeyboardOffset(bar);
-  const focused = useEditorFocused(editor);
   const [typeOpen, setTypeOpen] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -259,7 +201,6 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
 
   if (state == null) return null;
   const spec = state.active ? specs.get(state.active.name) : undefined;
-  const visible = focused || typeOpen || insertOpen || panelOpen;
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
     fn(editor.chain().focus()).run();
@@ -269,20 +210,14 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
   let group = "";
 
   return (
-    <div
-      ref={setBar}
-      role="toolbar"
-      aria-label="Editing"
-      data-hidden={visible ? undefined : ""}
-      {...stylex.props(styles.bar)}
-    >
+    <div ref={setBar} role="toolbar" aria-label="Editing" {...stylex.props(styles.bar)}>
       <div {...stylex.props(styles.row)}>
         <BlockTypePicker
           editor={editor}
           block={state.block}
           open={typeOpen}
           onOpenChange={setTypeOpen}
-          side="top"
+          side="bottom"
           triggerCls={labeledClass}
           container={bar ?? undefined}
         />
@@ -293,7 +228,7 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
           </Popover.Trigger>
           <Popover.Portal container={bar}>
             <Popover.Positioner
-              side="top"
+              side="bottom"
               sideOffset={4}
               align="start"
               {...stylex.props(chrome.layer)}
@@ -374,7 +309,7 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
               </Popover.Trigger>
               <Popover.Portal container={bar}>
                 <Popover.Positioner
-                  side="top"
+                  side="bottom"
                   sideOffset={4}
                   align="start"
                   {...stylex.props(chrome.layer)}

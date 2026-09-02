@@ -180,7 +180,7 @@ const styles = stylex.create({
     },
     backgroundColor: tokens.background,
     color: tokens.foreground,
-    fontSize: 15,
+    fontSize: tokens.fontSize,
     lineHeight: 1.625,
     boxShadow: consts.shadowSm,
   },
@@ -303,7 +303,7 @@ const styles = stylex.create({
     paddingInline: "1.25rem",
     paddingBlock: "1rem",
     fontFamily: consts.mono,
-    fontSize: 13,
+    fontSize: tokens.fieldSize,
     lineHeight: 1.625,
     color: tokens.foreground,
     outline: "none",
@@ -647,7 +647,7 @@ const EditorView = memo(function EditorView({
           </Tabs.List>
         </Tabs.Root>
         {mode === "visual" ? (
-          <div {...stylex.props(styles.body)}>
+          <div data-fde-overlay="" {...stylex.props(styles.body)}>
             {stage !== "static" && parsed && (!collab || collabRuntime) && (
               <Suspense fallback={null}>
                 <LiveEditor

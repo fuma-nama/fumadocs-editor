@@ -46,6 +46,11 @@
   --fde-error: oklch(63.7% 0.237 25.331);
   --fde-success: oklch(72.3% 0.219 149.579);
   --fde-idea: oklch(70.5% 0.209 60.849);
+  /* type: the editing surface, and every text field in the chrome */
+  --fde-font-size: 15px;
+  --fde-field-size: 13px;
+  /* where the touch toolbar sticks: below a site header */
+  --fde-sticky-top: 0px;
 }
 
 .dark {

@@ -356,7 +356,7 @@ const styles = stylex.create({
     borderStyle: "solid",
     borderColor: border,
     backgroundColor: card,
-    fontSize: 13,
+    fontSize: tokens.fieldSize,
   },
   table: { margin: 0, width: "100%", borderCollapse: "collapse" },
   head: {
@@ -395,7 +395,7 @@ const styles = stylex.create({
       color: `color-mix(in oklab, ${tokens.mutedForeground} 50%, transparent)`,
     },
   },
-  monoSmall: { fontFamily: consts.mono, fontSize: 12 },
+  monoSmall: { fontFamily: consts.mono },
   checkbox: {
     marginInline: "auto",
     display: "flex",

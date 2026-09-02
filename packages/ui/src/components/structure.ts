@@ -1,9 +1,9 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, Selection, type EditorState, type Transaction } from "@tiptap/pm/state";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import type { Node as PMNode, Slice } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
-import { childNames, childOnlyNames, type SpecMap } from "./keymap";
+import { FRONTMATTER_NODE, childNames, childOnlyNames, type SpecMap } from "./keymap";
 import { contentClass } from "../styles/content";
 
 /*
@@ -218,43 +218,61 @@ function touchedComponents(
   return fixes;
 }
 
-/** the component being dragged, when the drag carries exactly one we manage */
-function draggedComponent(view: EditorView, specs: SpecMap): PMNode | null {
-  const slice = view.dragging?.slice;
+/** the block a drag carries, when it is exactly one we manage */
+function draggedBlock(slice: Slice | undefined, specs: SpecMap): PMNode | null {
   if (!slice || slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount !== 1) {
     return null;
   }
   const node = slice.content.firstChild!;
-  if (node.type.name !== COMPONENT_NODE || !specs.has(node.attrs.name as string)) return null;
+  const type = node.type.name;
+  if (!node.isBlock || type === FRONTMATTER_NODE) return null;
+  if (type === COMPONENT_NODE && !specs.has(node.attrs.name as string)) return null;
   return node;
 }
 
+/** the range a move drag lifts out of the document */
+function dragSource(view: EditorView): Selection | null {
+  // ProseMirror carries the dragged node's selection, remapped through doc
+  // changes; the live selection can collapse mid-drag
+  const dragging = view.dragging as { move: boolean; node?: Selection } | null;
+  return dragging?.move ? (dragging.node ?? view.state.selection) : null;
+}
+
 /**
- * Where a dragged component would land. ProseMirror's dropPoint picks the
+ * Where a dragged block would land. ProseMirror's dropPoint picks the
  * deepest schema-valid spot, and this schema legally nests any component in
  * any component, so a drop over a row's text would land inside that row.
- * Walk up to the nearest container the spec allows instead, before or after
- * the hovered child by pointer height. Null when no valid spot exists.
+ * Walk up to the nearest container that takes it instead (for a component,
+ * one its spec allows), before or after the hovered child by pointer
+ * height. The lifted node itself (`source`, on a move) is opaque, and its
+ * own slot is no target: over itself, nothing happens. Null when no valid
+ * spot exists.
  */
 function dropTarget(
   view: EditorView,
-  event: DragEvent,
+  x: number,
+  y: number,
   dragged: PMNode,
+  source: { from: number; to: number } | null,
   specs: SpecMap,
   childOnly: Set<string>,
 ): number | null {
+  const component = dragged.type.name === COMPONENT_NODE;
   const name = dragged.attrs.name as string;
-  const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+  const coords = view.posAtCoords({ left: x, top: y });
   if (!coords) return null;
   const $pos = view.state.doc.resolve(coords.pos);
 
-  for (let depth = $pos.depth; depth >= 0; depth--) {
+  let top = $pos.depth;
+  for (let d = 1; d <= $pos.depth; d++) if ($pos.before(d) === source?.from) top = d - 1;
+
+  for (let depth = top; depth >= 0; depth--) {
     const parent = $pos.node(depth);
     if (parent.isTextblock) continue;
     const allowed =
       parent.type.name === COMPONENT_NODE
-        ? childNames(specs.get(parent.attrs.name as string)).includes(name)
-        : !childOnly.has(name);
+        ? component && childNames(specs.get(parent.attrs.name as string)).includes(name)
+        : !component || !childOnly.has(name);
     if (!allowed) continue;
 
     let insert: number;
@@ -270,74 +288,110 @@ function dropTarget(
         const dom = view.nodeDOM($pos.before(depth + 1));
         const rect = dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
         const before = rect
-          ? event.clientY < rect.top + rect.height / 2
+          ? y < rect.top + rect.height / 2
           : $pos.pos <= ($pos.start(depth + 1) + $pos.end(depth + 1)) / 2;
         insert = before ? $pos.before(depth + 1) : $pos.after(depth + 1);
       }
     }
 
+    if (insert === source?.from || insert === source?.to) return null;
     const $insert = view.state.doc.resolve(insert);
+    if ($insert.nodeAfter?.type.name === FRONTMATTER_NODE) return null; // pinned first
     const index = $insert.index();
     return $insert.parent.canReplaceWith(index, index, dragged.type) ? insert : null;
   }
   return null;
 }
 
-/**
- * The drag preview line, drawn from {@link dropTarget} so it always shows the
- * real destination: one line between same-level siblings, and an indented one
+/*
+ * The drag preview line, drawn from `dropTarget` so it always shows the real
+ * destination: one line between same-level siblings, and an indented one
  * when the drop nests into a folder. Hidden entirely over invalid targets.
  * Replaces the stock dropcursor, which previews its own dropPoint and paints
  * a different line for every schema-valid position sharing one visual gap.
  */
-function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
-  let line: HTMLElement | null = null;
-  const hide = () => {
-    line?.remove();
-    line = null;
+let line: HTMLElement | null = null;
+
+/**
+ * The drag overlays (line, ghost) are absolute children of the editor's
+ * scroll body, placed in its own coordinates: a scroll moves them with the
+ * content, so nothing depends on how the platform maps fixed boxes to the
+ * viewport (iOS repositions those lazily while scrolling, and offsets them
+ * from the visual viewport once the keyboard is up). The body is already a
+ * positioned ancestor of the content; the root is left unpositioned, so a
+ * native drag image (rasterized from the dragged node) keeps its offset.
+ */
+const overlay = (view: EditorView) =>
+  (view.dom.closest("[data-fde-overlay]") ??
+    view.dom.closest("[data-fde-root]") ??
+    document.body) as HTMLElement;
+
+/** a client point in the overlay's coordinates */
+function local(root: HTMLElement, x: number, y: number) {
+  const rect = root.getBoundingClientRect();
+  return {
+    left: x - rect.left - root.clientLeft + root.scrollLeft,
+    top: y - rect.top - root.clientTop + root.scrollTop,
   };
+}
+
+function hideIndicator() {
+  line?.remove();
+  line = null;
+}
+
+function showIndicator(view: EditorView, target: number) {
+  const $pos = view.state.doc.resolve(target);
+  const after = $pos.nodeAfter;
+  const before = $pos.nodeBefore;
+  const ref = after
+    ? view.nodeDOM(target)
+    : before
+      ? view.nodeDOM(target - before.nodeSize)
+      : $pos.depth > 0
+        ? view.nodeDOM($pos.before())
+        : null;
+  if (!(ref instanceof HTMLElement)) return hideIndicator();
+  const rect = ref.getBoundingClientRect();
+  const root = overlay(view);
+  if (!line) {
+    line = document.createElement("div");
+    line.className = contentClass.dropIndicator;
+    root.appendChild(line);
+  }
+  const at = local(root, rect.left, (after ? rect.top : rect.bottom) - 1.5);
+  line.style.transform = `translate(${at.left}px, ${at.top}px)`;
+  line.style.width = `${rect.width}px`;
+}
+
+function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
   return new Plugin({
-    view: () => ({ destroy: hide }),
+    view: () => ({ destroy: hideIndicator }),
     props: {
       handleDOMEvents: {
         dragover(view, event) {
-          const dragged = draggedComponent(view, specs);
+          const dragged = draggedBlock(view.dragging?.slice, specs);
           if (!dragged) return false;
-          const target = dropTarget(view, event, dragged, specs, childOnly);
-          if (target == null) {
-            hide();
-            return false;
-          }
-          const $pos = view.state.doc.resolve(target);
-          const after = $pos.nodeAfter;
-          const before = $pos.nodeBefore;
-          const ref = after
-            ? view.nodeDOM(target)
-            : before
-              ? view.nodeDOM(target - before.nodeSize)
-              : $pos.depth > 0
-                ? view.nodeDOM($pos.before())
-                : null;
-          if (!(ref instanceof HTMLElement)) {
-            hide();
-            return false;
-          }
-          const rect = ref.getBoundingClientRect();
-          if (!line) {
-            line = document.createElement("div");
-            line.className = contentClass.dropIndicator;
-            (view.dom.closest("[data-fde-root]") ?? document.body).appendChild(line);
-          }
-          line.style.left = `${rect.left}px`;
-          line.style.width = `${rect.width}px`;
-          line.style.top = `${(after ? rect.top : rect.bottom) - 1.5}px`;
+          // a move, and shown as one: WebKit otherwise badges the drag as a copy
+          if (event.dataTransfer && view.dragging?.move) event.dataTransfer.dropEffect = "move";
+          const target = dropTarget(
+            view,
+            event.clientX,
+            event.clientY,
+            dragged,
+            dragSource(view),
+            specs,
+            childOnly,
+          );
+          if (target == null) hideIndicator();
+          else showIndicator(view, target);
           return false;
         },
-        drop: () => (hide(), false),
-        dragend: () => (hide(), false),
+        drop: () => (hideIndicator(), false),
+        dragend: () => (hideIndicator(), false),
         dragleave(view, event) {
           if (!(event.relatedTarget instanceof Node) || !view.dom.contains(event.relatedTarget)) {
-            hide();
+            hideIndicator();
           }
           return false;
         },
@@ -346,39 +400,107 @@ function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
   });
 }
 
+/** move `node` to `insert`, removing it from `source` first */
+function placeDrop(
+  view: EditorView,
+  node: PMNode,
+  insert: number,
+  source: { from: number; to: number } | null,
+) {
+  const tr = view.state.tr;
+  if (source) tr.delete(source.from, source.to);
+  // an insert point inside the deleted source maps to the deletion
+  // boundary, so dropping into itself is a no-op
+  const mapped = tr.mapping.map(insert);
+  tr.insert(mapped, node);
+  const text = Selection.findFrom(tr.doc.resolve(mapped + 1), 1, true);
+  if (text && text.from < mapped + node.nodeSize) tr.setSelection(text);
+  view.dispatch(tr.scrollIntoView());
+}
+
+/** window scroll while the finger rides the viewport's top or bottom edge */
+const EDGE = 48;
+
 /**
- * ProseMirror marks a draggable node's DOM `draggable` on mousedown, which a
- * touch never sends, so iOS (native drag and drop after a long press) had
- * nothing to pick up. Mirror it for touches: a press on a component's own
- * chrome, not its text, makes that node view draggable until the touch ends.
+ * Touch drag from a block's handle. The native drag session is no use
+ * here: iOS lifts a mis-scaled page snapshot, its autoscroll strands the
+ * drop line, and its drop lands nowhere; Android has none. The first move
+ * lifts the block: a copy rides under the finger, and the same target,
+ * preview line and drop as a mouse drag apply. A touch that never moves is the handle's own tap.
  */
-function touchDrag(): Plugin {
-  let armed: HTMLElement | null = null;
-  const disarm = () => {
-    armed?.removeAttribute("draggable");
-    armed = null;
-    return false;
+export function startTouchDrag(
+  view: EditorView,
+  pos: number,
+  dom: HTMLElement,
+  event: TouchEvent,
+  specs: SpecMap,
+): void {
+  const node = view.state.doc.nodeAt(pos);
+  if (event.touches.length !== 1 || !node) return;
+  const childOnly = childOnlyNames(specs.values());
+  const viewport = window.visualViewport;
+  const root = overlay(view);
+  const source = { from: pos, to: pos + node.nodeSize };
+  let x = event.touches[0].clientX;
+  let y = event.touches[0].clientY;
+  let ghost: HTMLElement | null = null;
+  let base = { left: 0, top: 0 }; // the finger at lift, in the overlay's coordinates
+  let target: number | null = null;
+  let scrolling = 0;
+
+  // the ghost under the finger and the line at the target, re-placed on
+  // every move and every scrolled frame. Transforms only: they move on
+  // the compositor, and no layout is dirtied before the next hit test.
+  const follow = () => {
+    target = dropTarget(view, x, y, node, source, specs, childOnly);
+    const at = local(root, x, y);
+    ghost!.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
+    if (target == null) hideIndicator();
+    else showIndicator(view, target);
   };
-  return new Plugin({
-    props: {
-      handleDOMEvents: {
-        touchstart(view, event) {
-          const touch = event.touches[0];
-          if (!touch || event.touches.length > 1) return false;
-          const found = view.posAtCoords({ left: touch.clientX, top: touch.clientY });
-          const node = found && found.inside > -1 ? view.state.doc.nodeAt(found.inside) : null;
-          if (node?.type.name !== COMPONENT_NODE) return false;
-          const dom = view.nodeDOM(found!.inside);
-          if (!(dom instanceof HTMLElement)) return false;
-          armed = dom;
-          dom.draggable = true;
-          return false;
-        },
-        touchend: disarm,
-        touchcancel: disarm,
-      },
-    },
-  });
+  const scroll = () => {
+    const top = viewport?.offsetTop ?? 0;
+    const height = viewport?.height ?? window.innerHeight;
+    const dy = y < top + EDGE ? -8 : y > top + height - EDGE ? 8 : 0;
+    if (!dy) return void (scrolling = 0);
+    window.scrollBy(0, dy);
+    follow();
+    scrolling = requestAnimationFrame(scroll);
+  };
+  const lift = () => {
+    const rect = dom.getBoundingClientRect();
+    const at = local(root, rect.left, rect.top);
+    base = local(root, x, y);
+    ghost = dom.cloneNode(true) as HTMLElement;
+    ghost.className += ` ${contentClass.dragGhost}`;
+    // inline: the copy keeps the block's own classes, which position it
+    ghost.style.cssText = `position:absolute;left:${at.left}px;top:${at.top}px;width:${rect.width}px;box-sizing:border-box;margin:0;z-index:50;pointer-events:none`;
+    root.appendChild(ghost);
+  };
+  const move = (e: TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    x = touch.clientX;
+    y = touch.clientY;
+    if (!ghost) lift();
+    follow();
+    if (!scrolling) scrolling = requestAnimationFrame(scroll);
+  };
+  const end = (e: TouchEvent) => {
+    document.removeEventListener("touchmove", move);
+    document.removeEventListener("touchend", end);
+    document.removeEventListener("touchcancel", end);
+    cancelAnimationFrame(scrolling);
+    hideIndicator();
+    if (!ghost) return;
+    ghost.remove();
+    if (e.type === "touchend" && target != null && view.state.doc.nodeAt(pos) === node) {
+      placeDrop(view, node, target, source);
+    }
+  };
+  document.addEventListener("touchmove", move);
+  document.addEventListener("touchend", end);
+  document.addEventListener("touchcancel", end);
 }
 
 export function structureGuard(specs: SpecMap): Extension {
@@ -416,41 +538,26 @@ export function structureGuard(specs: SpecMap): Extension {
           },
           props: {
             handleDrop(view, event, slice, moved) {
-              if (slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount !== 1) {
-                return false;
-              }
-              const dragged = slice.content.firstChild!;
-              if (
-                dragged.type.name !== COMPONENT_NODE ||
-                !specs.has(dragged.attrs.name as string)
-              ) {
-                return false;
-              }
-              const insert = dropTarget(view, event, dragged, specs, childOnly);
+              const dragged = draggedBlock(slice, specs);
+              if (!dragged) return false;
+              const source = moved ? dragSource(view) : null;
+              const insert = dropTarget(
+                view,
+                event.clientX,
+                event.clientY,
+                dragged,
+                source,
+                specs,
+                childOnly,
+              );
               if (insert == null) return true; // nowhere valid: swallow the drop
-
-              const tr = view.state.tr;
-              if (moved) {
-                // the source is the node the drag carries (ProseMirror remaps
-                // it through doc changes); the live selection may have drifted
-                const node = (view.dragging as { node?: Selection } | null)?.node;
-                if (node) tr.delete(node.from, node.to);
-                else tr.deleteSelection();
-              }
-              // an insert point inside the deleted source maps to the
-              // deletion boundary, so dropping into itself is a no-op
-              const mapped = tr.mapping.map(insert);
-              tr.insert(mapped, dragged);
-              const text = Selection.findFrom(tr.doc.resolve(mapped + 1), 1, true);
-              if (text && text.from < mapped + dragged.nodeSize) tr.setSelection(text);
-              view.dispatch(tr.scrollIntoView());
+              placeDrop(view, dragged, insert, source);
               view.focus();
               return true;
             },
           },
         }),
         dropIndicator(specs, childOnly),
-        touchDrag(),
       ];
     },
   });

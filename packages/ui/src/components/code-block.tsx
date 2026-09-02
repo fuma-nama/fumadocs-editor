@@ -141,7 +141,7 @@ const styles = stylex.create({
     flex: 1,
     backgroundColor: "transparent",
     paddingInline: "0.375rem",
-    fontSize: 13,
+    fontSize: tokens.fieldSize,
     fontWeight: 500,
     color: tokens.foreground,
     outline: "none",
@@ -170,7 +170,7 @@ const styles = stylex.create({
     width: "3.5rem",
     paddingInline: "0.375rem",
     textAlign: "end",
-    fontSize: 12,
+    fontSize: tokens.fieldSize,
   },
   /** the fence flags this editor has no control for, shown verbatim */
   rest: {

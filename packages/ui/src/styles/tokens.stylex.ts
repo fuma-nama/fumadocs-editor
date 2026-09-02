@@ -28,4 +28,7 @@ export const tokens = stylex.defineConsts({
   error: "var(--fde-error)",
   success: "var(--fde-success)",
   idea: "var(--fde-idea)",
+  fontSize: "var(--fde-font-size)",
+  fieldSize: "var(--fde-field-size)",
+  stickyTop: "var(--fde-sticky-top)",
 });

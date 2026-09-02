@@ -34,10 +34,7 @@ const styles = stylex.create({
     color: tokens.foreground,
   },
   chevron: { flexShrink: 0, color: muted },
-  expression: {
-    fontFamily: consts.mono,
-    fontSize: 12,
-  },
+  expression: { fontFamily: consts.mono },
 });
 
 /** A single labelled control for a component attribute. */
