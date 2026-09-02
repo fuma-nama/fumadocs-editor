@@ -43,18 +43,25 @@ function subscribeSystemTheme(onChange: () => void): () => void {
  * key off that. Tracks `light | dark | system`, persists it, and applies the
  * class on a wrapper so `fd-*` tokens resolve.
  */
+export interface EditorThemeProviderProps {
+  /** @defaultValue "system" */
+  defaultTheme?: EditorTheme;
+  /**
+   * localStorage key for the persisted choice; pass `null` to disable
+   * @defaultValue "fde-theme"
+   */
+  storageKey?: string | null;
+  children: ReactNode;
+  /** applied to the wrapper that carries the theme class */
+  className?: string;
+}
+
 export function EditorThemeProvider({
   defaultTheme = "system",
   storageKey = "fde-theme",
   children,
   className,
-}: {
-  defaultTheme?: EditorTheme;
-  /** localStorage key for the persisted choice; pass `null` to disable */
-  storageKey?: string | null;
-  children: ReactNode;
-  className?: string;
-}) {
+}: EditorThemeProviderProps) {
   const [theme, setThemeState] = useState<EditorTheme>(defaultTheme);
   const system = useSyncExternalStore(subscribeSystemTheme, systemTheme, () => "light" as const);
 

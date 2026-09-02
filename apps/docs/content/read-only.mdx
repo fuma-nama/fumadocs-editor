@@ -1,29 +1,32 @@
 ---
 title: Read-only
-description: Showing documents without letting them change
+icon: Eye
+description: Show a document without letting it change
 ---
 
-## The `editable` prop
+`editable={false}` shows the document read-only:
 
-`editable={false}` shows the document read-only: no typing, no mutating
-chrome (slash menu, bubble and block menus, mobile bar, drag handles).
-Selection and copy still work. The raw MDX tab is read-only too. The prop
-is live; flipping it does not remount.
+- no typing, and no mutating chrome (slash menu, bubble and block menus,
+  mobile bar, drag handles)
+- selection and copy still work
+- the raw MDX tab is read-only too
 
-Plain TipTap passthrough. It has no opinion about _why_: viewer role,
-published snapshot, checked out by someone else.
+The prop is live: flipping it does not remount the editor. It is a plain
+TipTap passthrough and has no opinion about _why_: a viewer role, a
+published snapshot, a document checked out by someone else.
 
 ## Wiring it to auth
 
-The [auth layer](/auth) enforces scopes server-side and reports them. The
-file's `read` reply carries `writable`; `sync` hands it to you in
-`onOpen`. Connecting that to the prop is your code:
+The [auth layer](/auth) enforces scopes on the server and reports them: the
+file's read reply carries `writable`, and `sync.onOpen` hands it to you.
+Connecting that to `editable` is your code:
 
 <include meta='title="scoped-editor.tsx"'>../examples/read-only.tsx</include>
 
-A read-only user who tampers with the client and types anyway changes
-nothing. The server refuses the writes. Under [collab](/collab), their Y
-updates are dropped; they still receive everyone else's. `editable` is UI,
-not the security boundary.
-
 `onOpen` fires the same way with `collab` on.
+
+<Callout type="info" title="Not a security boundary">
+  A read-only user who tampers with the client and types anyway changes nothing: the server refuses
+  the writes. Under [collab](/collab), their updates are dropped while they keep receiving everyone
+  else's. `editable` is UI, not enforcement.
+</Callout>

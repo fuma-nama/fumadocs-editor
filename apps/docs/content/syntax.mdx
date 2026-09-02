@@ -1,17 +1,16 @@
 ---
 title: Syntax
-description: Dialects, feature switches, verbatim fallback
+icon: Braces
+description: Dialects, feature switches and the verbatim fallback
 ---
 
-## One syntax
+Two props define what the editor understands: `components` (the registered
+specs) and `syntax` (parse-level switches). Together they drive parsing,
+serializing and editing.
 
-The editor understands two props: `components` (registered specs) and
-`syntax` (parse-level switches). Together they drive parse, serialize, and
-edit.
-
-Anything outside that syntax is verbatim: it round-trips byte-for-byte and
-is edited as source. Turning a feature off does not break a document; those
-constructs stop being editable in place.
+Anything outside that syntax is **verbatim**: it round-trips byte-for-byte
+and is edited as source. Turning a feature off never breaks a document;
+those constructs just stop being editable in place.
 
 <include meta='title="editor.tsx"'>../examples/syntax.tsx</include>
 
@@ -23,41 +22,44 @@ constructs stop being editable in place.
 | `directives`      | off (`true` once `admonitionSpec` is registered) | the `:::` admonition dialect            |
 | `math`            | off                                              | `$…$` / `$$…$$` TeX math                |
 
-Dialects are off by default: they change how existing text parses (`$…$`,
-`:::` lines). Turn one on only if that content is yours.
+Dialects are off by default because they change how existing text parses:
+`$…$` becomes math, `:::` lines become directives. Turn one on when that
+content is yours.
 
 ### Heading suffixes
 
-`## Title [#custom-id]`, `[!toc]`, and `[toc]` become heading attributes
-(chips, edited from the turn-into menu), not literal prose. On by default:
-it only applies inside headings.
+`## Title [#custom-id]`, `[!toc]` and `[toc]` become heading attributes,
+shown as chips and edited from the turn-into menu, rather than literal
+prose. On by default: it only applies inside headings.
 
 ### Directive admonitions
 
-`:::warn[Title]` is an editable admonition. Registering the spec turns the
-dialect on:
+`:::warn[Title]` is an editable admonition. Registering the spec is what
+turns the dialect on:
 
 ```ts
 const components = [...fumadocsUiComponents, admonitionSpec];
 ```
 
-Admonitions stay `:::`; `<Callout>` stays JSX. No implicit conversion.
-Unknown names, rich labels, nested unknown directives fall back to verbatim.
+Admonitions stay `:::` and `<Callout>` stays JSX; nothing is converted
+implicitly. Unknown names, rich labels and nested unknown directives fall
+back to verbatim.
 
 ### Math
 
-`syntax={{ math: true }}` turns `$x^2$` and `$$…$$` into math nodes: editable
-source with a KaTeX preview. KaTeX loads lazily on first math. Delimiters
-are preserved (`$$x$$` stays `$$x$$`). An emptied inline formula is dropped
-(bare `$$` would not re-parse).
+`syntax={{ math: true }}` turns `$x^2$` and `$$…$$` into math nodes:
+editable source with a KaTeX preview. KaTeX loads lazily on the first
+formula. Delimiters are preserved (`$$x$$` stays `$$x$$`). An inline formula
+emptied out is dropped, since a bare `$$` would not re-parse.
 
 ### Files fences
 
 Register `filesFenceSpecs` to edit canonical ` ```files ` tree fences with
-the same UI as JSX `<Files>`. A fence stays a fence; JSX stays JSX. Non-canonical
-fences (loose indent, multiple roots) stay plain code blocks.
+the same UI as JSX `<Files>`. A fence stays a fence and JSX stays JSX.
+Non-canonical fences (loose indent, multiple roots) stay plain code blocks.
 
-## Deferred syntaxes
+## Not yet editable
 
-`<CodeBlockTabs>`, primitive (non-fumadocs) `<Tabs>`, and footnotes are not
-structurally editable yet. Verbatim fallback: source cards, byte-for-byte.
+`<CodeBlockTabs>`, plain (non-fumadocs) `<Tabs>` and footnotes are not
+structurally editable yet. They fall back to verbatim source cards and
+round-trip byte-for-byte.

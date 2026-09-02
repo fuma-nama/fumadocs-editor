@@ -1,0 +1,32 @@
+---
+title: MdxEditor
+icon: BookOpen
+description: Props, ref and sync options
+---
+
+```tsx
+import { MdxEditor } from "@fumadocs-editor/ui";
+```
+
+## Props
+
+<auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorProps" />
+
+## `sync`
+
+<auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorSync" />
+
+## Ref
+
+<auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorRef" />
+
+The ref satisfies `SyncedDocument`, so it can be handed to
+[`createFileSession`](/sync#your-own-session) directly.
+
+## EditorThemeProvider
+
+Theme context for standalone hosts. Tracks the choice, persists it and sets
+`.light` or `.dark` on a wrapper so the `fd-*` tokens resolve. Read or
+change it with `useEditorTheme()`.
+
+<auto-type-table path="../../../packages/ui/src/theme.tsx" name="EditorThemeProviderProps" />

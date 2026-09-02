@@ -2,11 +2,20 @@ import { defineConfig } from "fumapress";
 import { fumadocsMdx } from "fumapress/adapters/mdx";
 import { pageSchema, metaSchema } from "fumapress/adapters/mdx/schema";
 import { defineDocs } from "fumadocs-mdx/macro";
+import { lucideIconsPlugin } from "fumadocs-core/source/plugins/lucide-icons";
+import defaultMdxComponents, { createRelativeLink } from "fumadocs-ui/mdx";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import { PenLine } from "lucide-react";
+import { EditorDemo } from "./src/demo";
 
 const docs = defineDocs({
   dir: "content",
   docs: {
     async: true,
+    lastModified: true,
     schema: pageSchema,
     postprocess: {
       includeProcessedMarkdown: true,
@@ -21,6 +30,21 @@ export default defineConfig({
   content: docs.toFumadocsSource(),
   site: {
     name: "Fumadocs Editor",
+    baseUrl: "https://editor.fumadocs.dev",
+    git: { user: "fuma-nama", repo: "fumadocs-editor", branch: "dev", rootDir: "../.." },
+  },
+  loaderOptions: {
+    plugins: [lucideIconsPlugin()],
+  },
+  defaultLayoutProps: {
+    nav: {
+      title: (
+        <>
+          <PenLine className="size-4" />
+          Fumadocs Editor
+        </>
+      ),
+    },
   },
   meta: {
     root() {
@@ -36,4 +60,21 @@ export default defineConfig({
       );
     },
   },
-}).adapters(fumadocsMdx());
+}).adapters(
+  fumadocsMdx({
+    async getMdxComponents(page) {
+      return {
+        ...defaultMdxComponents,
+        Tab,
+        Tabs,
+        Step,
+        Steps,
+        Accordion,
+        Accordions,
+        TypeTable,
+        EditorDemo,
+        a: createRelativeLink(await this.getLoader(), page),
+      };
+    },
+  }),
+);

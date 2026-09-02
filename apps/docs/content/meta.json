@@ -5,12 +5,13 @@
     "sync",
     "collab",
     "auth",
-    "---Authoring---",
+    "---Customize---",
     "components",
     "syntax",
     "providers",
     "read-only",
     "---Reference---",
+    "editor",
     "limits"
   ]
 }

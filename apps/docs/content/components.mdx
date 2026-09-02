@@ -1,57 +1,82 @@
 ---
 title: Component Authoring
+icon: Puzzle
 description: Make your own MDX components editable in place
 ---
 
-## The model
+A component without a spec already round-trips byte-for-byte: it renders as
+a neutral card and is edited as source. A spec is what turns
+`<Feature title="…">` into a block edited in place, with its own slash-menu
+entry and attributes panel.
+
+## Why a spec
 
 The editor does not render your real components. Real components own state
 and interactivity (tabs switch, accordions collapse, links navigate), which
-fights an always-editable surface. Each component gets a **spec**: how
-attributes and children map to editable regions, plus a lightweight
-**renderer** that mirrors the look around those regions.
+fights an always-editable surface. Instead, each component gets two things:
 
-The spec is data, so the editor can keep structure (see
-[the guard](#what-the-guard-guarantees)) no matter what the renderer does.
-Components without a spec still round-trip byte-for-byte. They render as a
-neutral card and are edited as source.
+- a **spec**: data describing how attributes and children map to editable
+  regions
+- a **renderer**: a lightweight mirror that draws the look around those
+  regions
+
+Because the spec is data, the editor can
+[protect the structure](#what-the-guard-guarantees) no matter what the
+renderer does.
 
 ## A worked example
 
-A `<Feature title="…" soon={true}>` card. The spec declares its shape:
+Take a `<Feature title="…" soon={true}>` card.
+
+<Steps>
+<Step>
+
+### Declare the shape
 
 <include meta='title="feature.tsx"'>../examples/component.tsx#spec</include>
 
-- `attributeRegions` turns the `title` **attribute** into an inline editable
+- `attributeRegions` turns the `title` attribute into an inline editable
   region.
-- `childrenRegion` turns **children** into a block region: paragraphs,
+- `childrenRegion` turns the children into a block region: paragraphs,
   lists, code, nested components.
-- `props` are remaining attributes for the attributes panel. A `boolean`
-  prop is a toggle.
-- `insert` is the slash-menu fragment (regions present, empty).
+- `props` lists the remaining attributes for the attributes panel. A
+  `boolean` prop becomes a toggle.
+- `insert` is the fragment the slash menu inserts: every region present,
+  all empty.
 
-The renderer draws chrome around the regions:
+</Step>
+<Step>
 
-<include meta='title="feature.tsx (continued)"'>../examples/component.tsx#renderer</include>
+### Draw the chrome
 
-Register it. Every `<Feature>` in a document is editable in place:
+<include meta='title="feature.tsx"'>../examples/component.tsx#renderer</include>
+
+`children` holds the editable regions. Everything else is chrome.
+
+</Step>
+<Step>
+
+### Register it
 
 <include meta='title="editor.tsx"'>../examples/component.tsx#usage</include>
 
-## The regions model
+Every `<Feature>` in a document is now editable in place.
 
-`children` in the render props is **all regions in document order**: here
+</Step>
+</Steps>
+
+## Regions
+
+`children` in the render props is **all regions, in document order**: here
 the `title` inline region, then the `body` block region. You place them
-once; there is not one slot per region.
+once; there is no separate slot per region.
 
-To style a region, target `data-region="<name>"` from the wrapper (the
-example bolds the title with `[&_[data-region=title]]:font-medium`).
+- To style a region, target `data-region="<name>"` from the wrapper. The
+  example bolds the title with `[&_[data-region=title]]:font-medium`.
+- Mark chrome `contentEditable={false}` (the "Soon" badge) so the caret
+  cannot enter it. Clicking chrome puts the caret in the nearest region.
 
-Everything else the renderer draws is chrome. Mark it
-`contentEditable={false}` (the example's "Soon" badge) so the caret cannot
-enter it. Chrome clicks put the caret in the nearest region.
-
-## Props vs literals
+## Props and literals
 
 JSX attributes reach the renderer in two forms:
 
@@ -61,40 +86,30 @@ JSX attributes reach the renderer in two forms:
 | `literals`  | static values of expression attributes | `soon={true}` → `literals.soon === true` |
 
 `setProp(name, value)` writes a string attribute. `setLiteral(name, value)`
-rewrites an expression from a literal (source text is derived). Use them
-for controls the renderer owns (Callout type picker is `setProp`). An
-expression that is not a static literal (variable, call) stays out of
+rewrites an expression from a literal value; the source text is derived.
+Use them for controls the renderer owns, like the Callout type picker. An
+expression that is not a static literal (a variable, a call) stays out of
 `literals` and is edited as source in the attributes panel.
 
 ## Spec reference
 
-Structural fields (`ComponentSpec`, from `@fumadocs-editor/core`):
+Structural fields on `ComponentSpec` (from `@fumadocs-editor/core`):
 
-| Field              | Purpose                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `name`             | JSX tag name                                                                                  |
-| `label`            | display name in menus; defaults to `name`                                                     |
-| `attributeRegions` | string attributes edited as inline regions                                                    |
-| `contentRegion`    | element _text content_ as an inline region (`<include>./path.mdx</include>`)                  |
-| `childrenRegion`   | children as one block region; `fromAttribute` folds an attribute (Card `description`) into it |
-| `childComponent`   | children are nested component instances (Cards → Card); array for several tags                |
-| `listLike`         | Enter/Backspace grow and shrink the child list (file trees)                                   |
-| `itemsAttribute`   | parent array attribute edited as a label region in each child (Tabs `items`)                  |
-| `props`            | panel-edited attributes: `string`, `number`, `boolean`, `enum`, `expression`                  |
-| `insert`           | slash-menu fragment; omit for child-only specs                                                |
+<auto-type-table path="../../../packages/core/src/components/spec.ts" name="ComponentSpec" />
 
-UI fields (`UiComponentSpec` adds):
+`UiComponentSpec` (from `@fumadocs-editor/ui`) adds the UI half:
 
-| Field            | Purpose                                                             |
-| ---------------- | ------------------------------------------------------------------- |
-| `render`         | mirror renderer                                                     |
-| `icon`           | glyph in menus                                                      |
-| `filePathRegion` | file-path region; autocompletes via the [file provider](/providers) |
+<auto-type-table
+  path="../../../packages/ui/src/components/spec.tsx"
+  name="UiFields"
+  type='Pick<UiComponentSpec, "render" | "icon" | "filePathRegion">'
+/>
 
-`contentRegion`, `childrenRegion`, and `childComponent` are mutually
-exclusive. A spec with none of them is a leaf (props only, like
-`GithubInfo`). For containers, the built-in specs are the reference:
-`cardsSpec`/`cardSpec`, `filesSpec` (`listLike`), `tabsSpec`
+`contentRegion`, `childrenRegion` and `childComponent` are mutually
+exclusive. A spec with none of them is a leaf: props only, like
+`GithubInfo`. For containers, the
+[built-in specs](https://github.com/fuma-nama/fumadocs-editor/blob/main/packages/ui/src/components/fumadocs-ui.tsx)
+are the reference: Cards and Card, Files (`listLike`), Tabs
 (`itemsAttribute`).
 
 ## What the guard guarantees
@@ -102,12 +117,12 @@ exclusive. A spec with none of them is a leaf (props only, like
 A structure guard runs on every transaction and heals anything that would
 break a component's declared shape:
 
-- a component always has exactly its declared regions; a paste that brings
-  extra blocks is folded into the right region
-- selections spanning region boundaries cannot tear a component into
-  valid-but-wrong pieces (typing, paste, delete)
-- structural moves only place components into parents whose
-  `childComponent` accepts them; invalid MDX is unproducible
-- a renderer throw degrades that one component to a fallback card with
-  regions still editable; the document stays lossless, siblings untouched.
-  Fixing the attribute heals it in place.
+- A component always has exactly its declared regions. A paste that brings
+  extra blocks is folded into the right region.
+- Selections spanning region boundaries cannot tear a component into
+  valid-but-wrong pieces, whether by typing, paste or delete.
+- Structural moves only place components into parents whose
+  `childComponent` accepts them. Invalid MDX cannot be produced.
+- A renderer that throws degrades that one component to a fallback card
+  with its regions still editable. The document stays lossless and siblings
+  are untouched. Fixing the attribute heals it in place.

@@ -1,45 +1,52 @@
 ---
 title: Providers
-description: Where uploads go and what documents can reference
+icon: ImagePlus
+description: Where uploads go and which files documents can reference
 ---
 
-## Host concerns
+There is no file system in the browser. The editor does not know where a
+pasted image should be stored, or which documents exist for `<include>` and
+page links. Both are small interfaces your host implements and passes as
+props:
 
-The editor does not know where pasted images go, or which documents exist
-for links. Both are provider props: small interfaces your host implements.
+| Prop    | Without it                                                               |
+| ------- | ------------------------------------------------------------------------ |
+| `media` | paste and drop upload are off; images are added by URL                   |
+| `files` | the include picker and `[[` page-link autocomplete are plain text inputs |
 
-Without `media`, paste/drop upload is off; images are added by URL.
-Without `files`, the include picker and `[[` page-link autocomplete are
-plain text inputs. Everything else still works.
+Everything else works either way.
 
-## MediaProvider
+## Media
 
 <include meta='title="providers.tsx"'>../examples/providers.tsx#media</include>
 
-`upload` stores the file and returns the `src` written into the document
-(keep it relative if that is what the site expects). `resolve` maps
-document srcs to display URLs so relative paths still preview.
+- `upload` stores the file and returns the `src` written into the document.
+  Keep it relative if that is what your site expects.
+- `resolve` maps a document `src` to a display URL, so relative paths still
+  preview.
 
-On the [sync dev server](/sync#the-dev-server), its endpoints do the
-storing:
+### On the dev server
+
+The [sync dev server](/sync#the-dev-server) has an upload endpoint, so the
+provider only needs to call it:
 
 <include meta='title="dev-media.tsx"'>../examples/providers-dev.tsx</include>
 
-Uploads land in `<root>/assets`. Checked server-side before store: content
-type against `upload.types` (default `image/*`) and size against
-`upload.maxBytes` (default 10 MiB). With [auth](/auth), upload also needs
-`write` on the stored path. Pass the payload in `AUTH_HEADER` as the
-example does.
+Uploads land in `<root>/assets`. The server checks the content type against
+`upload.types` (default `image/*`) and the size against `upload.maxBytes`
+(default 10 MiB) before storing anything. With [auth](/auth#media-uploads)
+enabled, the upload also needs `write` on the stored path.
 
-## FileProvider
+## Files
 
 <include meta='title="providers.tsx"'>../examples/providers.tsx#files</include>
 
-Return the relative paths to write into the document (relative to the open
-document, e.g. `./shared/props.mdx`). They power:
+Return the relative paths exactly as they should be written into the
+document, relative to the open one (for example `./shared/props.mdx`). They
+power:
 
-- the `<include>` path region autocompletes in place
-- typing `[[` opens page-link suggestions
+- in-place autocomplete of the `<include>` path
+- page-link suggestions when you type `[[`
 
 On the dev server, `transport.list()` minus the open document is usually
 enough.

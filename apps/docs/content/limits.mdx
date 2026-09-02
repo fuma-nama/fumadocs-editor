@@ -1,37 +1,38 @@
 ---
 title: Known Limits
+icon: TriangleAlert
 description: Engine differences, platform caveats, current boundaries
 ---
 
 ## General
 
-- **React 19 only.** Client component; SSR apps mount it inside
-  `'use client'`. For a server-rendered first paint, pass your site's
-  rendered MDX as `staticFallback`. The editor swaps in on hydration
+- **React 19 only.** The editor is a client component; SSR apps mount it
+  inside `'use client'`. For a server-rendered first paint, pass your
+  site's rendered MDX as `staticFallback`. The editor swaps in on hydration
   without a parse on the critical path.
-- **Word pastes**: coerced through the schema (marks, tables, lists
-  survive). One upstream exception: Word numbered lists arrive as literal
-  `1. Item` paragraphs. That is ProseMirror's clipboard parser.
-- **Deferred syntaxes**: `<CodeBlockTabs>`, primitive `<Tabs>`, and
-  footnotes are verbatim-only for now ([details](/syntax#deferred-syntaxes)).
+- **Word pastes** are coerced through the schema, so marks, tables and
+  lists survive. One upstream exception: Word numbered lists arrive as
+  literal `1. Item` paragraphs. That is ProseMirror's clipboard parser.
+- **Not yet editable:** `<CodeBlockTabs>`, plain `<Tabs>` and footnotes are
+  verbatim-only for now ([details](/syntax#not-yet-editable)).
 
 ## Engine differences
 
-Exercised on Chromium, WebKit, and Firefox (desktop and touch). Aligned,
-except:
+Exercised on Chromium, WebKit and Firefox, desktop and touch. Behaviour is
+aligned, except:
 
-- **WebKit** takes one extra arrow-key stop when leaving inline math
-  (ProseMirror boundary, cosmetic).
-- Clicks on dead chrome (tab-strip padding, gap in a code-block header)
+- **WebKit** takes one extra arrow-key stop when leaving inline math. A
+  ProseMirror boundary quirk, cosmetic.
+- Clicks on dead chrome (tab-strip padding, the gap in a code-block header)
   are no-ops. Clicks on real component chrome place the caret in the
   nearest region.
 
 ## iOS
 
 Touch is verified against real WebKit with touch events: the mobile bar
-appears on coarse pointers, sticks to the bottom, 44 pt minimum targets.
-Autocorrect, autocapitalize, and spellcheck are suppressed on the editing
-surface.
+appears on coarse pointers, sticks to the bottom, and keeps 44 pt minimum
+targets. Autocorrect, autocapitalize and spellcheck are suppressed on the
+editing surface.
 
 Not yet verified on physical hardware:
 
@@ -42,8 +43,8 @@ Not yet verified on physical hardware:
 ## Collaboration
 
 - A hard kill of the sync server can lose edits still inside its save
-  debounce (under a second). Orderly shutdown flushes.
+  debounce (under a second). An orderly shutdown flushes.
 - Edits typed **while the server was down** are discarded when it comes
-  back ([epoch reset](/collab#restarts-and-the-epoch-model)). Edits made
-  while merely disconnected converge on reconnect.
+  back ([epoch reset](/collab#restarts)). Edits made while merely
+  disconnected converge on reconnect.
 - The raw MDX tab is disabled during collab.

@@ -1,90 +1,113 @@
 ---
 title: Quick Start
+icon: Rocket
 description: A WYSIWYG editor for Fumadocs MDX
 ---
 
-## Introduction
+Fumadocs Editor renders an MDX file as an editable page. Prose, code blocks,
+tables and MDX components are all edited in place, and the file stays the
+source of truth: blocks you did not touch serialize byte-for-byte, so a
+one-line edit stays a one-line diff.
 
-Fumadocs Editor is a visual editor for MDX. It renders prose, code, tables,
-and MDX components as an editable page. The file stays the source of truth.
-
-- **Lossless round-trip**: untouched blocks emit byte-for-byte, so a one-line
-  edit is a one-line diff. Unknown constructs are preserved, not reformatted.
-- **Spec-driven components**: fumadocs-ui (Callout, Cards, Tabs, Files, …)
-  is editable in place. [Your own components](/components) take a small spec.
-- **Instant open**: static first paint, then the editing runtime hydrates.
-  Keystrokes typed during load are not dropped.
-
-Three packages:
-
-<Cards>
-  <Card title="@fumadocs-editor/ui">The React editor. Install this one.</Card>
-  <Card title="@fumadocs-editor/core">
-    Parse, serialize, component specs. Dependency of `ui`; rarely imported directly.
-  </Card>
-  <Card title="@fumadocs-editor/sync" href="/sync">
-    Optional FS mirror: autosave, live merge, collab.
-  </Card>
-</Cards>
+<EditorDemo />
 
 ## Installation
+
+<Steps>
+<Step>
+
+### Install the package
 
 ```bash
 npm install @fumadocs-editor/ui
 ```
 
-React 19. Client component: in SSR apps, mount it inside `'use client'`.
+The editor needs React 19. It is a client component: in a server-rendered
+app, mount it from a file marked `'use client'`.
 
-## Styles
+</Step>
+<Step>
 
-Tailwind CSS v4 and fumadocs `fd-*` tokens. Import the preset after Tailwind:
+### Add the styles
+
+The editor is styled with Tailwind CSS v4 and the fumadocs `fd-*` tokens.
+Import the preset after Tailwind:
 
 ```css title="app.css"
 @import "tailwindcss";
 @import "@fumadocs-editor/ui/css/preset.css";
 ```
 
-The preset registers `--color-fd-*` (fumadocs `neutral` defaults) and tells
-Tailwind to scan the package. On a Fumadocs site, the site theme already
-defines those tokens and wins.
+The preset registers the `--color-fd-*` tokens (the fumadocs `neutral`
+palette) and tells Tailwind to scan the package. On a Fumadocs site, the
+site's own theme keeps precedence.
 
-## Render the editor
+</Step>
+<Step>
+
+### Render it
 
 <include meta='title="editor.tsx"'>../examples/quick-start.tsx</include>
 
-- `defaultValue` is the initial MDX. Uncontrolled after that, like
-  `<textarea defaultValue>`.
-- `onChange` fires with serialized MDX, debounced. `ref.getMarkdown()` if
-  you'd rather pull.
-- fumadocs-ui components work out of the box. Add [your own](/components)
-  with `components={[...fumadocsUiComponents, mine]}`. Unlisted components
-  still round-trip; they just aren't editable in place.
+`defaultValue` is the initial MDX; the editor is uncontrolled after that,
+like `<textarea defaultValue>`. `onChange` receives the serialized MDX,
+debounced. Prefer pulling? Call `ref.getMarkdown()` instead.
 
-On the dev server, [`sync`](/sync) replaces that plumbing:
+</Step>
+</Steps>
+
+## What is editable
+
+Out of the box the editor knows the fumadocs-ui components: Callout, Cards,
+Tabs, Steps, Accordions, Files, TypeTable, GithubInfo, InlineTOC and
+`<include>`. Each renders in place with its own editable regions, a
+slash-menu entry and an attributes panel.
+
+Anything else still round-trips. A component without a [spec](/components)
+shows as a neutral card and is edited as source. Syntax the editor does not
+understand is preserved verbatim rather than reformatted.
+
+## Saving to disk
+
+`onChange` is enough when you own the persistence. If your documents are
+files in a repository, [`@fumadocs-editor/sync`](/sync) runs the read,
+autosave and merge loop for you:
 
 <include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
 
 ## Theming
 
-`fd-*` tokens follow a `.dark` class, so a Fumadocs / `next-themes` site
-themes the editor with no extra setup. Standalone, wrap it:
+The `fd-*` tokens follow a `.dark` class on an ancestor, so a Fumadocs or
+`next-themes` site themes the editor with no extra setup. Standalone, wrap
+it in `EditorThemeProvider`:
 
 <include meta='title="standalone.tsx"'>../examples/theming.tsx</include>
 
-`EditorThemeProvider` tracks `light | dark | system`, persists to
-`localStorage`, and sets the class on a wrapper. Pin one editor with
+The provider tracks `light | dark | system`, persists the choice to
+`localStorage` and sets the class on a wrapper. Pin a single editor with
 `theme="light"` or `theme="dark"`.
+
+## Packages
+
+| Package                 |                                                          |
+| ----------------------- | -------------------------------------------------------- |
+| `@fumadocs-editor/ui`   | The React editor. The only package you install directly. |
+| `@fumadocs-editor/core` | Parse, serialize, component specs. Pulled in by `ui`.    |
+| `@fumadocs-editor/sync` | Optional: file system mirror, collaboration, auth.       |
 
 ## Next steps
 
 <Cards>
   <Card title="Sync" href="/sync">
-    Save through the dev server, with live merge of disk edits.
+    Save through the dev server, with live merge of edits made on disk.
   </Card>
   <Card title="Component authoring" href="/components">
     Make your own MDX components editable in place.
   </Card>
   <Card title="Syntax" href="/syntax">
-    Math, directive admonitions, other dialects.
+    Math, directive admonitions and other dialects.
+  </Card>
+  <Card title="MdxEditor reference" href="/editor">
+    Every prop, the ref, and the sync options.
   </Card>
 </Cards>

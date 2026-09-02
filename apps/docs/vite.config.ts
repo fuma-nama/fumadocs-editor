@@ -1,8 +1,21 @@
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import press from "fumapress/vite";
-import mdx from "fumadocs-mdx/vite";
+import { fumadocsMdx } from "fumadocs-mdx/vite";
+import { createGenerator, remarkAutoTypeTable } from "fumadocs-typescript";
+
+const generator = createGenerator();
 
 export default defineConfig({
-  plugins: [press(), mdx(), tailwindcss()],
+  plugins: [
+    press(),
+    fumadocsMdx({
+      globalOptions: {
+        mdxOptions: {
+          remarkPlugins: [[remarkAutoTypeTable, { generator }]],
+        },
+      },
+    }),
+    tailwindcss(),
+  ],
 });

@@ -1,58 +1,66 @@
 ---
 title: Auth
-description: Scoping who may read and write which documents
+icon: KeyRound
+description: Decide who may read and write which documents
 ---
 
-## The trust model
+Without an `authenticate` hook the sync server trusts everyone who can
+reach it, the same as Vite's own dev socket. That is right for local
+development and wrong for anything shared. Passing `authenticate` puts
+every surface (the websocket, uploads, asset serving) behind your policy.
 
-No `authenticate` hook: the sync server allows everything, same as Vite's
-dev socket. Anyone who can reach the server can edit. Fine for local
-development, not for anything shared. Passing `authenticate` puts every
-surface behind your policy.
+Enforcement is server-side only. The client sends credentials and reports
+what the server decided; it never restricts itself. Turning "this user
+cannot write" into a read-only editor is [your code](/read-only).
 
-Enforcement is **server-only**. The client sends credentials and exposes
-what the server decided. It does not change its own behavior. Wiring "this
-user can't write" into a read-only editor is [your code](/read-only).
+## Add an `authenticate` hook
 
-## The two hooks
+`authenticate` runs once per websocket connection (again on every reconnect,
+so refreshed tokens apply) and once per HTTP media request. It maps the
+request to a scope, or returns `null` to reject.
 
-**Server**: `authenticate` maps a connection (or media request) to a scope,
-or `null` to reject. Once per websocket (again on reconnect, so refreshed
-tokens apply) and once per HTTP media request.
+How credentials reach it depends on your setup:
 
-**Client**: transport `auth` produces an opaque payload on every connection
-attempt. It is sent on the first frame (browser websockets cannot set headers;
-query strings leak into logs) and the `x-fde-auth` header (`AUTH_HEADER`)
-on media requests. Cookie setups omit it and read the request server-side.
+<Tabs items={["Cookie session", "Bearer token"]}>
+<Tab>
 
-### Cookie example
+Cookies travel with every request and websocket upgrade, so the server
+reads them directly and the client needs no changes:
 
 <include meta='title="server.ts"'>../examples/auth-cookie.ts</include>
 
-### Token example
+</Tab>
+<Tab>
+
+Browser websockets cannot set headers, and query strings leak into logs, so
+the token goes in the first frame instead. Give the transport an `auth`
+function; it is called on every connection attempt:
 
 <include meta='title="transport.ts"'>../examples/auth-token-client.ts</include>
 
 <include meta='title="editor.tsx"'>../examples/auth-token-editor.tsx</include>
 
+On the server, the payload arrives verbatim:
+
 <include meta='title="server.ts"'>../examples/auth-token-server.ts</include>
 
-## The scope contract
+</Tab>
+</Tabs>
 
-```ts
-interface SyncScope {
-  user?: { name: string; color?: string };
-  read?: boolean | ((path: string) => boolean); // default true
-  write: boolean | ((path: string) => boolean);
-}
-```
+## Scopes
 
-A document is its root-relative posix path. Predicates are per-document
-permissions. Every predicate sees the **normalized** relative path, so
-`team-a/../outside.mdx` cannot write past a `team-a/` rule. Predicates run
-on the message hot path and must be synchronous: resolve async policy
-inside `authenticate` and close over the result. Policy changes apply on
-the next reconnect.
+<auto-type-table path="../../../packages/sync/src/node.ts" name="SyncScope" />
+
+A document is identified by its root-relative posix path, so `read` and
+`write` predicates are per-document permissions. Two rules:
+
+- Predicates see the **normalized** path. `team-a/../outside.mdx` cannot
+  slip past a `team-a/` rule.
+- Predicates run on the message hot path and must be synchronous. Resolve
+  async policy inside `authenticate` and close over the result, as the token
+  example does. Policy changes apply on the next reconnect.
+
+### What each surface checks
 
 | Surface                      | Rule                                                   |
 | ---------------------------- | ------------------------------------------------------ |
@@ -65,23 +73,28 @@ the next reconnect.
 | asset serving                | requires `read` on the asset path                      |
 | presence identity            | a scope `user` overrides the name the client claims    |
 
-A denied _path_ is a per-request error; the connection stays. A rejected
-_hello_ closes the socket with a dedicated code. The client reports
-`denied` (not `offline`) and stops retrying. Nothing is processed before
-hello passes `authenticate`. Hello-less connections time out.
+A denied path is a per-request error; the connection stays open. A rejected
+hello closes the socket with a dedicated code: the client reports `denied`
+rather than `offline` and stops retrying. Nothing is processed before the
+hello passes `authenticate`, and a connection that never sends one times
+out.
 
-## Exposed data
+## Media uploads
 
-A `read` reply (and the collab-open handshake) carries scope data for your
-UI:
+The HTTP endpoints cannot see the websocket hello, so the same payload
+travels in the `x-fde-auth` header (exported as `AUTH_HEADER`),
+JSON-encoded:
 
-```ts
-interface ReadResult {
-  text: string;
-  version: string;
-  user?: { name: string; color?: string };
-  writable?: boolean; // may this connection write this path
-}
-```
+<include meta='title="media.ts"'>../examples/auth-upload.ts</include>
 
-See [read-only](/read-only) for using `writable`.
+Cookie setups skip the header; the cookie is already on the request.
+
+## What the client learns
+
+The reply to a read (and the collab handshake) carries the scope data your
+UI needs:
+
+<auto-type-table path="../../../packages/sync/src/transport.ts" name="ReadResult" />
+
+`sync.onOpen` hands it to you. See [Read-only](/read-only) for wiring
+`writable` into the editor.

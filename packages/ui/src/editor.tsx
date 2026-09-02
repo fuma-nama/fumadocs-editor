@@ -160,7 +160,7 @@ type Mode = "visual" | "source";
  */
 type Stage = "static" | "mounting" | "live";
 
-const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground hover:bg-fd-background/70 hover:text-fd-foreground data-[selected]:bg-fd-background data-[selected]:text-fd-foreground data-[selected]:shadow-sm ${focusRing}`;
+const modeTabCls = `cursor-pointer rounded-md px-3 py-0.5 text-[12.5px] font-medium text-fd-muted-foreground hover:bg-fd-background/70 hover:text-fd-foreground data-[active]:bg-fd-background data-[active]:text-fd-foreground data-[active]:shadow-sm ${focusRing}`;
 
 const SYNC_DOT: Record<SessionStatus, string> = {
   synced: "bg-fd-success",
