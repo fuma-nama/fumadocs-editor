@@ -180,7 +180,7 @@ export const TURN_INTO = [
   },
 ] as const;
 
-function activeBlock(editor: Editor): string {
+export function activeBlock(editor: Editor): string {
   for (const level of [1, 2, 3]) {
     if (editor.isActive("heading", { level })) return `h${level}`;
   }
@@ -188,6 +188,82 @@ function activeBlock(editor: Editor): string {
     if (editor.isActive(name)) return name;
   }
   return "p";
+}
+
+/**
+ * The element type menu: every block a selection can become, with the
+ * heading's anchor and TOC options under it. The bubble and the touch bar
+ * share it; each supplies its own trigger styling and portal container.
+ */
+export function BlockTypePicker({
+  editor,
+  block,
+  open,
+  onOpenChange,
+  side,
+  triggerCls,
+  container,
+}: {
+  editor: Editor;
+  block: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  side?: "top" | "bottom";
+  triggerCls: string;
+  container: HTMLElement | undefined;
+}) {
+  const current = TURN_INTO.find((item) => item.value === block);
+  return (
+    <Picker
+      items={TURN_INTO}
+      value={current}
+      onPick={(item) => item.run(editor.chain().focus()).run()}
+      open={open}
+      onOpenChange={onOpenChange}
+      side={side}
+      ariaLabel="Block type"
+      triggerCls={triggerCls}
+      container={container}
+      lead={(item) => (
+        <span {...stylex.props(chrome.itemIcon)}>
+          <item.icon size={15} />
+        </span>
+      )}
+      footer={
+        block.startsWith("h") ? (
+          <div {...stylex.props(styles.headingOptions)}>
+            <input
+              {...stylex.props(chrome.input, chrome.field, styles.mono)}
+              placeholder="#anchor-id"
+              spellCheck={false}
+              value={String(editor.getAttributes("heading").anchor ?? "")}
+              onChange={(event) =>
+                editor.commands.updateAttributes("heading", {
+                  anchor: event.target.value.replace(/^#/, "") || null,
+                })
+              }
+            />
+            <select
+              {...stylex.props(chrome.input, styles.tocSelect)}
+              value={String(editor.getAttributes("heading").toc ?? "")}
+              onChange={(event) =>
+                editor.commands.updateAttributes("heading", {
+                  toc: event.target.value || null,
+                })
+              }
+            >
+              <option value="">In the TOC (default)</option>
+              <option value="hide">Hidden from TOC</option>
+              <option value="only">TOC only</option>
+            </select>
+          </div>
+        ) : undefined
+      }
+    >
+      {current?.label ?? "Paragraph"}
+      <ChevronDown size={13} {...stylex.props(styles.muted)} />
+    </Picker>
+  );
 }
 
 /**
@@ -618,54 +694,14 @@ export function EditorBubble({
     >
       {state?.format && (
         <>
-          <Picker
-            items={TURN_INTO}
-            value={TURN_INTO.find((item) => item.value === state.block)}
-            onPick={(item) => run(item.run)}
+          <BlockTypePicker
+            editor={editor}
+            block={state.block}
             open={turnIntoOpen}
             onOpenChange={setTurnIntoOpen}
-            ariaLabel="Block type"
             triggerCls={ghostSelectClass}
             container={panelContainer}
-            lead={(item) => (
-              <span {...stylex.props(chrome.itemIcon)}>
-                <item.icon size={15} />
-              </span>
-            )}
-            footer={
-              state.block.startsWith("h") ? (
-                <div {...stylex.props(styles.headingOptions)}>
-                  <input
-                    {...stylex.props(chrome.input, chrome.field, styles.mono)}
-                    placeholder="#anchor-id"
-                    spellCheck={false}
-                    value={String(editor.getAttributes("heading").anchor ?? "")}
-                    onChange={(event) =>
-                      editor.commands.updateAttributes("heading", {
-                        anchor: event.target.value.replace(/^#/, "") || null,
-                      })
-                    }
-                  />
-                  <select
-                    {...stylex.props(chrome.input, styles.tocSelect)}
-                    value={String(editor.getAttributes("heading").toc ?? "")}
-                    onChange={(event) =>
-                      editor.commands.updateAttributes("heading", {
-                        toc: event.target.value || null,
-                      })
-                    }
-                  >
-                    <option value="">In the TOC (default)</option>
-                    <option value="hide">Hidden from TOC</option>
-                    <option value="only">TOC only</option>
-                  </select>
-                </div>
-              ) : undefined
-            }
-          >
-            {TURN_INTO.find((item) => item.value === state.block)?.label ?? "Paragraph"}
-            <ChevronDown size={13} {...stylex.props(styles.muted)} />
-          </Picker>
+          />
           <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={15} />

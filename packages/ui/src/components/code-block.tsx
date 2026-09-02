@@ -18,6 +18,7 @@ import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-rea
 import type { Editor } from "@tiptap/core";
 import { chrome } from "../styles/shared";
 import { content, contentClass } from "../styles/content";
+import { nodeViewOptions } from "./node-view-options";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { MermaidDiagram } from "./mermaid";
@@ -381,7 +382,10 @@ export function codeBlockExtension(): Extension {
       };
     },
     addNodeView() {
-      return ReactNodeViewRenderer(CodeBlockView, { className: contentClass.block });
+      return ReactNodeViewRenderer(CodeBlockView, {
+        ...nodeViewOptions,
+        className: contentClass.block,
+      });
     },
   }).configure({ lowlight }) as unknown as Extension;
 }

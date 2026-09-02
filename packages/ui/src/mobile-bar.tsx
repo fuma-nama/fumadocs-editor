@@ -4,71 +4,77 @@ import "@tiptap/starter-kit";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { consts } from "./styles/consts.stylex";
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { useEditorPortal } from "./utils/portal";
 import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
-import { Dialog } from "@base-ui/react/dialog";
-import {
-  Bold,
-  Code,
-  CornerDownLeft,
-  Folder,
-  IndentDecrease,
-  Italic,
-  ListPlus,
-  Plus,
-  Redo2,
-  Settings2,
-  Strikethrough,
-  Type,
-  Undo2,
-} from "lucide-react";
+import { Popover } from "@base-ui/react/popover";
+import { Bold, ChevronDown, Code, Italic, Plus, Redo2, Strikethrough, Undo2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
-import { handleModEnter, listEntryDepth, outdentEntry, toggleEntryType } from "./components/keymap";
+import type { MediaProvider } from "./components/media";
 import { activeComponent } from "./components/attributes";
 import { BlockPanel } from "./block-menu";
-import { TURN_INTO } from "./bubble-menu";
+import { BlockTypePicker, activeBlock } from "./bubble-menu";
 import { insertItems } from "./slash-menu";
 import { chrome } from "./styles/shared";
 
-const SHEET_EASE = "cubic-bezier(0.2, 0, 0, 1)";
-
 const styles = stylex.create({
+  /* Fixed above the on-screen keyboard while the editor is being edited.
+   * The keyboard covers the bottom of the layout viewport on every mobile
+   * browser and no CSS knows its height, so `bottom` is written from the
+   * visual viewport on its own events (see `useKeyboardOffset`), directly
+   * on the element and without a transition on that axis. The visual
+   * viewport already excludes iOS Safari's keyboard accessory bar, so the
+   * bar sits right above it. Its popups portal into it and open upward. */
   bar: {
     boxSizing: "border-box",
     position: "fixed",
+    bottom: 0,
     insetInlineStart: 0,
     insetInlineEnd: 0,
-    bottom: 0,
-    zIndex: 40,
+    zIndex: 50,
+    paddingBottom: "env(safe-area-inset-bottom)",
     borderTopWidth: 1,
     borderTopStyle: "solid",
     borderTopColor: tokens.border,
     backgroundColor: tokens.popover,
     color: tokens.popoverForeground,
-    transition: { default: `transform 200ms ${SHEET_EASE}`, [consts.reduceMotion]: "none" },
-    paddingBottom: "env(safe-area-inset-bottom)",
+    // slides away rather than vanishing: a tap that blurs the editor still
+    // lands on the button it aimed at
+    transition: { default: `translate 150ms ${consts.ease}`, [consts.reduceMotion]: "none" },
+    translate: { default: null, ":is([data-hidden])": "0 100%" },
   },
   row: {
     display: "flex",
+    height: "3rem",
     alignItems: "center",
     gap: "0.125rem",
     overflowX: "auto",
+    scrollbarWidth: "none",
     paddingInline: "0.375rem",
-    paddingBlock: "0.125rem",
   },
-  /** touch target: 44px square minimum */
+  /** touch target: 40px square minimum */
   button: {
     display: "inline-flex",
-    height: "2.75rem",
-    minWidth: "2.75rem",
+    height: "2.5rem",
+    minWidth: "2.5rem",
     flexShrink: 0,
     cursor: "pointer",
     alignItems: "center",
     justifyContent: "center",
+    gap: "0.375rem",
     borderRadius: "0.5rem",
+    fontSize: 13,
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+    outline: "none",
     color: {
       default: tokens.mutedForeground,
       ":is([data-active])": tokens.foreground,
@@ -77,76 +83,39 @@ const styles = stylex.create({
       default: "transparent",
       ":active": tokens.accent,
       ":is([data-active])": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
     },
     opacity: { default: null, ":disabled": 0.35 },
   },
+  labeled: { paddingInline: "0.625rem", color: tokens.foreground },
+  chipIcon: { display: "inline-flex", color: tokens.mutedForeground },
   divider: { height: "1.25rem" },
   spacer: { minWidth: "0.25rem", flex: 1 },
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 40,
-    backgroundColor: "rgb(0 0 0 / 0.4)",
-    transition: { default: `opacity 150ms ${consts.ease}`, [consts.reduceMotion]: "none" },
-    opacity: { default: 1, ":is([data-starting-style])": 0, ":is([data-ending-style])": 0 },
-  },
-  sheet: {
-    boxSizing: "border-box",
-    position: "fixed",
-    insetInlineStart: 0,
-    insetInlineEnd: 0,
-    bottom: 0,
-    zIndex: 50,
+  /* popups hang below the bar; capped so they stay above the keyboard */
+  insertPopup: {
     display: "flex",
-    maxHeight: "70vh",
+    width: "15rem",
+    maxHeight: "40vh",
     flexDirection: "column",
-    gap: "0.5rem",
     overflowY: "auto",
-    borderStartStartRadius: "1rem",
-    borderStartEndRadius: "1rem",
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: tokens.border,
-    backgroundColor: tokens.popover,
-    padding: "0.75rem",
-    paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
-    color: tokens.popoverForeground,
-    boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-    transition: { default: `translate 220ms ${SHEET_EASE}`, [consts.reduceMotion]: "none" },
-    translate: {
-      default: null,
-      ":is([data-starting-style])": "0 100%",
-      ":is([data-ending-style])": "0 100%",
-    },
-    scrollbarColor: `${tokens.border} transparent`,
-    scrollbarWidth: "thin",
+    overscrollBehavior: "contain",
   },
-  /* chrome.item leaves the resting background undeclared, which on a
-   * <button> would let the UA button face through */
-  sheetItem: { height: "2.75rem", flexShrink: 0 },
-  sheetIcon: { width: "1.25rem" },
+  group: {
+    margin: 0,
+    paddingInline: "0.5rem",
+    paddingTop: "0.5rem",
+    paddingBottom: "0.125rem",
+    fontSize: 10.5,
+    fontWeight: 600,
+    letterSpacing: "0.025em",
+    textTransform: "uppercase",
+    color: tokens.mutedForeground,
+  },
+  item: { minHeight: "2.5rem", flexShrink: 0 },
+  panel: { display: "flex", width: "16rem", flexDirection: "column" },
 });
 
-const readKeyboardInset = () => {
-  const viewport = window.visualViewport;
-  return viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
-};
-
-const subscribeKeyboardInset = (onChange: () => void) => {
-  const viewport = window.visualViewport;
-  if (!viewport) return () => {};
-  viewport.addEventListener("resize", onChange);
-  viewport.addEventListener("scroll", onChange);
-  return () => {
-    viewport.removeEventListener("resize", onChange);
-    viewport.removeEventListener("scroll", onChange);
-  };
-};
-
-/** distance the virtual keyboard covers at the bottom of the layout viewport */
-function useKeyboardInset(): number {
-  return useSyncExternalStore(subscribeKeyboardInset, readKeyboardInset, () => 0);
-}
+const labeledClass = stylex.props(chrome.button, styles.button, styles.labeled).className!;
 
 function useMediaQuery(query: string): boolean {
   const [subscribe, getSnapshot] = useMemo(() => {
@@ -161,6 +130,24 @@ function useMediaQuery(query: string): boolean {
     ] as const;
   }, [query]);
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+/** keep `bottom` on the visual viewport's bottom edge: above the keyboard */
+function useKeyboardOffset(bar: HTMLElement | null) {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!bar || !viewport) return;
+    const place = () => {
+      bar.style.bottom = `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`;
+    };
+    place();
+    viewport.addEventListener("resize", place);
+    viewport.addEventListener("scroll", place);
+    return () => {
+      viewport.removeEventListener("resize", place);
+      viewport.removeEventListener("scroll", place);
+    };
+  }, [bar]);
 }
 
 function useEditorFocused(editor: Editor): boolean {
@@ -217,16 +204,15 @@ function BarButton({
   );
 }
 
-type Sheet = "turn-into" | "insert" | "component" | null;
-
 interface MobileBarProps {
   editor: Editor;
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
+  media?: MediaProvider;
   math?: boolean;
 }
 
-/** Touch editing surface: a fixed bar above the virtual keyboard. */
+/** Touch editing surface: a toolbar above the on-screen keyboard. */
 export function MobileBar(props: MobileBarProps) {
   // gate the whole subtree, not just its output: TouchBar's editor-state
   // selector (two can() trial runs) would otherwise run per transaction on
@@ -235,11 +221,15 @@ export function MobileBar(props: MobileBarProps) {
   return coarse ? <TouchBar {...props} /> : null;
 }
 
-function TouchBar({ editor, components, specs, math }: MobileBarProps) {
-  const { anchorRef, container } = useEditorPortal();
-  const inset = useKeyboardInset();
+function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
+  // popups portal into the bar itself: inside the theme scope, and moving
+  // with it rather than repositioned on every scroll
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  useKeyboardOffset(bar);
   const focused = useEditorFocused(editor);
-  const [sheet, setSheet] = useState<Sheet>(null);
+  const [typeOpen, setTypeOpen] = useState(false);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const state = useEditorState({
     editor,
@@ -252,8 +242,9 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
       }
       return {
         inInlineRegion,
+        format: !inInlineRegion && $from.parent.type.name !== "codeBlock",
+        block: activeBlock(current),
         active: activeComponent(current.state),
-        listEntry: listEntryDepth($from, specs) !== -1,
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
@@ -267,149 +258,153 @@ function TouchBar({ editor, components, specs, math }: MobileBarProps) {
   });
 
   if (state == null) return null;
-  const visible = focused || sheet != null;
+  const spec = state.active ? specs.get(state.active.name) : undefined;
+  const visible = focused || typeOpen || insertOpen || panelOpen;
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
     fn(editor.chain().focus()).run();
   };
 
-  return (
-    <>
-      <div
-        ref={anchorRef}
-        {...stylex.props(styles.bar)}
-        style={{
-          transform: visible ? `translateY(-${inset}px)` : "translateY(100%)",
-        }}
-      >
-        <div {...stylex.props(styles.row)}>
-          <BarButton
-            label="Turn into"
-            disabled={state.inInlineRegion}
-            onClick={() => setSheet("turn-into")}
-          >
-            <Type size={17} />
-          </BarButton>
-          <BarButton label="Insert" onClick={() => setSheet("insert")}>
-            <Plus size={17} />
-          </BarButton>
-          <span {...stylex.props(chrome.divider, styles.divider)} />
-          <BarButton
-            label="Bold"
-            active={state.bold}
-            disabled={state.inInlineRegion}
-            onClick={() => run((c) => c.toggleBold())}
-          >
-            <Bold size={17} />
-          </BarButton>
-          <BarButton
-            label="Italic"
-            active={state.italic}
-            disabled={state.inInlineRegion}
-            onClick={() => run((c) => c.toggleItalic())}
-          >
-            <Italic size={17} />
-          </BarButton>
-          <BarButton
-            label="Strikethrough"
-            active={state.strike}
-            disabled={state.inInlineRegion}
-            onClick={() => run((c) => c.toggleStrike())}
-          >
-            <Strikethrough size={17} />
-          </BarButton>
-          <BarButton
-            label="Inline code"
-            active={state.code}
-            disabled={state.inInlineRegion}
-            onClick={() => run((c) => c.toggleCode())}
-          >
-            <Code size={17} />
-          </BarButton>
-          {state.listEntry && (
-            <>
-              <span {...stylex.props(chrome.divider, styles.divider)} />
-              <BarButton label="Outdent" onClick={() => outdentEntry(editor, specs)}>
-                <IndentDecrease size={17} />
-              </BarButton>
-              <BarButton label="Toggle folder" onClick={() => toggleEntryType(editor, specs)}>
-                <Folder size={17} />
-              </BarButton>
-              <BarButton label="New row" onClick={() => handleModEnter(editor, specs)}>
-                <ListPlus size={17} />
-              </BarButton>
-            </>
-          )}
-          {state.active && (
-            <>
-              <span {...stylex.props(chrome.divider, styles.divider)} />
-              <BarButton label="Component options" onClick={() => setSheet("component")}>
-                <Settings2 size={17} />
-              </BarButton>
-            </>
-          )}
-          <span {...stylex.props(chrome.divider, styles.divider)} />
-          <BarButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
-            <Undo2 size={17} />
-          </BarButton>
-          <BarButton label="Redo" disabled={!state.canRedo} onClick={() => run((c) => c.redo())}>
-            <Redo2 size={17} />
-          </BarButton>
-          <span {...stylex.props(styles.spacer)} />
-          <BarButton label="Done" onClick={() => editor.commands.blur()}>
-            <CornerDownLeft size={17} />
-          </BarButton>
-        </div>
-      </div>
+  const items = insertItems(components, media, math);
+  let group = "";
 
-      <Dialog.Root open={sheet != null} onOpenChange={(next) => !next && setSheet(null)}>
-        <Dialog.Portal container={container}>
-          <Dialog.Backdrop {...stylex.props(styles.backdrop)} />
-          <Dialog.Popup data-fde-popup="" {...stylex.props(styles.sheet)}>
-            {sheet === "turn-into" &&
-              TURN_INTO.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  {...stylex.props(chrome.button, chrome.item, styles.sheetItem)}
-                  onClick={() => {
-                    item.run(editor.chain().focus()).run();
-                    setSheet(null);
-                  }}
+  return (
+    <div
+      ref={setBar}
+      role="toolbar"
+      aria-label="Editing"
+      data-hidden={visible ? undefined : ""}
+      {...stylex.props(styles.bar)}
+    >
+      <div {...stylex.props(styles.row)}>
+        <BlockTypePicker
+          editor={editor}
+          block={state.block}
+          open={typeOpen}
+          onOpenChange={setTypeOpen}
+          side="top"
+          triggerCls={labeledClass}
+          container={bar ?? undefined}
+        />
+        <Popover.Root open={insertOpen} onOpenChange={setInsertOpen}>
+          <Popover.Trigger className={labeledClass}>
+            <Plus size={16} />
+            Insert
+          </Popover.Trigger>
+          <Popover.Portal container={bar}>
+            <Popover.Positioner
+              side="top"
+              sideOffset={4}
+              align="start"
+              {...stylex.props(chrome.layer)}
+            >
+              <Popover.Popup
+                data-fde-popup=""
+                initialFocus={false}
+                finalFocus={false}
+                {...stylex.props(chrome.popup, styles.insertPopup)}
+              >
+                {items.map((item) => {
+                  const heading = item.group !== group;
+                  group = item.group;
+                  return (
+                    <Fragment key={item.title}>
+                      {heading && <p {...stylex.props(styles.group)}>{group}</p>}
+                      <Popover.Close
+                        {...stylex.props(chrome.button, chrome.item, styles.item)}
+                        onClick={() => {
+                          const { from } = editor.state.selection;
+                          item.run(editor, { from, to: from });
+                        }}
+                      >
+                        <span {...stylex.props(chrome.itemIcon)}>{item.icon}</span>
+                        <span>{item.title}</span>
+                      </Popover.Close>
+                    </Fragment>
+                  );
+                })}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
+        <span {...stylex.props(chrome.divider, styles.divider)} />
+        <BarButton
+          label="Bold"
+          active={state.bold}
+          disabled={!state.format}
+          onClick={() => run((c) => c.toggleBold())}
+        >
+          <Bold size={17} />
+        </BarButton>
+        <BarButton
+          label="Italic"
+          active={state.italic}
+          disabled={!state.format}
+          onClick={() => run((c) => c.toggleItalic())}
+        >
+          <Italic size={17} />
+        </BarButton>
+        <BarButton
+          label="Strikethrough"
+          active={state.strike}
+          disabled={!state.format}
+          onClick={() => run((c) => c.toggleStrike())}
+        >
+          <Strikethrough size={17} />
+        </BarButton>
+        <BarButton
+          label="Inline code"
+          active={state.code}
+          disabled={!state.format}
+          onClick={() => run((c) => c.toggleCode())}
+        >
+          <Code size={17} />
+        </BarButton>
+        {state.active && spec && (
+          <>
+            <span {...stylex.props(chrome.divider, styles.divider)} />
+            <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
+              <Popover.Trigger
+                aria-label={`${spec.label ?? spec.name} options`}
+                className={labeledClass}
+              >
+                <span {...stylex.props(styles.chipIcon)}>{spec.icon}</span>
+                {spec.label ?? spec.name}
+                <ChevronDown size={12} {...stylex.props(styles.chipIcon)} />
+              </Popover.Trigger>
+              <Popover.Portal container={bar}>
+                <Popover.Positioner
+                  side="top"
+                  sideOffset={4}
+                  align="start"
+                  {...stylex.props(chrome.layer)}
                 >
-                  <span {...stylex.props(chrome.itemIcon, styles.sheetIcon)}>
-                    <item.icon size={16} />
-                  </span>
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            {sheet === "insert" &&
-              insertItems(components, undefined, math).map((item) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  {...stylex.props(chrome.button, chrome.item, styles.sheetItem)}
-                  onClick={() => {
-                    const { from } = editor.state.selection;
-                    item.run(editor, { from, to: from });
-                    setSheet(null);
-                  }}
-                >
-                  <span {...stylex.props(chrome.itemIcon, styles.sheetIcon)}>{item.icon}</span>
-                  <span>{item.title}</span>
-                </button>
-              ))}
-            {sheet === "component" && state.active && (
-              <BlockPanel
-                editor={editor}
-                specs={specs}
-                active={state.active}
-                onDone={() => setSheet(null)}
-              />
-            )}
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </>
+                  <Popover.Popup
+                    data-fde-popup=""
+                    initialFocus={false}
+                    finalFocus={false}
+                    {...stylex.props(chrome.popup, styles.panel)}
+                  >
+                    <BlockPanel
+                      editor={editor}
+                      specs={specs}
+                      active={state.active}
+                      onDone={() => setPanelOpen(false)}
+                    />
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
+          </>
+        )}
+        <span {...stylex.props(styles.spacer)} />
+        <BarButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
+          <Undo2 size={17} />
+        </BarButton>
+        <BarButton label="Redo" disabled={!state.canRedo} onClick={() => run((c) => c.redo())}>
+          <Redo2 size={17} />
+        </BarButton>
+      </div>
+    </div>
   );
 }

@@ -9,9 +9,17 @@ import { useEditorPortal } from "./utils/portal";
 import { NodeSelection } from "@tiptap/pm/state";
 import type { MdxAttribute } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
-import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, IndentDecrease, MoreHorizontal, Trash2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
-import { childInsertContext, focusAt, moveComponentAt } from "./components/keymap";
+import {
+  childInsertContext,
+  entryParentFolder,
+  entryToggleTarget,
+  focusAt,
+  moveComponentAt,
+  outdentEntry,
+  toggleEntryType,
+} from "./components/keymap";
 import { PropControl } from "./attributes-panel";
 import { activeComponent, setComponentAttributes } from "./components/attributes";
 import { readPropValue, setPropValue } from "./components/attr-values";
@@ -201,8 +209,19 @@ export function BlockPanel({
   const attributes = active.attributes;
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
+  // row actions of a list entry (File ↔ Folder, out of its folder): Tab and
+  // Shift-Tab on a keyboard, labelled here for touch and discovery
+  const { $from } = editor.state.selection;
+  const toggle = entryToggleTarget($from, specs);
+  const folder = entryParentFolder($from, specs);
 
   const setAttributes = (next: MdxAttribute[]) => setComponentAttributes(editor, active.pos, next);
+  // These edit the document while a panel button holds focus, then hand it
+  // back with ProseMirror's own focus(): it writes the selection into the
+  // DOM synchronously. TipTap's focus command raw-focuses the DOM first on
+  // iOS/Android, and the browser's stale caret (inside a node view that no
+  // longer exists) gets read back as the new selection before the deferred
+  // sync runs.
 
   return (
     <>
@@ -241,6 +260,34 @@ export function BlockPanel({
           <span>Add {child.label ?? child.name}</span>
         </button>
       ))}
+      {toggle && (
+        <button
+          type="button"
+          {...stylex.props(chrome.button, chrome.item)}
+          onClick={() => {
+            toggleEntryType(editor, specs);
+            onDone();
+            editor.view.focus();
+          }}
+        >
+          <span {...stylex.props(chrome.itemIcon)}>{toggle.target.icon}</span>
+          <span>Turn into {toggle.target.label ?? toggle.target.name}</span>
+        </button>
+      )}
+      {folder && (
+        <button
+          type="button"
+          {...stylex.props(chrome.button, chrome.item)}
+          onClick={() => {
+            outdentEntry(editor, specs);
+            onDone();
+            editor.view.focus();
+          }}
+        >
+          <IndentDecrease size={13} {...stylex.props(styles.actionIcon)} />
+          <span>Move out of {folder.label ?? folder.name}</span>
+        </button>
+      )}
       {(
         [
           [-1, "Move up", ArrowUp],
@@ -253,7 +300,7 @@ export function BlockPanel({
           {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
             if (moveComponentAt(editor, active.pos, dir)) onDone();
-            editor.commands.focus();
+            editor.view.focus();
           }}
         >
           <Icon size={13} {...stylex.props(styles.actionIcon)} />
@@ -266,12 +313,9 @@ export function BlockPanel({
         onClick={() => {
           const current = editor.state.doc.nodeAt(active.pos);
           if (!current) return;
-          editor
-            .chain()
-            .deleteRange({ from: active.pos, to: active.pos + current.nodeSize })
-            .focus()
-            .run();
+          editor.commands.deleteRange({ from: active.pos, to: active.pos + current.nodeSize });
           onDone();
+          editor.view.focus();
         }}
       >
         <Trash2 size={13} {...stylex.props(styles.actionIcon)} />

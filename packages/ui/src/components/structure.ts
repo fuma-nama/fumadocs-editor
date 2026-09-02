@@ -346,6 +346,41 @@ function dropIndicator(specs: SpecMap, childOnly: Set<string>): Plugin {
   });
 }
 
+/**
+ * ProseMirror marks a draggable node's DOM `draggable` on mousedown, which a
+ * touch never sends, so iOS (native drag and drop after a long press) had
+ * nothing to pick up. Mirror it for touches: a press on a component's own
+ * chrome, not its text, makes that node view draggable until the touch ends.
+ */
+function touchDrag(): Plugin {
+  let armed: HTMLElement | null = null;
+  const disarm = () => {
+    armed?.removeAttribute("draggable");
+    armed = null;
+    return false;
+  };
+  return new Plugin({
+    props: {
+      handleDOMEvents: {
+        touchstart(view, event) {
+          const touch = event.touches[0];
+          if (!touch || event.touches.length > 1) return false;
+          const found = view.posAtCoords({ left: touch.clientX, top: touch.clientY });
+          const node = found && found.inside > -1 ? view.state.doc.nodeAt(found.inside) : null;
+          if (node?.type.name !== COMPONENT_NODE) return false;
+          const dom = view.nodeDOM(found!.inside);
+          if (!(dom instanceof HTMLElement)) return false;
+          armed = dom;
+          dom.draggable = true;
+          return false;
+        },
+        touchend: disarm,
+        touchcancel: disarm,
+      },
+    },
+  });
+}
+
 export function structureGuard(specs: SpecMap): Extension {
   const childOnly = childOnlyNames(specs.values());
 
@@ -415,6 +450,7 @@ export function structureGuard(specs: SpecMap): Extension {
           },
         }),
         dropIndicator(specs, childOnly),
+        touchDrag(),
       ];
     },
   });

@@ -20,25 +20,13 @@ import { FallbackCard, RenderBoundary } from "../static-mdx";
 import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
 import { caretPolicy } from "./caret-policy";
 import { componentKeymap } from "./keymap";
+import { nodeViewOptions } from "./node-view-options";
 import { structureGuard } from "./structure";
 import { content, contentClass } from "../styles/content";
 
 type SpecMap = Map<string, UiComponentSpec>;
 
 const COMPONENT = "mdxComponent";
-
-/**
- * TipTap's default `stopEvent` swallows any event whose target
- * `isContentEditable`, which silences keydowns from editable areas nested in
- * renderer chrome before ProseMirror sees them. Stop only events on real
- * controls.
- */
-function stopEvent({ event }: { event: Event }): boolean {
-  return (
-    event.target instanceof Element &&
-    event.target.closest("input, button, select, textarea") !== null
-  );
-}
 
 /* ---- node views ---- */
 
@@ -221,13 +209,16 @@ export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
       // the wrapper is what ProseMirror marks draggable on mousedown; its
       // styles (own paint layer, insert motion) are `content.component`
       addNodeView: () =>
-        ReactNodeViewRenderer(ComponentView, { stopEvent, className: contentClass.component }),
+        ReactNodeViewRenderer(ComponentView, {
+          ...nodeViewOptions,
+          className: contentClass.component,
+        }),
     }),
     MdxInlineRegion.extend({
-      addNodeView: () => ReactNodeViewRenderer(InlineRegionView, { stopEvent }),
+      addNodeView: () => ReactNodeViewRenderer(InlineRegionView, nodeViewOptions),
     }),
     MdxBlockRegion.extend({
-      addNodeView: () => ReactNodeViewRenderer(BlockRegionView, { stopEvent }),
+      addNodeView: () => ReactNodeViewRenderer(BlockRegionView, nodeViewOptions),
     }),
     ...componentKeymap(map),
     structureGuard(map),

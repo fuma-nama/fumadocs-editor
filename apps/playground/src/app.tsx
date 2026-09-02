@@ -182,8 +182,8 @@ function Playground() {
   const identical = markdown === diskText;
 
   return (
-    <main className="mx-auto max-w-[1080px] px-5 pt-12 pb-24">
-      <header className="mb-5 flex items-center justify-between gap-3">
+    <main className="mx-auto max-w-[1080px] px-4 pt-6 pb-24 md:px-5 md:pt-12">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h1 className="text-xl font-semibold tracking-tight">fumadocs editor</h1>
           <p className="text-[13px] text-fd-muted-foreground">
@@ -213,8 +213,8 @@ function Playground() {
           <ThemeToggle />
         </div>
       </header>
-      <div className="flex items-start gap-4">
-        <nav className="w-52 shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5">
+      <div className="flex flex-col items-start gap-4 md:flex-row">
+        <nav className="w-full shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5 md:w-52">
           {files?.map((path) => (
             <button
               key={path}
@@ -231,7 +231,7 @@ function Playground() {
             </button>
           ))}
         </nav>
-        <div className="min-w-0 flex-1">
+        <div className="w-full min-w-0 flex-1">
           {sync ? (
             <MdxEditor
               sync={sync}

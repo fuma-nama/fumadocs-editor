@@ -24,6 +24,7 @@ import {
 } from "@tiptap/react";
 import { useEffect, useState } from "react";
 import { content } from "../styles/content";
+import { nodeViewOptions } from "./node-view-options";
 import { chrome } from "../styles/shared";
 import { math } from "../styles/markers.stylex";
 
@@ -273,7 +274,8 @@ function enterBlock(editor: Editor, dir: 1 | -1, axis: "h" | "v"): boolean {
 export function mathExtensions(enabled: boolean): Extensions {
   return [
     MathInline.extend({
-      addNodeView: () => ReactNodeViewRenderer(MathInlineView, { className: inlineClass }),
+      addNodeView: () =>
+        ReactNodeViewRenderer(MathInlineView, { ...nodeViewOptions, className: inlineClass }),
       addInputRules() {
         if (!enabled) return [];
         return [
@@ -314,7 +316,8 @@ export function mathExtensions(enabled: boolean): Extensions {
       },
     }),
     MathBlock.extend({
-      addNodeView: () => ReactNodeViewRenderer(MathBlockView, { className: blockClass }),
+      addNodeView: () =>
+        ReactNodeViewRenderer(MathBlockView, { ...nodeViewOptions, className: blockClass }),
       addInputRules() {
         if (!enabled) return [];
         return [textblockTypeInputRule({ find: /^\$\$\s$/, type: this.type })];

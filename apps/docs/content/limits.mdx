@@ -27,18 +27,28 @@ aligned, except:
   are no-ops. Clicks on real component chrome place the caret in the
   nearest region.
 
-## iOS
+## Touch
 
-Touch is verified against real WebKit with touch events: the mobile bar
-appears on coarse pointers, sticks to the bottom, and keeps 44 pt minimum
-targets. Autocorrect, autocapitalize and spellcheck are suppressed on the
-editing surface.
+Verified against real WebKit and Chromium with touch events (Playwright
+device emulation), not yet on physical hardware:
 
-Not yet verified on physical hardware:
-
-- the bottom bar riding the on-screen keyboard (`visualViewport` inset)
-- autocorrect and dictation (`insertReplacementText`, not key events)
-- true iOS Safari rendering
+- On coarse pointers a toolbar sits above the on-screen keyboard while the
+  editor is focused: the element type menu, insert, marks, the active
+  component's panel, undo and redo. No CSS knows the keyboard's height, so
+  its offset is written from the visual viewport's own events, straight to
+  the element; the visual viewport already excludes iOS Safari's keyboard
+  accessory bar.
+- Drag and drop is the browser's own. A touch on a component's chrome (not
+  its text) makes it draggable for that touch, the way ProseMirror does on
+  mousedown, so an iOS long-press drags it from empty space or its ⋯
+  handle. Android has no native touch drag and drop; its panel offers move
+  up and down.
+- The editor's own chrome (node views rendered by React) is never read
+  back as a virtual-keyboard edit. TipTap's mobile heuristic would treat
+  each mount as one and synthesize Enter from it.
+- Autocorrect, autocapitalize and spellcheck are suppressed on the editing
+  surface; autocorrect and dictation (`insertReplacementText`, not key
+  events) are still unverified.
 
 ## Collaboration
 

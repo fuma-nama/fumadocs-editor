@@ -3,7 +3,7 @@ import * as stylex from "@stylexjs/stylex";
 import { tokens } from "../styles/tokens.stylex";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { chrome } from "../styles/shared";
 import { useEditorPortal } from "../utils/portal";
 
@@ -61,6 +61,7 @@ export function Picker<T extends PickerItem>({
   open,
   onOpenChange,
   align = "start",
+  side,
   ariaLabel,
   triggerCls,
   triggerTabIndex,
@@ -75,6 +76,7 @@ export function Picker<T extends PickerItem>({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   align?: "start" | "end";
+  side?: "top" | "bottom";
   ariaLabel?: string;
   /** the trigger is a native button: include `chrome.button` in this class */
   triggerCls: string;
@@ -90,6 +92,7 @@ export function Picker<T extends PickerItem>({
   footer?: ReactNode;
 }) {
   const portal = useEditorPortal();
+  const touch = useRef(false);
   return (
     <Combobox.Root
       items={items as T[]}
@@ -109,13 +112,36 @@ export function Picker<T extends PickerItem>({
         {children}
       </Combobox.Trigger>
       <Combobox.Portal container={container ?? portal.container}>
-        <Combobox.Positioner sideOffset={6} align={align} {...stylex.props(chrome.layer)}>
+        <Combobox.Positioner
+          side={side}
+          sideOffset={6}
+          align={align}
+          {...stylex.props(chrome.layer)}
+        >
           <Combobox.Popup {...stylex.props(chrome.popup, styles.popup)}>
             <Combobox.Input placeholder="Filter…" {...stylex.props(chrome.input, styles.input)} />
             <Combobox.Empty {...stylex.props(styles.empty)}>No matches</Combobox.Empty>
             <Combobox.List {...stylex.props(styles.list)}>
               {(item: T) => (
-                <Combobox.Item key={item.value} value={item} {...stylex.props(chrome.item)}>
+                <Combobox.Item
+                  key={item.value}
+                  value={item}
+                  {...stylex.props(chrome.item)}
+                  // Base UI cancels every pointerdown to keep the input
+                  // focused; WebKit then never synthesizes the click a touch
+                  // tap commits with, and no item can be picked on iOS. A tap
+                  // closes the popup anyway, so let touch pointers through,
+                  // and keep the click as the one commit: without its
+                  // pointerdown bookkeeping Base UI would also commit on the
+                  // compatibility mouseup.
+                  onPointerDownCapture={(event) => {
+                    touch.current = event.pointerType === "touch";
+                    if (touch.current) event.preventBaseUIHandler();
+                  }}
+                  onMouseUp={(event) => {
+                    if (touch.current) event.preventBaseUIHandler();
+                  }}
+                >
                   {lead?.(item)}
                   {item.label}
                   <Combobox.ItemIndicator {...stylex.props(chrome.itemIndicator)}>

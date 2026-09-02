@@ -8,6 +8,7 @@ import { Plugin } from "@tiptap/pm/state";
 import { ImageIcon } from "lucide-react";
 import { content } from "../styles/content";
 import { resolveSrc, type MediaProvider } from "./media";
+import { nodeViewOptions } from "./node-view-options";
 
 const styles = stylex.create({
   wrapper: { display: "inline-block", maxWidth: "100%" },
@@ -82,7 +83,7 @@ function makeImageView(media: MediaProvider | undefined) {
 export function imageExtension(media: MediaProvider | undefined): Extension {
   return Image.extend({
     addNodeView() {
-      return ReactNodeViewRenderer(makeImageView(media));
+      return ReactNodeViewRenderer(makeImageView(media), nodeViewOptions);
     },
     addProseMirrorPlugins() {
       const editor = this.editor;

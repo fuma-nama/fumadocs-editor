@@ -26,9 +26,7 @@ export const content = stylex.create({
     outline: "none",
     paddingTop: 20,
     paddingInline: 24,
-    // room for the mobile bar so the caret never hides beneath it
-    paddingBottom: { default: 56, "@media (pointer: coarse)": 108 },
-    scrollPaddingBottom: { default: null, "@media (pointer: coarse)": 108 },
+    paddingBottom: 56,
     minHeight: 420,
     "--fde-gap": "0.8em",
   },

@@ -314,42 +314,47 @@ function outermostComponentDepth($from: ResolvedPos): number {
 /* ---- Tab ---- */
 
 /**
+ * The type a list entry toggles to: a plain row becomes the type that can
+ * hold rows like it (File → Folder), an empty container row goes back to the
+ * plain type. Null when the row cannot toggle (a folder with children).
+ */
+export function entryToggleTarget<S extends ComponentSpec>(
+  $from: ResolvedPos,
+  specs: ReadonlyMap<string, S>,
+): { depth: number; entry: PMNode; target: S } | null {
+  const depth = listEntryDepth($from, specs);
+  if (depth === -1) return null;
+  const entry = $from.node(depth);
+  if (hasComponentChild(entry)) return null;
+  const entryName = entry.attrs.name as string;
+  const containerSpec = specs.get($from.node(depth - 1).attrs.name as string);
+  const plain = childNames(specs.get(entryName)).length === 0;
+  for (const name of childNames(containerSpec)) {
+    const spec = specs.get(name);
+    if (!spec || spec.childrenRegion) continue;
+    if (
+      plain
+        ? childNames(spec).includes(entryName)
+        : name !== entryName && childNames(spec).length === 0
+    ) {
+      return { depth, entry, target: spec };
+    }
+  }
+  return null;
+}
+
+/**
  * Tab toggles the row in place between the container's plain entry type and
  * its container type (File ↔ Folder). Only attributes change: the node and
  * its text are kept, so the node view updates in place and the caret never
- * moves. A folder that still has children stays a folder.
+ * moves.
  */
 export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from } = state.selection;
-  const depth = listEntryDepth($from, specs);
-  if (depth === -1) return false;
-  const entry = $from.node(depth);
-  if (hasComponentChild(entry)) return false;
-  const entryName = entry.attrs.name as string;
-  const containerSpec = specs.get($from.node(depth - 1).attrs.name as string);
-
-  let target: ComponentSpec | undefined;
-  if (childNames(specs.get(entryName)).length === 0) {
-    // plain row: become the type that can hold rows like it
-    for (const name of childNames(containerSpec)) {
-      const spec = specs.get(name);
-      if (spec && childNames(spec).includes(entryName)) {
-        target = spec;
-        break;
-      }
-    }
-  } else {
-    // empty container row: back to the plain type
-    for (const name of childNames(containerSpec)) {
-      const spec = specs.get(name);
-      if (spec && name !== entryName && childNames(spec).length === 0) {
-        target = spec;
-        break;
-      }
-    }
-  }
-  if (!target || target.childrenRegion) return false;
+  const toggle = entryToggleTarget($from, specs);
+  if (!toggle) return false;
+  const { depth, entry, target } = toggle;
 
   // regions must correspond one to one for a clean retag
   const regions = target.attributeRegions ?? [];
@@ -387,19 +392,27 @@ export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   return true;
 }
 
+/** the folder a nested list entry can move out of, when its grandparent accepts it */
+export function entryParentFolder<S extends ComponentSpec>(
+  $from: ResolvedPos,
+  specs: ReadonlyMap<string, S>,
+): S | null {
+  const depth = listEntryDepth($from, specs);
+  if (depth < 3) return null;
+  const grand = $from.node(depth - 2);
+  if (grand.type.name !== COMPONENT_NODE) return null;
+  const name = $from.node(depth).attrs.name as string;
+  if (!childNames(specs.get(grand.attrs.name as string)).includes(name)) return null;
+  return specs.get($from.node(depth - 1).attrs.name as string) ?? null;
+}
+
 /** Shift-Tab moves the entry out, right after its parent folder. */
 export function outdentEntry(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from } = state.selection;
+  if (!entryParentFolder($from, specs)) return false;
   const depth = listEntryDepth($from, specs);
-  if (depth === -1 || depth < 3) return false;
-  const grand = $from.node(depth - 2);
-  if (grand.type.name !== COMPONENT_NODE) return false;
   const entry = $from.node(depth);
-  if (!childNames(specs.get(grand.attrs.name as string)).includes(entry.attrs.name as string)) {
-    return false;
-  }
-
   const entryStart = $from.before(depth);
   const offset = $from.pos - entryStart;
   const afterParent = $from.after(depth - 1);

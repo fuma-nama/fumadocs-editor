@@ -172,12 +172,18 @@ export function LiveEditor({
       hidden={hidden}
       data-fde-settled={settled || undefined}
     >
+      {editor && editable && (
+        <MobileBar
+          editor={editor}
+          components={components}
+          specs={specs}
+          media={media}
+          math={syntax?.math}
+        />
+      )}
       <EditorContent editor={editor} />
       {editor && editable && <EditorBubble editor={editor} specs={specs} media={media} />}
       {editor && editable && <BlockMenu editor={editor} specs={specs} />}
-      {editor && editable && (
-        <MobileBar editor={editor} components={components} specs={specs} math={syntax?.math} />
-      )}
     </div>
   );
 }
