@@ -19,8 +19,8 @@ import {
 } from "@fumadocs-editor/sync";
 import { FileText, Moon, Sun } from "lucide-react";
 
-// static builds have no sync endpoint; never import from docs/ here — vite
-// would treat the mirrored file as a module and reload the app on every save
+// static builds have no sync endpoint; never import from docs/ here. Vite
+// would treat the mirrored file as a module and reload the app on every save.
 const fallbackDoc = `# fumadocs editor
 
 This is a static preview without the FS mirror (the sync server runs on the
@@ -63,9 +63,9 @@ const collabUser = {
   color: CARET_COLORS[Math.floor(Math.random() * CARET_COLORS.length)],
 };
 
-// toy auth (see vite.config.ts): the token rides the connection hello and the
-// upload header. Read fresh per attempt — ?token=… per tab, localStorage as
-// the store a reconnect would pick a rotated token from.
+// toy auth (see vite.config.ts): the token is sent on the connection hello
+// and the upload header. Read fresh per attempt: ?token=… per tab,
+// localStorage as the store a reconnect would pick a rotated token from.
 const authToken = () =>
   new URLSearchParams(location.search).get("token") ??
   localStorage.getItem("fde-token") ??
@@ -98,7 +98,7 @@ function Playground() {
   const [markdown, setMarkdown] = useState("");
   const [diskText, setDiskText] = useState("");
   // consumer wiring for the auth scope: the handshake's `writable` (data the
-  // sync layer merely exposes) drives our own `editable` prop
+  // sync layer exposes) drives our own `editable` prop
   const [writable, setWritable] = useState(true);
   const markdownRef = useRef("");
 

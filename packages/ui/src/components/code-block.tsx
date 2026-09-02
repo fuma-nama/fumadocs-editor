@@ -21,15 +21,12 @@ import { MermaidDiagram } from "./mermaid";
 import { useEditorPortal } from "../utils/portal";
 
 /**
- * Real-time syntax highlighting for fenced code blocks. `lowlight` (highlight.js)
- * decorates the ProseMirror document synchronously, so it works inside the
- * editor where Shiki's async model can't. The chrome mirrors the fumadocs-ui
- * `CodeBlock` figure: same `shiki`-flavoured card, border and title bar, so a
- * highlighted block reads the same in the editor as it will on the site.
+ * Syntax highlighting for fenced code. `lowlight` (highlight.js) decorates
+ * the PM document synchronously; Shiki's async model can't. Chrome matches
+ * fumadocs-ui `CodeBlock` (shiki-flavoured card, border, title bar).
  *
- * The instance starts with no grammars: the highlight.js chunk loads only
- * when a code block first renders, then registers into this same (mutable)
- * instance and re-decorates.
+ * Starts with no grammars: the highlight.js chunk loads on first code-block
+ * render, then registers into this instance and re-decorates.
  */
 const lowlight = createLowlight();
 

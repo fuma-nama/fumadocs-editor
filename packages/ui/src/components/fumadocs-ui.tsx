@@ -36,13 +36,11 @@ import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 /*
  * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
  * component's markup: same Tailwind utilities, same `fd-*` tokens, so the
- * editor is genuinely WYSIWYG. Mirroring is deliberate — the editor never
- * renders through fumadocs-ui itself: real components own state and
- * interactivity (tab switching, collapse, navigation) that conflict with
- * always-editable regions, and the editor stays free of the dependency.
- * Custom components integrate the same way: a lightweight editor-side
- * renderer, with the editable regions arriving as `children` in document
- * order.
+ * editor matches the site. The editor never renders through fumadocs-ui:
+ * those components own state and interactivity (tabs, collapse, navigation)
+ * that conflict with always-editable regions, and we stay free of the
+ * dependency. Custom components work the same way: a lightweight editor
+ * renderer, with editable regions as `children` in document order.
  */
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
@@ -216,7 +214,7 @@ function Files({ children }: ComponentRenderProps) {
 
 /**
  * File and Folder rows share one geometry; the icon reads as the drag grip
- * (cursor only — pressing any chrome drags the row via the node's native
+ * (cursor only: pressing any chrome drags the row via the node's native
  * draggability). `z-[1]` lifts it above the name region (`position:
  * relative`, later in DOM order), which would otherwise swallow every
  * pointer event aimed at it.
@@ -247,11 +245,10 @@ function Folder({ children }: ComponentRenderProps) {
 }
 
 function Accordion({ props, children }: ComponentRenderProps) {
-  // Editor renders every item open so its body stays editable; the chevron is a
-  // real collapse toggle (mirrors the component) rather than the whole header,
-  // so clicking the title still places the caret. Open state is a DOM attribute
-  // toggled imperatively: node-view renderers can't hold React hook state
-  // reliably, and "reopens on edit" is the right default for an editor anyway.
+  // Every item starts open so its body stays editable. The chevron is the
+  // collapse toggle (not the whole header), so clicking the title still
+  // places the caret. Open state is a DOM attribute toggled imperatively:
+  // node-view renderers can't hold React hook state reliably.
   const anchor = props.id;
   return (
     <div className="fde-accordion" data-open="">
@@ -358,8 +355,8 @@ function TypeCell({
 /**
  * The `type` object edited in place as the table it renders as: one row per
  * property, cells for the fields fumadocs' TypeTable reads. Unknown fields
- * on a property ride along untouched; a dynamic (non-literal) expression
- * keeps the summary card and stays source-editable via the ⋯ menu.
+ * stay on the property. A dynamic (non-literal) expression keeps the
+ * summary card and stays source-editable via the ⋯ menu.
  */
 function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
   const rows =
@@ -375,7 +372,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
         <div className="min-w-0">
           <p className="font-medium">TypeTable</p>
           <p className="truncate font-mono text-[12px] text-fd-muted-foreground">
-            dynamic type={"{…}"} — edit the expression via the ⋯ menu
+            dynamic type={"{…}"}; edit the expression via the ⋯ menu
           </p>
         </div>
       </div>
@@ -876,9 +873,9 @@ export const githubInfoSpec: UiComponentSpec = {
   insert: () => ({ type: "mdxComponent", attrs: { name: "GithubInfo", attributes: [] } }),
 };
 
-// Banner is deliberately absent: it is a site-layout component (mounted in
-// the app shell), not document content. In a doc it stays on the lossless
-// generic fallback.
+// Banner is absent: it is a site-layout component (mounted in the app
+// shell), not document content. In a doc it stays on the lossless generic
+// fallback.
 
 export const inlineTocSpec: UiComponentSpec = {
   name: "InlineTOC",

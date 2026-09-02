@@ -16,10 +16,10 @@ import { focusRing, itemCls, popupCls } from "./components/styles";
 import { cn } from "./utils/cn";
 
 /**
- * A quiet ⋯ handle at the active component's top-right corner: the resting
- * affordance while the caret merely sits inside a component (the bubble menu
- * appears only for selections). Click or Mod-. opens the panel; dragging the
- * handle moves the component.
+ * A ⋯ handle at the active component's top-right: the resting affordance
+ * while the caret sits inside a component (the bubble appears only for
+ * selections). Click or Mod-. opens the panel; dragging the handle moves
+ * the component.
  */
 export function BlockMenu({
   editor,

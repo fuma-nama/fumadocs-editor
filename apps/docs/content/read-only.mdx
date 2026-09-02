@@ -5,28 +5,25 @@ description: Showing documents without letting them change
 
 ## The `editable` prop
 
-`editable={false}` shows the document read-only: typing is off, and every
-piece of mutating chrome — slash menu, bubble and block menus, mobile bar,
-drag handles — is gone. Selection and copy still work, and the raw MDX tab
-becomes read-only too. The prop is live; flipping it doesn't remount the
-editor.
+`editable={false}` shows the document read-only: no typing, no mutating
+chrome (slash menu, bubble and block menus, mobile bar, drag handles).
+Selection and copy still work. The raw MDX tab is read-only too. The prop
+is live; flipping it does not remount.
 
-It's a plain TipTap passthrough with no opinion about _why_ a document is
-read-only — that's yours to decide: a viewer role, a published snapshot, a
-document checked out by someone else.
+Plain TipTap passthrough. It has no opinion about _why_: viewer role,
+published snapshot, checked out by someone else.
 
 ## Wiring it to auth
 
-The [auth layer](/auth) enforces scopes server-side and only _reports_ them
-to the client: the file's `read` reply carries `writable`, and `sync`
-hands it to you in `onOpen`. Connecting that data to the prop is
-deliberately consumer code —
+The [auth layer](/auth) enforces scopes server-side and reports them. The
+file's `read` reply carries `writable`; `sync` hands it to you in
+`onOpen`. Connecting that to the prop is your code:
 
 <include meta='title="scoped-editor.tsx"'>../examples/read-only.tsx</include>
 
 A read-only user who tampers with the client and types anyway changes
-nothing: the server refuses the writes, and under [collab](/collab) their Y
-updates are dropped while they keep receiving everyone else's. The `editable`
-wiring is honest UI, not the security boundary.
+nothing. The server refuses the writes. Under [collab](/collab), their Y
+updates are dropped; they still receive everyone else's. `editable` is UI,
+not the security boundary.
 
 `onOpen` fires the same way with `collab` on.

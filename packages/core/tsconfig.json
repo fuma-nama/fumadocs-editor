@@ -1,4 +1,7 @@
 {
   "extends": "@repo/typescript-config/base.json",
-  "include": ["src", "test", "tsdown.config.ts"]
+  "compilerOptions": {
+    "types": ["@types/node"]
+  },
+  "include": ["src", "test", "bench", "tsdown.config.ts"]
 }

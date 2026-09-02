@@ -135,7 +135,7 @@ function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): B
   }
 
   // the chip appears only when something is selected: a resting caret keeps
-  // the quieter ⋯ handle instead of a floating menu
+  // the ⋯ handle instead of a floating menu
   let active: BubbleState["active"] = null;
   let atom: BubbleState["atom"] = null;
   if (selection instanceof NodeSelection) {
@@ -191,9 +191,8 @@ function MarkButton({
 
 /**
  * URL editor for the link mark; portalled into the bubble's parent. With a
- * FileProvider the input autocompletes the workspace's pages — the
- * conventional way to link between documents — while staying free-form for
- * external URLs.
+ * FileProvider the input autocompletes workspace pages (how docs link to
+ * each other) while staying free-form for external URLs.
  */
 function LinkControl({
   editor,
@@ -432,15 +431,14 @@ export function EditorBubble({
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
-  // Where the panel portals matters three times over: the menu hides on
-  // editor blur unless focus lands inside the bubble's parent (the plugin
-  // checks `element.parentNode.contains(relatedTarget)`), the bubble itself
-  // is positioned with a transform (which would skew any popup measured
-  // inside it), and the container must sit inside [data-fde-root] for the
-  // theme scope and themed ::selection. The plugin appends the bubble to
-  // `view.dom.parentElement`, so that exact element satisfies all three —
-  // resolved directly from the editor, never derived through refs (a
-  // ref-timing miss silently fell back to a body portal).
+  // Portal target has three constraints: the menu hides on editor blur
+  // unless focus lands inside the bubble's parent (plugin checks
+  // `element.parentNode.contains(relatedTarget)`), the bubble is
+  // positioned with a transform (would skew a popup measured inside it),
+  // and the container must sit in [data-fde-root] for theme and
+  // ::selection. The plugin appends the bubble to `view.dom.parentElement`,
+  // which satisfies all three. Resolved from the editor, never through
+  // refs (a ref-timing miss fell back to a body portal).
   // an object ref, not a callback: BubbleMenu assigns its ref during render,
   // where a state-setter callback would be a cross-component setState. The
   // element is created eagerly and never replaced, so mount effects see it.

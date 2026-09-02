@@ -140,7 +140,7 @@ test("applyExternalMarkdown merges a disk change without touching the caret", as
   expect(editor.state.doc.textContent).toContain("Third paragraph, from disk.");
   expect(editor.state.selection.from).toBe(before);
 
-  // the merged doc serializes with the local edit woven into the disk text
+  // merged doc serializes with the local edit in the disk text
   const out = editorRef.current!.getMarkdown();
   expect(out).toContain("FirstLOCAL  paragraph.");
   expect(out).toContain("Third paragraph, from disk.");
@@ -314,7 +314,7 @@ test("arrow keys enter math source on every engine (hidden text traversal differ
   const parentAt = () => editor.state.selection.$from.parent.type.name;
 
   // inline: from either side, one arrow enters edit mode, caret at the
-  // source end (the click-to-edit position — a caret at source offset 0
+  // source end (the click-to-edit position: a caret at source offset 0
   // cannot be distinguished from "before the node" in the DOM)
   act(() => editor.commands.setTextSelection(inline.pos));
   arrow("ArrowRight");

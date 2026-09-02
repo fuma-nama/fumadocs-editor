@@ -9,10 +9,10 @@ import {
 } from "@fumadocs-editor/core";
 
 /*
- * The component keyboard grammar. Everything here derives from `ComponentSpec`
- * (`listLike`, `childComponent`, regions): no behaviour is keyed on literal
- * component names, and structural moves only place a component into parents
- * whose spec accepts it, so an invalid document is unproducible.
+ * Component keyboard grammar. Derived from `ComponentSpec` (`listLike`,
+ * `childComponent`, regions): no behaviour keyed on literal names.
+ * Structural moves only place a component into parents whose spec accepts
+ * it, so invalid MDX is unproducible.
  */
 
 /** read-only, so a `Map<string, UiComponentSpec>` passes without casts */

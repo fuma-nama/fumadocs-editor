@@ -22,7 +22,7 @@ export interface MergeResult {
    * wins until the user resolves.
    */
   conflicts: number[];
-  /** the parsed disk text — its snapshot is the new base for future saves */
+  /** parsed disk text; its snapshot is the new base for later saves */
   remote: ParsedDoc;
 }
 
@@ -77,9 +77,9 @@ export function mergeRemote(options: {
   };
 
   // the local child an insertion should follow: the nearest base block at or
-  // before `b` still present locally — surviving unchanged, or edited in
-  // place (anchoring after the edited version keeps "append after a block
-  // someone is typing in" appending, not slipping in front of it)
+  // before `b` still present locally (surviving unchanged, or edited in
+  // place). Anchoring after the edited version keeps "append after a block
+  // someone is typing in" appending, not slipping in front of it.
   const anchorLocal = (b: number): number => {
     for (; b >= 0; b--) {
       if (baseToLocal[b] >= 0) return baseToLocal[b];

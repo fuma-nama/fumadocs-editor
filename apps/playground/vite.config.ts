@@ -13,11 +13,9 @@ export default defineConfig({
     tailwindcss(),
     editorSync({
       root: "docs",
-      // toy auth layer for trying the scope enforcement: open the playground
-      // with ?token=editor / ?token=viewer / ?token=anything-else (denied).
-      // No token keeps the plain full-access dev flow, which is also what
-      // asset <img> requests (no header) resolve to. A real consumer verifies
-      // a session or JWT here instead.
+      // playground auth: ?token=editor / ?token=viewer / anything else
+      // (denied). No token = full-access, including asset <img> (no header).
+      // Real consumers verify a session or JWT here.
       authenticate: async ({ payload }) => {
         if (payload === undefined) return { write: true };
         if (payload === "editor")
@@ -41,7 +39,7 @@ export default defineConfig({
         // react in its own chunk: a fumadocs host already ships it, so the
         // size budget (scripts/check-size.mjs) tracks the editor's own
         // eager cost separately
-        advancedChunks: {
+        codeSplitting: {
           groups: [{ name: "react", test: /node_modules\/.+\/(react|react-dom|scheduler)@/ }],
         },
       },

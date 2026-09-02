@@ -2,8 +2,7 @@ import type { JSONContent } from "@tiptap/core";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 
 /**
- * A non-region attribute, edited through the component's props panel rather
- * than as an inline editable region.
+ * A non-region attribute, edited in the props panel.
  */
 export interface PropField {
   name: string;
@@ -12,17 +11,17 @@ export interface PropField {
   /** for `type: 'enum'` */
   options?: string[];
   default?: string | number | boolean;
-  /** placeholder text for `string` / `number` inputs in the attributes popover */
+  /** `string` / `number` placeholder in the attributes popover */
   placeholder?: string;
   /**
-   * Edited in-place by the component's own renderer (e.g. the Callout type,
-   * picked from its icon) rather than in the floating props panel. Keeps the
-   * attribute documented here while hiding it from the generic panel.
+   * Edited by the component's renderer (e.g. Callout type from its icon),
+   * not the floating props panel. Still documented here, hidden from the
+   * generic panel.
    */
   inline?: boolean;
 }
 
-/** A JSX string attribute surfaced as an inline (plain-text) editable region. */
+/** JSX string attribute as an inline (plain-text) region. */
 export interface AttributeRegion {
   /** the JSX attribute holding the text, e.g. Callout's `title` */
   attribute: string;
@@ -33,12 +32,10 @@ export interface AttributeRegion {
 }
 
 /**
- * Structural description of an MDX component: how its attributes and children
- * map to editable regions and editable props. This is the *content-layer*
- * concern: no rendering. The UI layer extends this with a node renderer.
+ * How an MDX component's attributes and children map to regions and props.
+ * Content layer only: no rendering. UI extends this with a node renderer.
  *
- * A spec with no regions at all is a leaf component (e.g. GithubInfo): it has
- * no editable content, only props.
+ * No regions = leaf (e.g. GithubInfo): props only.
  */
 export interface ComponentSpec {
   /** JSX tag name, e.g. "Callout" */
@@ -48,76 +45,69 @@ export interface ComponentSpec {
   /** string attributes shown as inline editable regions (e.g. Callout title) */
   attributeRegions?: AttributeRegion[];
   /**
-   * The element's *text content* edited as an inline region — for elements
-   * whose payload is their text child, like fumadocs `<include>./path.mdx</include>`.
-   * Mutually exclusive with `childrenRegion` / `childComponent`.
+   * Element *text content* as an inline region, e.g. fumadocs
+   * `<include>./path.mdx</include>`. Mutually exclusive with
+   * `childrenRegion` / `childComponent`.
    */
   contentRegion?: { region: string; placeholder?: string; label?: string };
   /**
-   * Element children become a single block editable region. `fromAttribute`
-   * folds a string attribute that renders into the same visual slot as the
-   * children (e.g. fumadocs `Card`'s `description`, shown right above the body)
-   * into this region so it's edited as body text instead of a separate field;
-   * on save the region serializes back as children.
+   * Children as one block region. `fromAttribute` folds a string attribute
+   * that renders in the same slot (e.g. Card `description`) into this
+   * region. On save the region serializes as children.
    */
   childrenRegion?: { region: string; placeholder?: string; label?: string; fromAttribute?: string };
   /**
-   * Repeated child elements become nested component instances (e.g. Cards →
-   * Card). Pass an array to accept more than one child tag: e.g. Files accepts
-   * both `File` and `Folder`. Mutually exclusive with `childrenRegion`.
+   * Repeated child elements as nested instances (Cards → Card). Array to
+   * accept more than one tag (Files: `File` and `Folder`). Mutually
+   * exclusive with `childrenRegion`.
    */
   childComponent?: string | string[];
   /**
-   * Treat the children as an editable list: pressing Enter in a child's name
-   * inserts a fresh sibling and Backspace in an empty child removes it (a file
-   * tree). Off by default: grid/step containers (Cards, Steps, Accordions)
-   * keep plain editing, where Enter moves between a component's own regions.
+   * Children as an editable list: Enter in a child's name inserts a sibling,
+   * Backspace in an empty child removes it. Off by default (Cards, Steps,
+   * Accordions keep region-to-region Enter).
    */
   listLike?: boolean;
   /**
-   * A parent attribute that is derived data: a string-array expression whose
-   * entries are edited as an inline region injected into each child, and
-   * rebuilt on save from those regions (fumadocs `Tabs`' `items` holds the
-   * labels of its `Tab` children). Requires `childComponent`.
+   * Parent attribute derived from children: string-array expression edited
+   * as an inline region on each child, rebuilt on save (Tabs `items`).
+   * Requires `childComponent`.
    */
   itemsAttribute?: { attribute: string; childRegion: string; placeholder?: string };
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
-  /** default document fragment inserted by the slash menu */
+  /** slash-menu default fragment */
   insert?: () => JSONContent;
 }
 
 /**
- * Parse-level feature switches. Everything the syntax does not understand
- * still round-trips byte-for-byte through the verbatim safety net — disabling
- * a feature only means its construct stops being structurally editable.
+ * Parse-level feature switches. Unknown constructs still round-trip
+ * byte-for-byte. Disabling a feature only stops it being structurally
+ * editable.
  */
 export interface SyntaxOptions {
   /**
-   * Parse fumadocs heading suffixes — `## Title [#custom-id]`, `[!toc]`,
-   * `[toc]` — into heading attributes instead of literal text. Default true.
+   * Parse fumadocs heading suffixes (`## Title [#custom-id]`, `[!toc]`,
+   * `[toc]`) as heading attributes, not literal text. Default true.
    */
   headingSuffixes?: boolean;
   /**
-   * Parse the remark-directive dialect, making `:::type[Title]` admonitions
-   * editable components (the `syntax/directives` capsule). Off by default —
-   * it is a dialect: enabling it changes how any `:`-directive-shaped text
-   * parses (directives the editor doesn't model ride the verbatim fallback).
-   * Defaults to true when the admonition spec is registered.
+   * remark-directive: `:::type[Title]` as editable components
+   * (`syntax/directives`). Off by default; changes how `:`-directive-shaped
+   * text parses. Unknown directives stay verbatim. Defaults true when the
+   * admonition spec is registered.
    */
   directives?: boolean;
   /**
-   * Parse the remark-math dialect, making `$x$` / `$$…$$` TeX math editable
-   * nodes (the `syntax/math` capsule). Off by default — it is a dialect:
-   * enabling it changes how any `$`-delimited text parses.
+   * remark-math: `$x$` / `$$…$$` as editable nodes (`syntax/math`). Off by
+   * default; changes how `$`-delimited text parses.
    */
   math?: boolean;
 }
 
 /**
- * Everything the editor understands: the registered MDX components plus the
- * parse-level feature switches. One `Syntax` drives parsing, serialization
- * and (with renderers layered on top) the UI.
+ * Registered MDX components plus parse-level switches. Drives parse,
+ * serialize, and (with renderers) the UI.
  */
 export interface Syntax {
   components: Map<string, ComponentSpec>;
@@ -125,9 +115,8 @@ export interface Syntax {
 }
 
 /**
- * Build the {@link Syntax} a document is parsed and serialized with.
- * Registering the admonition spec defaults `directives` on — registering a
- * component is what makes its syntax meaningful.
+ * Build the {@link Syntax} used to parse and serialize. Registering the
+ * admonition spec defaults `directives` on.
  */
 export function createSyntax(
   components: ComponentSpec[] = [],
@@ -141,11 +130,9 @@ export function createSyntax(
 }
 
 /**
- * The pure-data view of a spec: everything parse/serialize consult, nothing
- * more. This is what a collab client sends the sync server so it can parse
- * and serialize the document authoritatively — editor-side fields (`insert`,
- * a UI layer's renderers) never cross the wire. Keep the field list in step
- * with {@link ComponentSpec}.
+ * Data half of a spec: what parse/serialize consult. Sent to the collab
+ * server. Editor fields (`insert`, UI renderers) stay off the wire. Keep
+ * in step with {@link ComponentSpec}.
  */
 export function componentSpecData(spec: ComponentSpec): ComponentSpec {
   const {

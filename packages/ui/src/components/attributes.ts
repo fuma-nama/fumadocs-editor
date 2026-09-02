@@ -4,7 +4,7 @@ import { COMPONENT_NODE, type MdxAttribute } from "@fumadocs-editor/core";
 
 /**
  * The component that is node-selected or contains the caret. Panels render
- * from this snapshot — `attributes` must be part of it, or `useEditorState`
+ * from this snapshot. `attributes` must be part of it, or `useEditorState`
  * won't re-render on attribute edits and React resets the controlled
  * inputs' caret on every keystroke.
  */
@@ -38,7 +38,7 @@ export function activeComponent(
 /**
  * Write a component's attributes without losing a NodeSelection on it:
  * `setNodeMarkup` fully replaces a CHILDLESS node (there is no gap to
- * preserve), which degrades the NodeSelection to a text selection — the
+ * preserve), which degrades the NodeSelection to a text selection. The
  * panel anchored to it would unmount after the first keystroke.
  */
 export function setComponentAttributes(

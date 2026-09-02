@@ -1,4 +1,9 @@
 @import "tailwindcss";
-@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/solar.css";
 @import "fumadocs-ui/css/preset.css";
 @import "fumapress/css/preset.css";
+
+@theme {
+  --default-font-family: "Geist", sans-serif;
+  --font-mono: "Jetbrains Mono", monospace;
+}

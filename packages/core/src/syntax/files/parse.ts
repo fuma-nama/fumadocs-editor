@@ -9,7 +9,7 @@ interface Entry {
 
 /**
  * A line's leading `tree`-drawing units, one nesting level each. Strictly the
- * canonical 4-character units `tree` prints (and fumadocs documents) — a
+ * canonical 4-character units `tree` prints (and fumadocs documents). A
  * fence in any looser format stays a plain code block.
  */
 const UNITS = /^((?:├── |└── |│   | {4})*)(.*)$/;
@@ -20,7 +20,7 @@ const UNITS = /^((?:├── |└── |│   | {4})*)(.*)$/;
  * syntax. Null when the listing can't be edited structurally (kept as a code
  * block in that case): a non-canonical prefix, tree-drawing characters
  * inside a name (fumadocs' parser would mangle them), no root, more than one
- * root (fumadocs silently keeps only the last — bailing loses nothing), or
+ * root (fumadocs keeps only the last; bailing loses nothing), or
  * an entry with no parent to attach to.
  */
 export function filesFenceAsJsx(value: string): MdxJsxFlowElement | null {

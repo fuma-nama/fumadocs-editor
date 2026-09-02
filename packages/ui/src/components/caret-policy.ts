@@ -104,7 +104,7 @@ export const caretPolicy = Extension.create({
             return true;
           },
           // handleClickOn depends on ProseMirror resolving the click to a
-          // position inside the component — on fully non-editable chrome the
+          // position inside the component. On fully non-editable chrome the
           // hit test often lands in the gap outside it and the click dies.
           // Fall back to the DOM: the node-view wrapper carries the
           // component, and a leaf still deserves its menu.

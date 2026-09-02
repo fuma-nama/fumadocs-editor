@@ -25,8 +25,8 @@ export interface CollabSessionOptions {
   path: string;
   /**
    * The syntax the document is edited with. Only the data fields of each
-   * spec cross the wire ({@link componentSpecData}) — the server parses and
-   * serializes with them, renderers stay client-side.
+   * spec cross the wire ({@link componentSpecData}). The server parses and
+   * serializes with them; renderers stay client-side.
    */
   components: ComponentSpec[];
   /** dialect switches beyond the component specs (math, directives…) */
@@ -49,8 +49,8 @@ export interface CollabSession {
   whenSynced: Promise<void>;
   /**
    * Scope-derived data from the doc-open handshake, set before `whenSynced`
-   * resolves. Data only — the session never acts on it; consumers wire it
-   * into their own props (e.g. `writable` into the editor's `editable`).
+   * resolves. The session never acts on it; consumers wire it into their
+   * own props (e.g. `writable` into the editor's `editable`).
    */
   access?: { user?: SyncUser; writable: boolean };
   destroy(): void;

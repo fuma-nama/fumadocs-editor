@@ -14,7 +14,7 @@ export interface EditorSyncOptions extends Omit<SyncServerOptions, "root"> {
  * under `<root>/assets`, referenced as `./assets/…`), and asset serving at
  * `ASSET_ENDPOINT/<relative>` so the editor can display them.
  * `authenticate` guards every surface (see {@link SyncServerOptions.authenticate});
- * absent, everything is allowed — the same trust as Vite's own dev socket.
+ * absent, everything is allowed (same trust as Vite's own dev socket).
  */
 export function editorSync(options: EditorSyncOptions = {}): Plugin {
   return {

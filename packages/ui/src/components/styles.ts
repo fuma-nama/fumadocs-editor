@@ -18,7 +18,7 @@ export const focusRing =
  *
  * Padding scale: menu/list popups keep the p-1 (items px-2); form popovers
  * override to p-2, the picker to p-0 and pads each section itself.
- * Overriding a utility from these strings only works through `cn` — a
+ * Overriding a utility from these strings only works through `cn`. A
  * template literal resolves conflicts by stylesheet order, not call order. */
 export const popupCls =
   "z-50 min-w-40 rounded-[10px] border border-fd-border bg-fd-popover p-1 text-[13px] text-fd-popover-foreground shadow-lg [scrollbar-color:var(--color-fd-border)_transparent] [scrollbar-width:thin]";

@@ -5,14 +5,14 @@ description: Mirror documents to the file system with autosave and live merge
 
 ## Overview
 
-`@fumadocs-editor/sync` keeps the editor and a directory of `.md`/`.mdx` files
-in sync, in both directions:
+`@fumadocs-editor/sync` keeps the editor and a directory of `.md`/`.mdx`
+files in sync both ways:
 
-- the editor autosaves with compare-and-swap writes (no lost updates), and
-- changes from outside — a `git pull`, an IDE save — merge into the live
-  document as you type, without touching your caret.
+- the editor autosaves with compare-and-swap writes
+- disk changes (`git pull`, IDE save) merge into the live document without
+  moving the caret
 
-The files stay the source of truth; the editor is just another writer.
+The files are the source of truth. The editor is another writer.
 
 ```bash
 npm install @fumadocs-editor/sync
@@ -20,27 +20,26 @@ npm install @fumadocs-editor/sync
 
 ## The dev server
 
-For local editing, mount the sync server on Vite:
+Mount the sync server on Vite:
 
 <include meta='title="vite.config.ts"'>../examples/sync-vite.ts</include>
 
-`root` is the mirrored directory, resolved against the Vite project root. The
-plugin serves three endpoints (exported as constants from
-`@fumadocs-editor/sync`):
+`root` is the mirrored directory, resolved against the Vite project root.
+Three endpoints (constants from `@fumadocs-editor/sync`):
 
 | Endpoint         | Constant          | Purpose                                              |
 | ---------------- | ----------------- | ---------------------------------------------------- |
-| `/__fde_sync`    | `SYNC_ENDPOINT`   | the sync websocket                                   |
+| `/__fde_sync`    | `SYNC_ENDPOINT`   | sync websocket                                       |
 | `/__fde_upload`  | `UPLOAD_ENDPOINT` | media uploads (`POST`, stored under `<root>/assets`) |
-| `/__fde_asset/*` | `ASSET_ENDPOINT`  | serves stored assets for display                     |
+| `/__fde_asset/*` | `ASSET_ENDPOINT`  | stored assets                                        |
 
-It also accepts every [`createSyncServer` option](#standalone-server) — most
-importantly [`authenticate`](/auth).
+Also accepts every [`createSyncServer` option](#standalone-server), including
+[`authenticate`](/auth).
 
 <Callout type="warn" title="Keep Vite away from the mirrored files">
 If the mirrored directory sits inside your Vite root, exclude it from the
-watcher — otherwise Tailwind's source scan invalidates the CSS and reloads
-the page on every save:
+watcher. Tailwind's source scan will otherwise invalidate CSS and reload the
+page on every save:
 
 ```ts title="vite.config.ts"
 export default defineConfig({
@@ -48,64 +47,59 @@ export default defineConfig({
 });
 ```
 
-Never import mirrored files as modules (`?raw` included) for the same reason.
+Do not import mirrored files as modules (`?raw` included).
 
 </Callout>
 
 ### Standalone server
 
-Outside Vite, `createSyncServer` gives you the same server as plain handlers
-to mount on any Node HTTP server:
+`createSyncServer` is the same server as plain handlers on any Node HTTP
+server:
 
 <include meta='title="server.ts"'>../examples/sync-server.ts</include>
 
 Options: `authenticate` ([auth](/auth)), `evictAfterMs` (how long an open
-collab document outlives its last client, default 60 s), and `upload` limits
-(default 10 MiB, `image/*` — oversized or wrong-typed bodies are refused
-before anything is stored).
+collab doc outlives its last client, default 60 s), `upload` limits
+(default 10 MiB, `image/*`; oversized or wrong-type bodies are refused
+before store).
 
 ## The editor side
 
-Give the editor a path and it owns the rest — the initial read, autosave
-(800 ms after the last change, 5 s max), external edits merged in as they
-land, conflicts, flush on Cmd-S and on leaving the page:
+Pass a path. The editor does the rest: initial read, autosave (800 ms after
+the last change, 5 s max), live merge, conflicts, flush on Cmd-S and page
+leave.
 
 <include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
 
-Without a `transport`, editors share one websocket to the dev server on the
-current host. Pass your own for [auth](/auth) or a custom backend, and
-`onOpen` to receive the file's [scope data](/auth#exposed-data) once it has
-been read.
+With no `transport`, editors share one websocket to the current host's
+dev server. Pass your own for [auth](/auth) or a custom backend, and
+`onOpen` for the file's [scope data](/auth#exposed-data) after read.
 
 ### Status
 
-The dot beside the mode tabs shows the session status; `onStatus` mirrors it
-to your own UI:
+The dot beside the mode tabs is the session status. `onStatus` mirrors it.
 
 | Status     | Meaning                                                |
 | ---------- | ------------------------------------------------------ |
-| `synced`   | the disk holds what you see                            |
-| `dirty`    | local edits waiting for the autosave                   |
-| `saving`   | a write is in flight                                   |
-| `conflict` | the same block changed locally and on disk             |
+| `synced`   | disk matches what you see                              |
+| `dirty`    | local edits waiting for autosave                       |
+| `saving`   | write in flight                                        |
+| `conflict` | same block changed locally and on disk                 |
 | `offline`  | connection lost; edits keep, saves resume on reconnect |
-| `denied`   | the server rejected the credentials ([auth](/auth))    |
+| `denied`   | server rejected credentials ([auth](/auth))            |
 
 ### The conflict model
 
-Merging is block-level and three-way: the last-synced document is the base,
-and a block counts as "the same" exactly when the serializer would emit it
-byte-identically. Changes that only happened on disk apply to the live
-document as one non-undoable transaction — your caret stays put. A block
-edited on **both** sides becomes a conflict: the editor keeps the local
-version, pauses writes, and shows a quiet chip with two resolutions — keep
-mine (overwrite the disk) or take disk (drop local edits).
+Block-level three-way merge. Base is the last-synced document. A block is
+"the same" when the serializer would emit it byte-identically. Disk-only
+changes apply as one non-undoable transaction; the caret stays put. A block
+edited on **both** sides is a conflict: local version kept, writes paused,
+chip with keep mine (overwrite disk) or take disk (drop local).
 
 ## Custom backends
 
-The dev server is one implementation of the `SyncTransport` interface. A
-different backend — a database, a CMS, a browser file-system handle — only
-needs four calls:
+The dev server implements `SyncTransport`. A database, CMS, or browser
+file-system handle needs four calls:
 
 ```ts
 interface SyncTransport {
@@ -117,21 +111,19 @@ interface SyncTransport {
 }
 ```
 
-Documents are addressed by root-relative posix paths. `version` strings are
-opaque compare-and-swap tokens: `write` must fail with the current state when
-`baseVersion` no longer matches, and that is all the session needs to merge
-and retry. `onStatus` is optional — omit it for a backend that cannot go
-offline. Hand the transport to `sync` and everything above applies unchanged.
+Documents are root-relative posix paths. `version` is an opaque CAS token:
+`write` must fail with the current state when `baseVersion` no longer
+matches. That is all the session needs to merge and retry. `onStatus` is
+optional (omit if the backend cannot go offline). Pass the transport to
+`sync` and the rest applies unchanged.
 
 ### Your own session
 
-`sync` is built on `createFileSession`, which is public. Reach for it when
-the editor isn't the only party — a custom status UI, a non-React shell, a
-session shared by several views:
+`sync` is built on public `createFileSession`. Use it for a custom status
+UI, a non-React shell, or a session shared by several views:
 
 <include meta='title="custom-session.tsx"'>../examples/sync-session.tsx</include>
 
-`document` is anything with the ref's four methods — `getMarkdown`,
-`applyExternalMarkdown`, `setMarkdown`, `markSaved` — so the session never
-depends on React. Call `changed()` from `onChange` and `flush()` whenever a
-save should happen now.
+`document` is anything with `getMarkdown`, `applyExternalMarkdown`,
+`setMarkdown`, `markSaved`. The session does not depend on React. Call
+`changed()` from `onChange` and `flush()` when a save should happen now.

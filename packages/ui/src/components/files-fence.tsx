@@ -4,10 +4,9 @@ import { fileSpec, filesSpec, folderSpec } from "./fumadocs-ui";
 import type { UiComponentSpec } from "./spec";
 
 /*
- * UI slice of the ```files fence syntax (core/src/syntax/files): the same
- * tree chrome as the JSX Files components — identical renderers, region
- * names and CSS — under the fence spec names, so provenance survives while
- * the editing experience is one and the same.
+ * UI slice of the ```files fence syntax (core/src/syntax/files): same
+ * tree chrome as the JSX Files components (renderers, region names, CSS)
+ * under the fence spec names, so provenance survives and editing matches.
  */
 
 const renderers = [filesSpec, folderSpec, fileSpec];

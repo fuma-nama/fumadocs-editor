@@ -1,51 +1,49 @@
 ---
 title: Known Limits
-description: Engine differences, platform caveats, and current boundaries
+description: Engine differences, platform caveats, current boundaries
 ---
 
 ## General
 
-- **React 19 only.** The editor is a client component; server-rendered apps
-  mount it inside a `'use client'` boundary. For a server-rendered first
-  paint, pass your site's rendered MDX as `staticFallback` — the editor
-  swaps in on hydration without a parse on the critical path.
-- **Word pastes**: pasted content is coerced through the schema and cleans up
-  well (marks, tables, lists survive), with one upstream exception —
-  Word's numbered lists arrive as literal `1. Item` paragraphs. That is
-  ProseMirror's clipboard parser, not a bug in your setup.
-- **Deferred syntaxes**: `<CodeBlockTabs>`, primitive `<Tabs>`, and footnotes
-  are verbatim-only for now ([details](/syntax#deferred-syntaxes)).
+- **React 19 only.** Client component; SSR apps mount it inside
+  `'use client'`. For a server-rendered first paint, pass your site's
+  rendered MDX as `staticFallback`. The editor swaps in on hydration
+  without a parse on the critical path.
+- **Word pastes**: coerced through the schema (marks, tables, lists
+  survive). One upstream exception: Word numbered lists arrive as literal
+  `1. Item` paragraphs. That is ProseMirror's clipboard parser.
+- **Deferred syntaxes**: `<CodeBlockTabs>`, primitive `<Tabs>`, and
+  footnotes are verbatim-only for now ([details](/syntax#deferred-syntaxes)).
 
 ## Engine differences
 
-The editor is exercised on Chromium, WebKit, and Firefox (desktop and touch
-contexts). Behavior is aligned; what remains:
+Exercised on Chromium, WebKit, and Firefox (desktop and touch). Aligned,
+except:
 
-- **WebKit** takes one extra arrow-key stop when leaving inline math — a
-  ProseMirror boundary artifact, cosmetic only.
-- Clicks on dead chrome (tab-strip padding, the gap in a code-block header)
-  are no-ops on every engine; clicks on real component chrome place the
-  caret in the nearest region.
+- **WebKit** takes one extra arrow-key stop when leaving inline math
+  (ProseMirror boundary, cosmetic).
+- Clicks on dead chrome (tab-strip padding, gap in a code-block header)
+  are no-ops. Clicks on real component chrome place the caret in the
+  nearest region.
 
 ## iOS
 
-Touch behavior is verified against real WebKit with touch events: the mobile
-bar appears on coarse pointers, rides the bottom, and every target meets the
-44 pt minimum; autocorrect, autocapitalize, and spellcheck are suppressed on
-the editing surface.
+Touch is verified against real WebKit with touch events: the mobile bar
+appears on coarse pointers, sticks to the bottom, 44 pt minimum targets.
+Autocorrect, autocapitalize, and spellcheck are suppressed on the editing
+surface.
 
-Not yet verified on physical hardware, and worth checking in your own app:
+Not yet verified on physical hardware:
 
-- the bottom bar riding the on-screen keyboard (`visualViewport` inset),
-- autocorrect and dictation, which insert text through
-  `insertReplacementText` rather than key events,
-- true iOS Safari rendering.
+- the bottom bar riding the on-screen keyboard (`visualViewport` inset)
+- autocorrect and dictation (`insertReplacementText`, not key events)
+- true iOS Safari rendering
 
 ## Collaboration
 
 - A hard kill of the sync server can lose edits still inside its save
-  debounce — under a second. Orderly shutdown flushes.
-- Edits typed **while the server was down** are discarded when it comes back
-  (the [epoch reset](/collab#restarts-and-the-epoch-model)); edits made while
-  merely disconnected converge on reconnect.
-- The raw MDX tab is disabled during collaborative sessions.
+  debounce (under a second). Orderly shutdown flushes.
+- Edits typed **while the server was down** are discarded when it comes
+  back ([epoch reset](/collab#restarts-and-the-epoch-model)). Edits made
+  while merely disconnected converge on reconnect.
+- The raw MDX tab is disabled during collab.

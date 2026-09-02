@@ -16,10 +16,10 @@ function directiveLabel(node: ContainerDirective) {
 /**
  * A container directive the admonition dialect can edit structurally: a name
  * fumadocs knows, a plain-text label (the title region is plain text by
- * construction), no attribute colliding with the `type`/`title` storage slots
- * — and, recursively, the same for every nested container directive: a bailed
- * inner directive would ride verbatim, invisible to the outer fence sizing,
- * and its `:::` would close the re-emitted outer fence early.
+ * construction), no attribute colliding with the `type`/`title` storage slots.
+ * Same check recursively for every nested container directive: a bailed inner
+ * directive would stay verbatim, invisible to outer fence sizing, and its
+ * `:::` would close the re-emitted outer fence early.
  */
 function admonitionConvertible(node: ContainerDirective): boolean {
   if (!(node.name in ADMONITION_TYPES)) return false;
@@ -42,10 +42,10 @@ function nestedDirectivesConvertible(nodes: { type: string; children?: unknown[]
 }
 
 /**
- * Reshape `:::type[Title]` as a JSX-attribute view of itself — the directive
- * name as `type`, the label as `title`, directive `{…}` attributes riding
- * along — so the generic component conversion builds the regions. Null when
- * the directive can't be edited structurally (kept verbatim in that case).
+ * Reshape `:::type[Title]` as a JSX-attribute view of itself: directive name
+ * as `type`, label as `title`, directive `{…}` attributes kept. The generic
+ * component conversion then builds the regions. Null when the directive
+ * can't be edited structurally (kept verbatim).
  */
 export function admonitionAsJsx(node: ContainerDirective): MdxJsxFlowElement | null {
   if (!admonitionConvertible(node)) return null;

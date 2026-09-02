@@ -2,9 +2,9 @@ import type { JSONContent } from "@tiptap/core";
 import type { PhrasingContent } from "mdast";
 
 /*
- * Fumadocs heading suffixes — `## Title [#custom-id]`, `[!toc]`, `[toc]` —
+ * Fumadocs heading suffixes (`## Title [#custom-id]`, `[!toc]`, `[toc]`),
  * gated by `SyntaxOptions.headingSuffixes` (default on). Both halves live
- * here: the file is dependency-free, so the parse and serialize chunks can
+ * here: the file is dependency-free, so parse and serialize chunks can
  * share it without folding into each other.
  */
 

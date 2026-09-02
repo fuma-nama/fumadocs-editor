@@ -6,7 +6,7 @@ import { FENCE_FILES, FENCE_FOLDER, FILES_FENCE_LANG } from ".";
  * Serialized straight from the ProseMirror JSON (not through the generic
  * component conversion, which would recurse each row into its own code
  * node): a fence component can only ever re-emit ```files syntax. Called for
- * stray rows too — a folder/file dragged out of its tree emits a one-entry
+ * stray rows too: a folder/file dragged out of its tree emits a one-entry
  * fence rather than unparseable `<```file>` JSX.
  */
 

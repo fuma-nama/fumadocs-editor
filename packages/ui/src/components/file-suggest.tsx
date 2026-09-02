@@ -37,7 +37,7 @@ function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): Ac
  * In-place autocomplete for file-path regions (the include path): the region
  * itself is the input. While the caret is inside one, the host's FileProvider
  * suggests matching files below it; Enter or a click replaces the region
- * text. Free-form typing is untouched — the popup only appears on matches.
+ * text. Free-form typing is untouched; the popup only appears on matches.
  */
 export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProvider): Extension {
   return Extension.create({
@@ -160,7 +160,7 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
 /**
  * Obsidian-style page links: typing `[[` in text opens the same suggestion
  * popup over the FileProvider's pages; picking one inserts a link whose text
- * is the page name — no select-then-toggle needed.
+ * is the page name. No select-then-toggle needed.
  */
 export function linkSuggest(files: FileProvider): Extension {
   let paths: string[] | null = null;

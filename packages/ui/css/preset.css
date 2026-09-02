@@ -1,16 +1,15 @@
 /*
  * @fumadocs-editor/ui: Tailwind v4 preset.
  *
- * Registers the fumadocs `--color-fd-*` design tokens (so the `fd-*` utilities
- * used across the editor components are generated) and styles the ProseMirror
- * content layer, whose DOM is produced by TipTap and therefore can't carry
- * utility classes. Import it after `@import 'tailwindcss'`:
+ * Registers fumadocs `--color-fd-*` tokens (so `fd-*` utilities generate) and
+ * styles the ProseMirror content layer (TipTap DOM, no utility classes).
+ * Import after `@import 'tailwindcss'`:
  *
  *   @import 'tailwindcss';
  *   @import '@fumadocs-editor/ui/css/preset.css';
  *
- * The default values reproduce the fumadocs `neutral` theme; when the editor is
- * mounted inside a real fumadocs site its own theme overrides them.
+ * Defaults are the fumadocs `neutral` theme; a real fumadocs site overrides
+ * them with its own.
  */
 
 /* the editor chrome is styled with utility classes in the shipped JS; scan it
@@ -46,10 +45,9 @@
   --color-fd-idea: oklch(70.5% 0.209 60.849);
 }
 
-/* Explicit light scope. `@theme` already sets these at `:root`, but a nested
- * `.light` (from the theme provider or `<MdxEditor theme="light">`) must be able
- * to override an ancestor `.dark`: or the OS override below, so it re-declares
- * the light values authoritatively. */
+/* Nested `.light` (theme provider or `<MdxEditor theme="light">`) must
+ * override an ancestor `.dark` or the OS rule below; `@theme` only sets
+ * `:root`. */
 .light {
   color-scheme: light;
   --color-fd-background: hsl(0 0% 96%);
@@ -70,11 +68,10 @@
   --color-fd-ring: hsl(0 0% 63.9%);
 }
 
-/* Dark theme: via a `.dark` class (fumadocs / next-themes) … */
+/* Dark theme: via a `.dark` class (fumadocs / next-themes). */
 .dark {
-  /* form-control internals (input selection, caret, native menus) follow the
-   * UA colour scheme, not our tokens: without this, Chrome paints light-mode
-   * selection inside inputs on the dark theme — near-zero contrast */
+  /* form-control internals follow the UA colour scheme, not our tokens.
+   * Without this, Chrome paints light-mode selection in dark-theme inputs. */
   color-scheme: dark;
   --color-fd-background: hsl(0 0% 7.04%);
   --color-fd-foreground: hsl(0 0% 92%);
@@ -94,7 +91,7 @@
   --color-fd-ring: hsl(0 0% 54.9%);
 }
 
-/* … or the OS preference when no explicit theme class is set (standalone). */
+/* OS preference when no explicit theme class is set (standalone). */
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not(.dark) {
     color-scheme: dark;
@@ -117,39 +114,34 @@
   }
 }
 
-/* Themed selection everywhere in the editor — the native translucent blue
- * has almost no contrast on the dark surfaces (chrome inputs included).
- * Background tint ONLY: overriding `color` blanks text on node selections,
- * where the browser applies the colour but ProseMirror suppresses the
- * native background paint. */
+/* Themed selection (chrome inputs included). Native translucent blue has
+ * almost no contrast on dark surfaces. Background tint only: setting
+ * `color` blanks text on node selections (browser applies colour,
+ * ProseMirror suppresses the native background). */
 [data-fde-root] ::selection {
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
-/* While ProseMirror hides the native selection (node selections: the ring is
- * the signal), the themed tint above must not resurrect it — source order
- * lets it beat ProseMirror's own transparent rule, and WebKit's node range
- * bleeds onto the inter-block whitespace line owned by the .ProseMirror
- * element itself, painting a phantom selected bar above the component. */
+/* Node selections: the ring is the signal. The themed tint above must
+ * not resurrect native selection. Source order beats ProseMirror's
+ * transparent rule; WebKit's node range bleeds onto inter-block
+ * whitespace on `.ProseMirror`, painting a phantom bar above the
+ * component. */
 [data-fde-root] .ProseMirror-hideselection::selection,
 [data-fde-root] .ProseMirror-hideselection ::selection {
   background: transparent;
 }
 
-/* TipTap's injected Selection CSS blanks native ::selection for every
- * descendant while the editor is blurred
- * (`.ProseMirror:not(.ProseMirror-focused) ::selection`) so its decoration
- * can take over — but chrome inputs (TypeTable cells, the code title) hold
- * the real selection exactly then: focusing them is what blurs the editor.
- * Win those back with higher specificity (0,2,2 beats its 0,2,1). */
+/* TipTap blanks native ::selection on descendants while the editor is
+ * blurred so its decoration can take over. Chrome inputs (TypeTable
+ * cells, code title) hold the real selection then: focusing them blurs
+ * the editor. Higher specificity (0,2,2 beats 0,2,1) wins them back. */
 .ProseMirror:not(.ProseMirror-focused) :is(input, textarea)::selection {
   background: color-mix(in oklab, var(--color-fd-primary) 30%, transparent);
 }
 
-/* =========================================================================
- * Editor content: the ProseMirror document. TipTap owns this DOM, so it is
- * styled here rather than with utility classes.
- * ====================================================================== */
+/* Editor content: TipTap owns this DOM, so it is styled here rather than
+ * with utility classes. */
 
 .fde-content .ProseMirror {
   outline: none;
@@ -189,9 +181,8 @@
   margin-top: 1.2em;
 }
 
-/* Links must read as links at rest — with the neutral theme, `fd-primary` is
- * nearly the foreground colour, so the underline carries the declaration:
- * clearly visible always, full-strength on hover. */
+/* Neutral theme: `fd-primary` is nearly the foreground, so the underline
+ * is what reads as a link. Visible always, full-strength on hover. */
 .fde-content a {
   color: var(--color-fd-primary);
   text-decoration: underline;
@@ -314,8 +305,8 @@
   margin: 2em 0;
 }
 
-/* Document tables only — the TypeTable renders its own <table> as chrome
- * with utility classes, and this skin's cell borders would stack on it. */
+/* Document tables only. TypeTable is chrome with its own <table>; these
+ * cell borders would stack on it. */
 .fde-content table:not(.fde-typetable *) {
   border-collapse: collapse;
   width: 100%;
@@ -375,11 +366,11 @@
   color: var(--color-fd-muted-foreground);
 }
 
-/* Registered components draw their own selection outline (data-selected on the
- * node view wrapper) and regions never draw one: TipTap marks every node view
- * covered by the selection, so without these exclusions one selected card
- * would stack rings on itself, its regions and its children. This rule is for
- * selected block atoms (frontmatter, ESM, dividers, images). */
+/* Registered components draw their own outline (`data-selected`); regions
+ * never get one. TipTap marks every node view in the selection, so without
+ * these exclusions a selected card would stack rings on itself, its
+ * regions, and its children. This rule is for block atoms (frontmatter,
+ * ESM, dividers, images). */
 .fde-content
   .ProseMirror-selectednode:not(.node-mdxComponent):not(.node-mdxInlineRegion):not(
     .node-mdxBlockRegion
@@ -424,12 +415,9 @@
   animation: fde-fade-in 80ms ease-out;
 }
 
-/* =========================================================================
- * Component editable regions. The chrome around them is drawn with utility
- * classes in the renderers; these rules cover what utilities can't: the
- * empty-region placeholder and spacing between regions inside the single
- * content hole.
- * ====================================================================== */
+/* Component regions. Renderers draw chrome with utilities; these rules
+ * cover what utilities can't: empty-region placeholder and spacing between
+ * regions inside the single content hole. */
 
 .fde-region {
   position: relative;
@@ -443,20 +431,19 @@
   user-select: none;
 }
 
-/* A drag's ghost is rasterized from the dragged element's own paint layer —
- * without one Chromium snapshots the enclosing layer: the whole page. The
- * component wrappers carry `relative isolate` as utilities (node-views.tsx);
- * this rule covers the non-editable chrome the browser can pick as a drag
- * source when the press lands on a control, across every renderer. */
+/* Drag ghost comes from the element's own paint layer. Without one,
+ * Chromium snapshots the enclosing layer (the whole page). Component
+ * wrappers already have `relative isolate` (node-views.tsx); this covers
+ * non-editable chrome the browser can pick when the press lands on a
+ * control. */
 .fde-content [data-component] > [contenteditable="false"] {
   position: relative;
   isolation: isolate;
 }
 
-/* ---- the quiet chrome ----
- * The only signals while writing: a warm border on the component the caret is
- * in (the activeComponent decoration lands on the `.react-renderer` wrapper),
- * one ⋯ handle at its corner, and the bubble for selections. */
+/* Writing signals: a warm border on the caret's component (`data-active`
+ * on the `.react-renderer` wrapper), one ⋯ handle, and the bubble for
+ * selections. */
 
 .fde-content .react-renderer[data-active] > [data-component] {
   border-color: color-mix(in oklab, var(--color-fd-ring) 45%, var(--color-fd-border));
@@ -466,10 +453,10 @@
 /* the ⋯ handle appears instantly: it comes and goes with every caret move
  * through components, and repeated fades read as flicker */
 
-/* A freshly inserted component (a new row, step, card) settles into place.
- * Gated behind [data-fde-settled] — set one painted frame after the live
- * editor appears — so neither the static paint nor the hydration swap
- * flashes every component on screen; only real insertions animate. */
+/* Fresh inserts (row, step, card) settle in. Gated on [data-fde-settled]
+ * (one painted frame after the live editor appears) so static paint and
+ * the hydration swap don't flash every component; only real inserts
+ * animate. */
 [data-fde-settled] .react-renderer.node-mdxComponent {
   @starting-style {
     opacity: 0;
@@ -540,11 +527,9 @@
   display: contents;
 }
 
-/* =========================================================================
- * Code blocks. The node view supplies the fumadocs `CodeBlock` figure chrome
- * with utility classes; here we neutralise the generic `pre`/`code` rules for
- * the inner element and provide the highlight.js token palette (lowlight).
- * ====================================================================== */
+/* Code blocks. The node view supplies fumadocs `CodeBlock` figure chrome
+ * with utilities; here we neutralize generic `pre`/`code` rules and provide
+ * the highlight.js token palette (lowlight). */
 
 .fde-content pre.fde-codeblock-pre {
   margin: 0;
@@ -586,8 +571,8 @@
   user-select: none;
 }
 
-/* highlight.js token palette: github-light, darkened a touch so it keeps
- * >4.5:1 contrast on the muted `fd-card` surface (not pure white). */
+/* highlight.js token palette: github-light, darkened for >4.5:1 contrast
+ * on the muted `fd-card` surface (not pure white). */
 .fde-codeblock .hljs-comment,
 .fde-codeblock .hljs-quote {
   color: #57606a;
@@ -687,13 +672,10 @@
   color: #8b949e;
 }
 
-/* =========================================================================
- * Math (remark-math dialect): editable TeX source + KaTeX preview. The
- * `fdeMathActive` plugin marks the math node holding the caret with
- * `data-active` on its outer .react-renderer; `data-rendered` appears once
- * KaTeX has produced a preview. Source shows while editing or while the
- * KaTeX chunk hasn't loaded; the preview shows the rest of the time.
- * ====================================================================== */
+/* Math (remark-math): editable TeX + KaTeX preview. `fdeMathActive` sets
+ * `data-active` on the caret's math node; `data-rendered` once KaTeX has
+ * a preview. Source shows while editing or before the KaTeX chunk loads;
+ * preview otherwise. */
 
 .fde-content .node-mathInline {
   display: inline;
@@ -755,7 +737,7 @@
 .fde-content .node-mathBlock:not([data-active]) .fde-math[data-rendered] .fde-math-src {
   display: none;
 }
-/* while editing, the preview rides below the source as a live result */
+/* while editing, the preview sits below the source */
 .fde-content .fde-math-block .fde-math-preview {
   display: block;
   overflow-x: auto;
@@ -766,9 +748,7 @@
   outline-offset: 2px;
 }
 
-/* =========================================================================
- * Steps: mirrors the fumadocs `fd-steps` / `fd-step` utilities.
- * ====================================================================== */
+/* Steps: fumadocs `fd-steps` / `fd-step` utilities. */
 
 .fde-content .fde-steps {
   counter-reset: step;
@@ -823,12 +803,9 @@
   margin-top: 0;
 }
 
-/* =========================================================================
- * Accordions: mirrors the fumadocs `Accordions`/`Accordion`: a chevron that
- * leads the title row and rotates open, with the panel below. The chevron is
- * the collapse toggle (the title stays editable); the editor opens items by
- * default so their body can be edited.
- * ====================================================================== */
+/* Accordions: fumadocs chevron on the title row, panel below. Chevron is
+ * the collapse toggle (title stays editable); items start open so the body
+ * can be edited. */
 
 .fde-content .fde-accordion {
   position: relative;
@@ -899,17 +876,13 @@
   border-top: 1px solid var(--color-fd-border);
 }
 
-/* =========================================================================
- * Files: a file tree mirroring the fumadocs `Files` / `File` / `Folder`.
- * Only the plural `.fde-files` container is dissolved (so its entries are its
- * direct children); each `.fde-folder` keeps its content wrapper, so nested
- * entries and the folder name are reached one level down: mirroring how the
- * accordions are structured.
- * ====================================================================== */
+/* Files tree (fumadocs Files / File / Folder). Only `.fde-files` is
+ * dissolved so entries are direct children; each `.fde-folder` keeps its
+ * content wrapper so nested entries sit one level down, like accordions. */
 
-/* Each entry's node view is wrapped in a `.react-renderer.node-mdxComponent`
- * div by TipTap: that wrapper, not `[data-component]`, is the direct child of
- * the (dissolved) content hole, so the tree rules target it. */
+/* TipTap wraps each entry in `.react-renderer.node-mdxComponent`. That
+ * wrapper, not `[data-component]`, is the direct child of the dissolved
+ * content hole, so the tree rules target it. */
 .fde-content
   .fde-files
   > .fde-component-content
@@ -956,9 +929,7 @@
   margin-top: 2px;
 }
 
-/* =========================================================================
- * Reduced motion
- * ====================================================================== */
+/* Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
   .fde-content * {
@@ -975,10 +946,8 @@
   }
 }
 
-/* =========================================================================
- * Tabs. Children stack (like Accordions, every panel stays editable): the
- * label region reads as the active trigger, the body as its panel.
- * ====================================================================== */
+/* Tabs. Children stack (like Accordions, every panel stays editable): the
+ * label region reads as the active trigger, the body as its panel. */
 
 .fde-tabs > .fde-component-content,
 .fde-tabs > .fde-component-content > [data-node-view-content-react] {
@@ -1017,7 +986,7 @@
   font-size: 0.875em;
 }
 
-/* Heading suffixes surface as quiet chips, not body text */
+/* Heading suffixes surface as chips, not body text */
 .fde-content :is(h1, h2, h3, h4, h5, h6)[data-anchor]::after,
 .fde-content :is(h1, h2, h3, h4, h5, h6)[data-toc]::after {
   margin-inline-start: 10px;
@@ -1054,11 +1023,9 @@
   opacity: 0.65;
 }
 
-/* ---------- collaboration presence ----------
- * Peer carets from the CollaborationCaret extension: a 2px colored bar in
- * the text flow (the extension sets each element's user color inline) with
- * a small name flag pinned above it. Pure CSS, no motion; the flag is
- * chrome — never selectable, never a pointer target. */
+/* Peer carets (CollaborationCaret): 2px colored bar in the text flow
+ * (user color inline) with a name flag above. Pure CSS, no motion. The
+ * flag is chrome: never selectable, never a pointer target. */
 .fde-content .collaboration-carets__caret {
   position: relative;
   margin-inline: -1px;

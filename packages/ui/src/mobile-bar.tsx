@@ -110,7 +110,7 @@ function BarButton({
       data-active={active || undefined}
       disabled={disabled}
       // Keep focus (and the virtual keyboard) in the editor by cancelling the
-      // mouse focus transfer — but never a touch pointerdown: WebKit then
+      // mouse focus transfer, but never a touch pointerdown: WebKit then
       // suppresses the synthesized click entirely and the button goes dead on
       // real touches. Touch taps don't focus buttons on iOS, and every action
       // refocuses the editor through chain().focus() anyway.
@@ -133,7 +133,7 @@ interface MobileBarProps {
   math?: boolean;
 }
 
-/** Touch editing surface: a fixed bar riding above the virtual keyboard. */
+/** Touch editing surface: a fixed bar above the virtual keyboard. */
 export function MobileBar(props: MobileBarProps) {
   // gate the whole subtree, not just its output: TouchBar's editor-state
   // selector (two can() trial runs) would otherwise run per transaction on

@@ -1,10 +1,10 @@
 import type { MdxAttribute, PropField } from "@fumadocs-editor/core";
 
 /*
- * Pure attribute-array helpers, deliberately free of ProseMirror imports:
- * the static paint (static-mdx.tsx) reads props through these, and a PM
- * value import here would drag prosemirror-model/state into the eager
- * chunk. Editor-coupled attribute writes live in ./attributes.
+ * Pure attribute-array helpers, no ProseMirror imports: the static paint
+ * (static-mdx.tsx) reads props through these, and a PM value import here
+ * would drag prosemirror-model/state into the eager chunk. Editor-coupled
+ * attribute writes live in ./attributes.
  */
 
 export function readStringProps(attributes: MdxAttribute[]): Record<string, string> {

@@ -36,8 +36,7 @@ formatting bubble; its component chip edits the card's link and other props:
   </Card>
 </Cards>
 
-Multi-part components port 1:1 too. Steps keep their numbered rail, and
-`Cmd-Enter` starts the next one mid-thought:
+Steps keep their numbered rail. `Cmd-Enter` starts the next one:
 
 <Steps>
   <Step>
@@ -65,16 +64,15 @@ folder, `Alt-arrows` reorder, and the icons are drag handles:
   <File name="package.json" />
 </Files>
 
-And Accordions render every panel open, so the answers stay editable:
+Accordions render every panel open so answers stay editable:
 
 <Accordions>
   <Accordion title="Does it round-trip losslessly?">
     Yes. Unedited blocks serialize back byte-for-byte.
   </Accordion>
   <Accordion title="Can I add my own components?">
-    Register a spec and a renderer, and it becomes a first-class node.
+    Register a spec and a renderer.
   </Accordion>
 </Accordions>
 
-Everything else stays plain markdown, and unedited blocks round-trip
-byte-for-byte.
+Unedited blocks round-trip byte-for-byte.

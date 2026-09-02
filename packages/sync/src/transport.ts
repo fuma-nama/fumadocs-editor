@@ -11,8 +11,8 @@ export interface SyncUser {
 }
 
 /**
- * A read reply: the file state plus scope-derived data. Data only — the
- * client never acts on it; consumers wire it into their own props.
+ * A read reply: file state plus scope-derived data. The client never acts
+ * on it; consumers wire it into their own props.
  */
 export interface ReadResult extends FileState {
   user?: SyncUser;
@@ -43,12 +43,12 @@ export interface SyncTransport {
   /**
    * Connection state changes, firing immediately with the current state;
    * returns unsubscribe. Optional: a backend that cannot go offline (an
-   * in-memory store) simply omits it.
+   * in-memory store) omits it.
    */
   onStatus?(listener: (status: ConnectionStatus) => void): () => void;
 }
 
-/** websocket close code for a rejected hello — denied is not offline */
+/** websocket close code for a rejected hello; denied is not offline */
 export const CLOSE_DENIED = 4403;
 
 /** request header carrying the JSON-encoded auth payload on the HTTP media endpoints */

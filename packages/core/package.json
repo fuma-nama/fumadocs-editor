@@ -41,16 +41,16 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@tiptap/core": "^3.27.3",
-    "@tiptap/extension-code-block": "^3.27.3",
-    "@tiptap/extension-heading": "^3.27.3",
-    "@tiptap/extension-image": "^3.27.3",
-    "@tiptap/extension-link": "^3.27.3",
-    "@tiptap/extension-list": "^3.27.3",
-    "@tiptap/extension-table": "^3.27.3",
-    "@tiptap/extensions": "^3.27.3",
-    "@tiptap/pm": "^3.27.3",
-    "@tiptap/starter-kit": "^3.27.3",
+    "@tiptap/core": "^3.31.0",
+    "@tiptap/extension-code-block": "^3.31.0",
+    "@tiptap/extension-heading": "^3.31.0",
+    "@tiptap/extension-image": "^3.31.0",
+    "@tiptap/extension-link": "^3.31.0",
+    "@tiptap/extension-list": "^3.31.0",
+    "@tiptap/extension-table": "^3.31.0",
+    "@tiptap/extensions": "^3.31.0",
+    "@tiptap/pm": "^3.31.0",
+    "@tiptap/starter-kit": "^3.31.0",
     "mdast-util-directive": "^3.1.0",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-frontmatter": "^2.0.1",
@@ -68,9 +68,9 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^24.13.2",
-    "tsdown": "^0.22.4",
-    "typescript": "^5.9.2",
-    "vitest": "^4.1.10"
+    "@types/node": "^26.4.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

@@ -1,6 +1,6 @@
 /**
- * Where uploaded files go — the host's concern, not the editor's. Without a
- * provider, paste/drop upload is off and images are added by URL.
+ * Where uploaded files go. The host owns storage; the editor does not.
+ * Without a provider, paste/drop upload is off and images are added by URL.
  */
 export interface MediaProvider {
   /** store the file; the returned src is what the document will reference */
@@ -13,8 +13,8 @@ export const resolveSrc = (media: MediaProvider | undefined, src: string): strin
   media?.resolve?.(src) ?? src;
 
 /**
- * What the document can reference — also the host's concern (there is no
- * file system in the browser). Powers the include picker and page-link
+ * Paths the document can reference. There is no filesystem in the browser,
+ * so the host supplies them. Powers include picker and page-link
  * autocomplete; without a provider both stay plain text inputs.
  */
 export interface FileProvider {

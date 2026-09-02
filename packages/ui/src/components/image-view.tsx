@@ -51,7 +51,7 @@ function makeImageView(media: MediaProvider | undefined) {
             )}
           >
             <ImageIcon size={14} />
-            No image yet — set a source from the bubble
+            No image yet. Set a source from the bubble
           </span>
         )}
       </NodeViewWrapper>

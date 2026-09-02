@@ -22,7 +22,7 @@ import { caret, specs } from "./helpers";
 const syntax = createSyntax(fumadocsUiComponents, { math: true });
 
 /** two Y.Docs wired doc-to-doc; updates queue until `flush` so edits between
- * flushes are genuinely concurrent */
+ * flushes are concurrent */
 function link(a: Y.Doc, b: Y.Doc) {
   const toB: Uint8Array[] = [];
   const toA: Uint8Array[] = [];
@@ -59,8 +59,8 @@ function collabEditor(ydoc: Y.Doc) {
 
 /**
  * Seed a Y.Doc with the parsed document through a throwaway editor (standing
- * in for the server authority), then hand identical copies to two editors —
- * like clients, they see the seed as pre-existing state, not their own edit.
+ * in for the server authority), then hand identical copies to two editors.
+ * Like clients, they see the seed as pre-existing state, not their own edit.
  */
 function seedPair(mdx: string) {
   const parsed = parseMdxToDoc(mdx, syntax);
@@ -117,8 +117,8 @@ x^2
 $$
 `;
   const { a, b, parsed } = seedPair(src);
-  // the peer never saw the source text, only the Y.Doc — content-based
-  // snapshot matching must still reproduce every byte
+  // the peer never saw the source text, only the Y.Doc. Content-based
+  // snapshot matching must still reproduce every byte.
   expect(serializeDocToMdx(b.getJSON(), parsed.snapshot, syntax)).toBe(src);
   expect(serializeDocToMdx(a.getJSON(), parsed.snapshot, syntax)).toBe(src);
 });

@@ -6,13 +6,12 @@ import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs
 import { childNames, childOnlyNames, type SpecMap } from "./keymap";
 
 /*
- * Structural invariants the schema alone can't express: a component's regions
- * are part of its identity. The schema must keep `mdxComponent` content
- * repeatable (regions vary per spec), so a DOM-level edit: native word
- * deletes, autocorrect, IME: can parse a region right out of the document,
- * leaving a File with no name field and no placeholder. This guard reconciles
- * every touched component against its spec after each transaction, and vets
- * drops so a child row only lands in a container that accepts it.
+ * Structural invariants the schema can't express: a component's regions are
+ * part of its identity. `mdxComponent` content must stay repeatable (regions
+ * vary per spec), so a DOM edit (native word delete, autocorrect, IME) can
+ * parse a region out of the document. After each transaction this reconciles
+ * touched components against their spec, and vets drops so a child row only
+ * lands in a container that accepts it.
  */
 
 type Fix =
@@ -117,9 +116,9 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
       });
     }
     // a component with a body region owns ALL its block content through it
-    // (that's what childrenRegion folding means at parse time): a bare block
-    // that lands directly in the component — a cross-region selection typed
-    // over, a native edit — is folded into the body, never left floating
+    // (that's what childrenRegion folding means at parse time). A bare block
+    // that lands directly in the component (cross-region type-over, a
+    // native edit) is folded into the body, never left floating.
     node.forEach((child, offset) => {
       const at = pos + 1 + offset;
       if (
@@ -373,9 +372,9 @@ export function structureGuard(specs: SpecMap): Extension {
         new Plugin({
           appendTransaction(transactions, _oldState, newState) {
             // remote Yjs transactions ('y-sync$' is the sync plugin's meta
-            // key) are a peer's already-guarded state — "healing" them here
+            // key) are a peer's already-guarded state. Healing them here
             // would race the peer doing the same and duplicate the moved
-            // content, so only local edits are guarded
+            // content, so only local edits are guarded.
             if (!transactions.some((tr) => tr.docChanged && !tr.getMeta("y-sync$"))) return null;
             return applyFixes(newState, touchedComponents(newState, transactions, specs));
           },

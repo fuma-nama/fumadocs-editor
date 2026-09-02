@@ -87,18 +87,13 @@ let schema: Schema | undefined;
 const getDocSchema = () => (schema ??= getSchema(editorExtensions()));
 
 /**
- * The collab side of the sync server: one authoritative Y.Doc per open
- * document. Clients exchange y-protocols sync/awareness messages with it;
- * the authority is the only writer of the file (Y → MDX, debounced,
- * byte-preserving via the snapshot), and external disk changes enter by the
- * same block merge the single-user mirror uses, applied to the Y.Doc.
+ * One Y.Doc per open file. Clients speak y-protocols; this process is the
+ * only writer (Y → MDX, debounced, byte-preserving). Disk changes merge in
+ * the same way as the single-user mirror.
  *
- * Documents are seeded from disk and never persisted as Y state — the file
- * is the document of record. When the last client of a document leaves, its
- * final state is flushed to disk and the doc evicted after a grace period
- * (memory must not grow with every file ever opened); the grace keeps a
- * reload or a brief drop from discarding Y history, and a client returning
- * later re-seeds through the changed epoch, exactly like a server restart.
+ * Seeded from disk, never stored as Y state. After the last client leaves,
+ * flush then evict after a grace (reload shouldn't drop Y history). A later
+ * reopen re-seeds via a new epoch, like a restart.
  */
 export function createDocAuthority<C>({
   read,
@@ -268,9 +263,8 @@ export function createDocAuthority<C>({
       clearTimeout(doc.evict);
       doc.evict = undefined;
       if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
-      // greet writers with our step1 (the reply delivers their buffered
-      // edits) — a read-only client's reply would only be refused — and
-      // everyone with the room's presence
+      // writers get our step1 (the reply delivers buffered edits); a
+      // read-only client's reply would be refused. Everyone gets presence.
       if (scope(conn).write(path)) {
         const step1 = collabFrame(path, MESSAGE_SYNC);
         syncProtocol.writeSyncStep1(step1, doc.ydoc);

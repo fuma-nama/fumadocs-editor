@@ -47,7 +47,7 @@ export const mathUnsafe = extension.unsafe;
 
 export function inlineMathToMdast(value: string, delimiter: unknown): InlineMath | Text {
   // an emptied inline math has no source form (`$$` would re-parse as plain
-  // text): it simply vanishes from the output
+  // text): it vanishes from the output
   if (!value) return { type: "text", value: "" };
   const size = typeof delimiter === "number" && delimiter > 1 ? delimiter : undefined;
   return { type: "inlineMath", value, ...(size && { data: { delimiter: size } }) };

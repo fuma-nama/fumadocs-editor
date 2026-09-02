@@ -38,12 +38,10 @@ function subscribeSystemTheme(onChange: () => void): () => void {
 }
 
 /**
- * Self-contained theme context for the editor. Fumadocs sites already toggle a
- * `.dark` class (via `next-themes`) that the editor's tokens key off, so inside
- * a real site you don't need this. It exists for standalone usage: a plain
- * React app, Storybook, the playground: where there's no ambient theme: it
- * tracks a `light | dark | system` choice, persists it, and applies the class
- * on a wrapper element so every `fd-*` token below it resolves correctly.
+ * Theme context for standalone hosts (plain React, Storybook, playground).
+ * Fumadocs sites already toggle `.dark` via next-themes; the editor's tokens
+ * key off that. Tracks `light | dark | system`, persists it, and applies the
+ * class on a wrapper so `fd-*` tokens resolve.
  */
 export function EditorThemeProvider({
   defaultTheme = "system",
@@ -92,7 +90,7 @@ export function EditorThemeProvider({
 
 /**
  * Access the editor theme. Safe to call outside an {@link EditorThemeProvider};
- * it then reports `system` and `setTheme` is a no-op, so the editor simply
+ * it then reports `system` and `setTheme` is a no-op, so the editor
  * inherits whatever ambient theme (`next-themes`, OS) is in effect.
  */
 export function useEditorTheme(): ThemeContextValue {

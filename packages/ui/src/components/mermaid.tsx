@@ -3,11 +3,10 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useEditorTheme } from "../theme";
 
 /*
- * Diagram preview for `mermaid` code fences — a code-block renderer variant,
- * not a syntax: the fence stays an ordinary editable code block in the
- * document (and in MDX), the diagram simply renders beneath it, the way
- * fumadocs' remarkMdxMermaid renders it on the site. The mermaid library
- * (~large) loads in its own chunk only when a mermaid fence actually renders.
+ * Diagram preview for `mermaid` code fences: a code-block renderer variant,
+ * not a syntax. The fence stays an ordinary editable code block; the
+ * diagram renders beneath it, matching fumadocs' remarkMdxMermaid. Mermaid
+ * loads in its own chunk only when a mermaid fence actually renders.
  */
 
 type Mermaid = typeof import("mermaid").default;
@@ -17,7 +16,7 @@ let renderSeq = 0;
 
 /**
  * Whether `el` sits in a dark scope. `color-scheme` in preset.css tracks
- * every theming path — `.dark` / `.light` classes and the OS fallback — so
+ * every theming path (`.dark` / `.light` classes and the OS fallback), so
  * the computed value is authoritative even for nested overrides.
  */
 function isDark(el: Element): boolean {

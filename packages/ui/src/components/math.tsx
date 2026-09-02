@@ -24,12 +24,11 @@ import { useEffect, useState } from "react";
 
 /*
  * UI slice of the remark-math syntax (core/src/syntax/math): in-place TeX
- * source editing with a KaTeX preview, mirroring fumadocs' rehype-katex
- * rendering. The caret position drives which face shows — a plugin decorates
- * the math node holding the caret with `data-active`, and preset.css swaps
- * source/preview from that attribute alone, so activation never re-renders
- * React. KaTeX (and its stylesheet) load in their own chunk on the first
- * math node actually rendered.
+ * source editing with a KaTeX preview, matching fumadocs' rehype-katex.
+ * Caret position drives which face shows: a plugin sets `data-active` on
+ * the math node holding the caret, and preset.css swaps source/preview
+ * from that attribute, so activation never re-renders React. KaTeX (and
+ * its stylesheet) load in their own chunk on the first math node rendered.
  */
 
 type Katex = typeof import("katex").default;
@@ -176,20 +175,18 @@ const mathActive = Extension.create({
 });
 
 /*
- * Deterministic arrow entry into math. The inactive TeX source is
- * display:none (the preview shows instead), and engines disagree on moving
- * a caret through hidden text: Chromium and WebKit step into it (which
- * activates the node), Firefox skips the whole node. Handle the crossing
- * explicitly so every engine enters edit mode the same way.
+ * Arrow entry into math. Inactive TeX is display:none (preview shows);
+ * Chromium and WebKit step into hidden text (activating the node), Firefox
+ * skips the whole node. Handle the crossing so every engine enters edit
+ * mode the same way.
  */
 
 /*
- * The entry caret goes to the END of the source, exactly like click-to-edit
- * (focusSource): a caret at source offset 0 is structurally equivalent to
- * the position before the node, so ProseMirror's selectionToDOM leaves the
- * DOM caret outside the (still hidden) source and typing lands beside the
- * formula instead of in it. End-of-source has text between it and either
- * boundary, so the placement sticks in every engine.
+ * Entry caret goes to the END of the source, like click-to-edit
+ * (focusSource). A caret at source offset 0 is equivalent to the position
+ * before the node, so selectionToDOM leaves the DOM caret outside the
+ * (still hidden) source and typing lands beside the formula. End-of-source
+ * has text between it and either boundary, so placement sticks.
  */
 
 /** caret adjacent to an inline math node: step into its source */
@@ -228,8 +225,8 @@ function enterBlock(editor: Editor, dir: 1 | -1, axis: "h" | "v"): boolean {
 
 /**
  * The math node types wired to their KaTeX node views. Views register
- * regardless of the dialect flag (a flag-off document simply never contains
- * the nodes); only the creation paths — input rules — are gated, so math is
+ * regardless of the dialect flag (a flag-off document never contains the
+ * nodes); only the creation paths (input rules) are gated, so math is
  * unproducible while `SyntaxOptions.math` is off.
  */
 export function mathExtensions(enabled: boolean): Extensions {

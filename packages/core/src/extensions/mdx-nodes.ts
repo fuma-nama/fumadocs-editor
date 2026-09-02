@@ -14,7 +14,7 @@ export interface MdxJsxAttribute {
         type: "mdxJsxAttributeValueExpression";
         value: string;
         /** the expression's value when it is a static literal (JSON-safe),
-         * extracted at parse time — lets the UI edit it structurally */
+         * extracted at parse time so the UI can edit it structurally */
         literal?: unknown;
       };
 }

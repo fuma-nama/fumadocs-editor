@@ -1,17 +1,16 @@
 # fumadocs-editor
 
-A WYSIWYG editor for Fumadocs MDX content. Documents render as an editable
-page — prose, code, tables, and MDX components in place — and serialize back
-losslessly: blocks you didn't touch are emitted byte-for-byte.
+A WYSIWYG editor for Fumadocs MDX. Documents render as an editable page
+(prose, code, tables, MDX components) and serialize losslessly: untouched
+blocks come back byte-for-byte.
 
-| Package                                  |                                                    |
-| ---------------------------------------- | -------------------------------------------------- |
-| [`@fumadocs-editor/ui`](packages/ui)     | the React editor component                         |
-| [`@fumadocs-editor/core`](packages/core) | headless engine: parse, serialize, component specs |
-| [`@fumadocs-editor/sync`](packages/sync) | FS mirror, collaboration, auth layer               |
+| Package                                  |                                   |
+| ---------------------------------------- | --------------------------------- |
+| [`@fumadocs-editor/ui`](packages/ui)     | React editor                      |
+| [`@fumadocs-editor/core`](packages/core) | parse, serialize, component specs |
+| [`@fumadocs-editor/sync`](packages/sync) | FS mirror, collab, auth           |
 
-Documentation lives in [`apps/docs`](apps/docs); a live playground in
-[`apps/playground`](apps/playground).
+Docs: [`apps/docs`](apps/docs). Playground: [`apps/playground`](apps/playground).
 
 ## Development
 

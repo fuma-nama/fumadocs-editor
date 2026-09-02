@@ -353,7 +353,7 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       return listToNode(node, ctx);
     case "code": {
       // a ```files tree listing becomes an editable Files tree when the whole
-      // fence spec set is registered (a partial set would drop rows silently)
+      // fence spec set is registered (a partial set would drop rows)
       const specs = ctx.syntax.components;
       if (
         node.lang === FILES_FENCE_LANG &&
@@ -464,7 +464,7 @@ export function parseStringArray(expression: string): string[] | null {
 /**
  * Convert a registered component's JSX element into structured region nodes.
  * Returns null when the element can't be edited structurally (e.g. an items
- * expression that isn't a literal string array) — the caller keeps it generic.
+ * expression that isn't a literal string array). The caller keeps it generic.
  */
 function componentToNode(
   node: JsxElement,

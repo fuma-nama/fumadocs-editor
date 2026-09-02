@@ -23,8 +23,8 @@ export const CodeBlockMdx = CodeBlock.extend({
 
 /**
  * Fumadocs heading suffixes live as attributes: `## Title [#custom-id]`
- * (anchor), `[!toc]` (hidden from TOC) and `[toc]` (TOC-only) — parsed out
- * of the text so flags never read as prose, surfaced as data attributes for
+ * (anchor), `[!toc]` (hidden from TOC) and `[toc]` (TOC-only). Parsed out
+ * of the text so flags never read as prose; surfaced as data attributes for
  * the editor chrome.
  */
 export const HeadingMdx = Heading.extend({
@@ -85,7 +85,7 @@ export interface EditorExtensionsOptions {
   /** Include the base image node; `false` when the UI ships a node view. */
   image?: boolean;
   /**
-   * Include the base math nodes (inert either way — the dialect gate lives in
+   * Include the base math nodes (inert either way; the dialect gate lives in
    * `SyntaxOptions.math`); `false` when the UI ships node views.
    */
   mathNodes?: boolean;

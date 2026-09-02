@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .turbo
 .env*
+
+.pnpm-store

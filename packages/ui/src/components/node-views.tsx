@@ -160,11 +160,10 @@ function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
 }
 
 /**
- * Marks the innermost component containing the caret with `data-active` so its
- * control bar can reveal on keyboard/touch focus. Necessary because the whole
- * editor is one contenteditable: putting the caret in a region focuses the
- * ProseMirror root, not the region, so `:focus-within` never reaches these
- * wrappers (only the Callout's nested contenteditable and node-selection do).
+ * Marks the innermost component containing the caret with `data-active` so
+ * its control bar can reveal on keyboard/touch focus. The editor is one
+ * contenteditable: putting the caret in a region focuses the PM root, not
+ * the region, so `:focus-within` never reaches these wrappers.
  */
 const activeComponent = ExtensionBase.create({
   name: "fdeActiveComponent",

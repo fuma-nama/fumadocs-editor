@@ -12,10 +12,8 @@ export interface PickerItem {
 }
 
 /**
- * Select-like combobox for long lists (block types, code languages): a plain
- * trigger button, and a popup that filters as you type. Base UI matches the
- * item `label` and drives highlight/keyboard on the input, so the list stays
- * a list of dumb rows.
+ * Combobox for long lists (block types, code languages): trigger button,
+ * popup filters as you type.
  */
 export function Picker<T extends PickerItem>({
   items,

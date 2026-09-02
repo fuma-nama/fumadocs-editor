@@ -14,7 +14,7 @@ export interface WsTransportOptions {
   /**
    * Produces the opaque payload the connection hello carries to the server's
    * `authenticate` hook. Called on every connection attempt, so reconnects
-   * pick up fresh tokens. Cookie-based setups simply omit it.
+   * pick up fresh tokens. Cookie-based setups omit it.
    */
   auth?: () => unknown;
 }
@@ -25,9 +25,9 @@ export interface WsTransport extends SyncTransport {
   /** connection state changes; fires immediately with the current state */
   onStatus(listener: (status: ConnectionStatus) => void): () => void;
   /**
-   * Collab frames ride this same socket as binary messages (see `wire.ts`).
-   * Sends while offline are dropped — the y-protocols handshake re-run on
-   * reconnect recovers whatever was missed.
+   * Collab frames use this same socket as binary messages (see `wire.ts`).
+   * Sends while offline are dropped. The y-protocols handshake on reconnect
+   * recovers whatever was missed.
    */
   sendBinary(data: Uint8Array): void;
   onBinary(listener: (data: Uint8Array) => void): () => void;
@@ -38,10 +38,10 @@ export interface WsTransport extends SyncTransport {
 /**
  * `SyncTransport` over one JSON websocket (the dev-server mirror). Every
  * connection opens with a hello frame carrying the `auth` payload; nothing
- * else is sent until the server acknowledges it. Requests made while offline
- * reject with "sync offline"; the connection retries with backoff and
- * re-registers every watch on reconnect — sessions listen to `onStatus` to
- * flush once it returns. A denied hello stops the retrying for good.
+ * else is sent until the server acknowledges it. Offline requests reject
+ * with "sync offline". Reconnect retries with backoff and re-registers
+ * watches; sessions listen to `onStatus` to flush. A denied hello stops
+ * retrying.
  */
 export function wsTransport(options: WsTransportOptions = {}): WsTransport {
   const url =
@@ -174,7 +174,7 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
       return () => statusListeners.delete(listener);
     },
     sendBinary(data) {
-      if (ready && socket) socket.send(data);
+      if (ready && socket) socket.send(data.buffer as ArrayBuffer);
     },
     onBinary(listener) {
       binaryListeners.add(listener);

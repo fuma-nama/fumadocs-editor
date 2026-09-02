@@ -26,6 +26,12 @@
       "port": 3801
     },
     {
+      "name": "docs-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "apps/docs", "dev", "--port", "3802"],
+      "port": 3802
+    },
+    {
       "name": "playground-prod",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/playground", "exec", "vite", "preview", "--port", "4173"],

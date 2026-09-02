@@ -7,8 +7,7 @@ export function ScopedEditor({ path }: { path: string }) {
     <MdxEditor
       sync={{
         path,
-        // `writable` is data from the server's scope — wiring it into
-        // `editable` is the consumer's decision, made right here
+        // `writable` comes from the server's scope. Wire it into `editable` here.
         onOpen: (result) => setWritable(result.writable ?? true),
       }}
       editable={writable}

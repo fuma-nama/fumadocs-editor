@@ -13,7 +13,7 @@ import { AUTH_HEADER, CLOSE_DENIED, type SyncUser } from "./transport";
 /**
  * What one authenticated connection may do. Document identity is the
  * root-relative posix path, so the predicates are per-document permissions;
- * they run on the message hot path and must be synchronous and cheap — async
+ * they run on the message hot path and must be synchronous and cheap. Async
  * policy resolves inside `authenticate` and closes over the result (changes
  * apply on reconnect).
  */
@@ -28,9 +28,9 @@ export interface SyncScope {
 export type SyncAuthenticate = (ctx: {
   request: IncomingMessage;
   /**
-   * The client transport's `auth()` payload, verbatim: it rides the
-   * connection hello on the websocket and {@link AUTH_HEADER} on the HTTP
-   * media endpoints. Cookie-based consumers ignore it and read the request.
+   * The client transport's `auth()` payload, verbatim. Sent on the
+   * connection hello and in {@link AUTH_HEADER} on HTTP media endpoints.
+   * Cookie-based consumers ignore it and read the request.
    */
   payload?: unknown;
 }) => SyncScope | null | Promise<SyncScope | null>;
@@ -112,15 +112,14 @@ interface Conn {
 }
 
 /**
- * The dev-server side of the FS mirror: JSON over one websocket per client
- * (list / read / compare-and-swap write / watch), chokidar for external
- * changes. A successful write is broadcast to the other watchers straight
- * away and its own chokidar echo suppressed — the writer already knows.
+ * The dev-server FS mirror: JSON over one websocket per client (list / read
+ * / compare-and-swap write / watch), chokidar for external changes. A
+ * successful write is broadcast to other watchers immediately and its own
+ * chokidar echo suppressed: the writer already knows.
  *
- * Nothing is processed on a connection before its hello frame has passed
- * `authenticate`; every surface (including the media endpoints and the Y
- * update stream) is then checked against the resolved scope, always with the
- * normalized root-relative path.
+ * Nothing is processed before the hello frame passes `authenticate`. Every
+ * surface (media endpoints, Y update stream) is then checked against the
+ * resolved scope, always with the normalized root-relative path.
  */
 export function createSyncServer({
   root,
@@ -337,8 +336,8 @@ export function createSyncServer({
         case "watch": {
           const relative = rel(message.path!);
           ensureWatcher();
-          // an unreadable path is simply never registered, so its change
-          // broadcasts are withheld from this client
+          // unreadable paths are never registered, so their change
+          // broadcasts never reach this client
           if (scope.read(relative)) conn.watching.add(relative);
           return;
         }

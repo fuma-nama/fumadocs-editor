@@ -331,8 +331,8 @@ function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
   }
 
   // an element whose payload is its text content serializes back to the
-  // tight inline form authors write — raw, so a path like `./page.mdx`
-  // never grows markdown escapes
+  // tight inline form authors write. Raw, so a path like `./page.mdx`
+  // never grows markdown escapes.
   if (spec.contentRegion) {
     const value = regionText(
       children.find(

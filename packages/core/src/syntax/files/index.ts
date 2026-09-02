@@ -1,25 +1,18 @@
 import type { ComponentSpec } from "../../components/spec";
 
 /*
- * The fumadocs `remarkMdxFiles` fence: a ```files code block whose value is a
- * `tree`-style listing, rendered as `<Files />` on the site. This folder is
- * the whole feature, split by pipeline slice like the other capsules:
+ * fumadocs `remarkMdxFiles` fence: ```files tree listing. Split by pipeline:
  *
- *   index.ts     inert data (names, specs)
- *   parse.ts     fence value → JSX-shaped tree (or null: stays a code block)
- *   serialize.ts fence components → the ```files code node
+ *   index.ts     names, specs
+ *   parse.ts     fence value → JSX-shaped tree (null: stays a code block)
+ *   serialize.ts fence components → ```files code node
  *
- * Registering the three specs is the gate — no SyntaxOptions flag, because
- * the fence is ordinary code-block syntax either way (nothing else changes
- * how it parses). The UI slice (components/files-fence.tsx) reuses the real
- * Files/Folder/File renderers.
+ * Registering the three specs is the gate. No SyntaxOptions flag: the fence
+ * is ordinary code-block syntax either way. UI: components/files-fence.tsx.
  *
- * Provenance follows the directives pattern: the spec names are not valid
- * JSX names, so serialization branches on them and a fence-sourced tree can
- * only re-emit fence syntax while `<Files>` stays JSX. They are also
- * separate specs (not the JSX ones) so fence rows offer no props — the
- * fence format cannot carry attributes, and what cannot be written is not
- * editable.
+ * Spec names are not valid JSX, so a fence re-emits fence syntax and
+ * `<Files>` stays JSX. Separate specs (not the JSX ones) so fence rows
+ * have no props: the format cannot carry attributes.
  */
 
 export const FILES_FENCE_LANG = "files";
@@ -51,10 +44,8 @@ const fenceFolderSpec: ComponentSpec = {
 };
 
 /**
- * No root `insert`: fence trees enter documents by parsing (new trees are
- * authored through the richer JSX `<Files>` insert), so the slash menu stays
- * free of a near-duplicate entry. The row specs keep theirs — the listLike
- * keymap inserts siblings through them.
+ * No root `insert`: new trees go through JSX `<Files>`. Row specs keep
+ * theirs for the listLike keymap.
  */
 const filesFenceSpec: ComponentSpec = {
   name: FENCE_FILES,
@@ -63,5 +54,5 @@ const filesFenceSpec: ComponentSpec = {
   listLike: true,
 };
 
-/** Register all three (the parser requires the full set) to turn ```files fences into editable trees. */
+/** Register all three. Parser needs the full set. */
 export const filesFenceSpecs: ComponentSpec[] = [filesFenceSpec, fenceFolderSpec, fenceFileSpec];

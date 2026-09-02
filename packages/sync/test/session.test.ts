@@ -134,7 +134,7 @@ test("losing the CAS race merges the disk text, then saves the weave", async () 
 
   text = "# One, local\n";
   session.changed();
-  // applyRemote weaves: local + disk
+  // applyRemote merges: local + disk
   conflictsToReport = [];
   await vi.advanceTimersByTimeAsync(900);
   // second save cycle writes the merged text

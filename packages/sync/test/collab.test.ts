@@ -158,7 +158,7 @@ test("a disk edit merges into every client without touching their blocks", async
   );
   expect(docText(b)).toContain("!");
   await until(() => (a.doc.getXmlFragment("default").length === 3 ? true : undefined));
-  // and the authority weaves both back to disk
+  // and the authority writes both back to disk
   await until(
     () =>
       readFile(path.join(root, "doc.mdx"), "utf-8").then((text) =>

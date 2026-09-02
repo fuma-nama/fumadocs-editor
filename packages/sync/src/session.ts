@@ -3,15 +3,15 @@ import type { FileState, ReadResult, SyncTransport } from "./transport";
 export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
 /**
- * The editor side of a session. `MdxEditorRef` satisfies it; any document
- * that can serialize itself, merge external text, and be replaced does.
+ * Editor side of a session. `MdxEditorRef` satisfies it; any document that
+ * can serialize, merge external text, and be replaced does.
  */
 export interface SyncedDocument {
   /** the current markdown, read at save time */
   getMarkdown(): string;
   /** merge disk text in; resolves with the conflicting block indices */
   applyExternalMarkdown(text: string): Promise<number[]>;
-  /** replace the document with disk text outright (conflict → "take disk") */
+  /** replace the document with disk text (conflict: take disk) */
   setMarkdown(text: string): Promise<void>;
   /**
    * The disk now holds `text`, written from this document: adopt it as the
@@ -173,8 +173,8 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     changed() {
       if (closed || conflict) return;
       // compare now (cheap with an incremental serializer): a change that
-      // lands back on the synced text — a clean external merge's own update
-      // event, or an undo — never even reports dirty
+      // lands back on the synced text (a clean external merge's own update
+      // event, or an undo) never reports dirty
       dirty = document.getMarkdown() !== lastSynced;
       emit();
       if (dirty) schedule();

@@ -68,8 +68,8 @@ test("last disconnect flushes to disk; the doc survives the grace, then evicts a
   session.destroy();
   a.close();
 
-  // the final state lands on disk straight away — the last disconnect
-  // flushes, it does not wait out the 800ms save debounce
+  // the final state lands on disk straight away. The last disconnect
+  // flushes; it does not wait out the 800ms save debounce.
   const flushed = await until(
     () =>
       readFile(path.join(root, "doc.mdx"), "utf-8").then((text) =>
@@ -79,12 +79,12 @@ test("last disconnect flushes to disk; the doc survives the grace, then evicts a
   );
   expect(flushed).toBe("hello evicted-edit\n");
 
-  // returning within the grace finds the same doc (epoch unchanged)…
+  // returning within the grace finds the same doc (epoch unchanged)
   const b = openTransport();
   expect((await collabOpen(b)).epoch).toBe(first.epoch);
   b.close();
 
-  // …but once the grace passes with no client, the doc is evicted: the next
+  // once the grace passes with no client, the doc is evicted: the next
   // opener gets a fresh epoch, re-seeded from the flushed file
   await new Promise((resolve) => setTimeout(resolve, EVICT_MS + 700));
   const c = openTransport();

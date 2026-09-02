@@ -5,28 +5,25 @@ description: Scoping who may read and write which documents
 
 ## The trust model
 
-Without an `authenticate` hook the sync server allows everything — the same
-trust as Vite's own dev socket: anyone who can reach the dev server can edit
-the files. That is the right default for local development and the wrong one
-for anything shared. Passing `authenticate` puts every surface behind your
-policy.
+No `authenticate` hook: the sync server allows everything, same as Vite's
+dev socket. Anyone who can reach the server can edit. Fine for local
+development, not for anything shared. Passing `authenticate` puts every
+surface behind your policy.
 
-Enforcement is **server-only**. The client transports credentials and exposes
-what the server decided as plain data — it never adjusts its own behavior.
-Wiring "this user can't write" into a read-only editor is
-[your code](/read-only), not a hidden mechanism.
+Enforcement is **server-only**. The client sends credentials and exposes
+what the server decided. It does not change its own behavior. Wiring "this
+user can't write" into a read-only editor is [your code](/read-only).
 
 ## The two hooks
 
 **Server**: `authenticate` maps a connection (or media request) to a scope,
-or rejects it with `null`. It runs once per websocket connection — again on
-every reconnect, so refreshed tokens apply — and once per HTTP media request.
+or `null` to reject. Once per websocket (again on reconnect, so refreshed
+tokens apply) and once per HTTP media request.
 
-**Client**: the transport's `auth` option produces an opaque payload, called
-on every connection attempt. It rides the connection's first frame (browser
-websockets can't set headers, and query strings leak into logs) and the
-`x-fde-auth` header (`AUTH_HEADER`) on media requests. Cookie-based setups
-simply omit it and read the request server-side.
+**Client**: transport `auth` produces an opaque payload on every connection
+attempt. It is sent on the first frame (browser websockets cannot set headers;
+query strings leak into logs) and the `x-fde-auth` header (`AUTH_HEADER`)
+on media requests. Cookie setups omit it and read the request server-side.
 
 ### Cookie example
 
@@ -50,36 +47,33 @@ interface SyncScope {
 }
 ```
 
-A document's identity is its root-relative posix path, so the predicates are
-per-document permissions. Every predicate sees the **normalized** relative
-path — `team-a/../outside.mdx` cannot smuggle a write past a `team-a/` rule.
-The predicates run on the message hot path and must be synchronous: resolve
-async policy inside `authenticate` (as in the token example) and close over
-the result; policy changes apply on the next reconnect.
+A document is its root-relative posix path. Predicates are per-document
+permissions. Every predicate sees the **normalized** relative path, so
+`team-a/../outside.mdx` cannot write past a `team-a/` rule. Predicates run
+on the message hot path and must be synchronous: resolve async policy
+inside `authenticate` and close over the result. Policy changes apply on
+the next reconnect.
 
-What the scope gates:
+| Surface                      | Rule                                                   |
+| ---------------------------- | ------------------------------------------------------ |
+| `list`                       | filtered to readable paths                             |
+| `read`, opening a collab doc | requires `read`                                        |
+| watch / change broadcasts    | withheld for unreadable paths                          |
+| `write` (compare-and-swap)   | requires `write`                                       |
+| collab edits (Y updates)     | refused without `write`; read-only peers still receive |
+| media upload                 | requires `write` on `assets/<name>`                    |
+| asset serving                | requires `read` on the asset path                      |
+| presence identity            | a scope `user` overrides the name the client claims    |
 
-| Surface                      | Rule                                                     |
-| ---------------------------- | -------------------------------------------------------- |
-| `list`                       | filtered to readable paths                               |
-| `read`, opening a collab doc | requires `read`                                          |
-| watch / change broadcasts    | silently withheld for unreadable paths                   |
-| `write` (compare-and-swap)   | requires `write`                                         |
-| collab edits (Y updates)     | refused without `write` — read-only peers still receive  |
-| media upload                 | requires `write` on `assets/<name>`                      |
-| asset serving                | requires `read` on the asset path                        |
-| presence identity            | a scope `user` overrides whatever name the client claims |
-
-A denied _path_ is a per-request error — the connection stays. A rejected
-_hello_ closes the socket with a dedicated code; the client reports the
-terminal status `denied` (distinct from `offline`) and stops retrying.
-Nothing is processed on a connection before its hello passes `authenticate`,
-and hello-less connections time out.
+A denied _path_ is a per-request error; the connection stays. A rejected
+_hello_ closes the socket with a dedicated code. The client reports
+`denied` (not `offline`) and stops retrying. Nothing is processed before
+hello passes `authenticate`. Hello-less connections time out.
 
 ## Exposed data
 
-A `read` reply (and the collab-open handshake) carries scope-derived data for
-your UI to use:
+A `read` reply (and the collab-open handshake) carries scope data for your
+UI:
 
 ```ts
 interface ReadResult {
@@ -90,4 +84,4 @@ interface ReadResult {
 }
 ```
 
-See [read-only wiring](/read-only) for putting `writable` to work.
+See [read-only](/read-only) for using `writable`.

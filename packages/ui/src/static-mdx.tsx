@@ -15,10 +15,9 @@ import { resolveSrc, type MediaProvider } from "./components/media";
 
 /**
  * Stage-0 paint: the parsed PM document as plain React, no TipTap and no
- * ProseMirror. Mirrors the live editor's DOM shape — the same
- * `.react-renderer` / `data-node-view-*` shells the React node views emit —
- * so preset.css styles both identically and the live editor can swap in
- * without a visible shift.
+ * ProseMirror. Same DOM shape as the live editor (`.react-renderer` /
+ * `data-node-view-*` shells) so preset.css styles both and the swap has
+ * no visible shift.
  */
 
 type SpecMap = Map<string, UiComponentSpec>;
@@ -43,7 +42,7 @@ const noop = () => {};
  * keeps that component's (still editable) regions visible while the document
  * and the rest of the editor stay intact. Colocated here, not its own module,
  * because both the static paint and the live node views need it and this file
- * is already eager — module extraction on the eager path costs real bytes.
+ * is already eager; extracting a module on this path costs real bytes.
  */
 export class RenderBoundary extends ReactComponent<
   { resetOn?: unknown; fallback: ReactNode; children: ReactNode },

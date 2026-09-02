@@ -2,20 +2,14 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 
 /**
- * Framing for collab messages: they ride the mirror websocket as *binary*
- * frames (the JSON mirror protocol stays on text frames), so the two
- * protocols share one connection, one reconnect path and one server. Each
- * frame is the document path followed by a y-websocket-style message
- * (sync = 0 / awareness = 1, then the y-protocols payload).
+ * Collab messages as *binary* frames on the mirror websocket (JSON stays
+ * on text): one connection, reconnect path, and server. Layout: document
+ * path, then y-websocket-style (sync = 0 / awareness = 1 + y-protocols).
  *
- * This was weighed against mounting `y-websocket` alongside: its provider
- * would give every open document a second socket with its own reconnect
- * logic next to `wsTransport`'s, and its server half keeps a private
- * doc-per-room registry behind a persistence hook that has no notion of a
- * file changing on disk mid-session — the doc authority (parse → seed,
- * Y → MDX → disk, disk → merge → Y) would still be hand-written against an
- * API its own readme calls unsupported. Extending the existing socket with
- * y-protocols directly is less code overall and keeps one code path.
+ * A second `y-websocket` would add another socket/reconnect loop, and its
+ * persistence hook has no notion of disk changing mid-session. The
+ * authority (parse → seed, Y → MDX → disk, disk → merge → Y) would still
+ * be hand-written against an unsupported API. One socket is less code.
  */
 export const MESSAGE_SYNC = 0;
 export const MESSAGE_AWARENESS = 1;

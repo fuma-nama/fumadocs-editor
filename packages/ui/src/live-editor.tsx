@@ -49,7 +49,7 @@ export interface LiveEditorProps {
  * Stage-1 hydration: the real TipTap editor. Mounted lazily by the shell
  * (idle or first intent), constructed after mount (`immediatelyRender:
  * false`) so the static paint never waits on ProseMirror, and never
- * re-rendered per transaction — all chrome subscribes via `useEditorState`.
+ * re-rendered per transaction. Chrome subscribes via `useEditorState`.
  */
 export function LiveEditor({
   doc,
@@ -140,7 +140,7 @@ export function LiveEditor({
   }, [editor, editable]);
 
   // insert animations arm one painted frame after the editor shows: the
-  // hydration swap must be perfectly still, only real insertions move
+  // hydration swap must not move; only real insertions animate
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     if (hidden || !editor) return;

@@ -1,16 +1,15 @@
 # @fumadocs-editor/sync
 
 File-system sync for the [Fumadocs editor](https://www.npmjs.com/package/@fumadocs-editor/ui):
-autosave with compare-and-swap writes, live merge of external edits,
-collaborative editing (Yjs, server-authoritative), and a server-enforced auth
-layer with per-document scopes.
+CAS autosave, live merge of disk edits, Yjs collab, server auth with per-doc
+scopes.
 
 ```bash
 npm install @fumadocs-editor/sync
 ```
 
 ```ts
-// vite.config.ts — mount the sync server on the dev server
+// vite.config.ts
 import { editorSync } from "@fumadocs-editor/sync/vite";
 
 export default defineConfig({
@@ -18,9 +17,8 @@ export default defineConfig({
 });
 ```
 
-Entry points: `.` (browser client + session), `./vite` (dev-server plugin),
-`./node` (standalone server), `./collab` (collab session), `./merge`
-(block-level three-way merge).
+Entries: `.` (client + session), `./vite` (dev plugin), `./node` (standalone
+server), `./collab`, `./merge`.
 
-Documentation lives in the
-[fumadocs-editor repository](https://github.com/fuma-nama/fumadocs-editor) (`apps/docs`).
+Docs live in the
+[fumadocs-editor repo](https://github.com/fuma-nama/fumadocs-editor) (`apps/docs`).
