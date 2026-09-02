@@ -1,11 +1,10 @@
-import { MdxEditor, fumadocsUiComponents } from "@fumadocs-editor/ui";
+import { MdxEditor } from "@fumadocs-editor/ui";
 
-export function EditorPage() {
+export function EditorPage({ source }: { source: string }) {
   return (
     <MdxEditor
-      defaultValue={"# Hello world\n"}
-      components={fumadocsUiComponents}
-      onMarkdownChange={(markdown) => {
+      defaultValue={source}
+      onChange={(markdown) => {
         // persist it wherever your content lives
         console.log(markdown);
       }}

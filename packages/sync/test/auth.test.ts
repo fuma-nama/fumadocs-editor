@@ -97,7 +97,10 @@ afterAll(async () => {
 });
 
 const open = (token: unknown) =>
-  wsTransport(`ws://127.0.0.1:${port}/__fde_sync`, { auth: () => token });
+  wsTransport({
+    url: `ws://127.0.0.1:${port}/__fde_sync`,
+    auth: () => token,
+  });
 
 const docText = (session: CollabSession, index: number) =>
   (session.doc.getXmlFragment("default").get(index) as Y.XmlElement).toString();
@@ -127,7 +130,8 @@ test("a rejected payload is denied, distinct from offline, without a retry loop"
 
 test("reconnects re-invoke the client auth hook and carry the fresh token", async () => {
   let calls = 0;
-  const transport = wsTransport(`ws://127.0.0.1:${port}/__fde_sync`, {
+  const transport = wsTransport({
+    url: `ws://127.0.0.1:${port}/__fde_sync`,
     auth: () => (calls++ === 0 ? "admin" : "admin-fresh"),
   });
   await transport.list();

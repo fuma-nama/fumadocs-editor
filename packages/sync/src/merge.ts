@@ -110,8 +110,13 @@ export function mergeRemote(options: {
     const pairs = Math.min(removed.length, added.length);
     for (let k = 0; k < pairs; k++) {
       const local = baseToLocal[removed[k]];
-      if (local >= 0) ops.push({ type: "replace", local, node: remoteNodes[added[k]] });
-      else conflicts.add(localForEditedBase(removed[k]));
+      if (local >= 0) {
+        ops.push({ type: "replace", local, node: remoteNodes[added[k]] });
+        continue;
+      }
+      // edited on both sides: identical edits are already merged
+      const edited = localForEditedBase(removed[k]);
+      if (edited < 0 || localNormalized[edited] !== remoteNorm[added[k]]) conflicts.add(edited);
     }
     for (let k = pairs; k < removed.length; k++) {
       const local = baseToLocal[removed[k]];

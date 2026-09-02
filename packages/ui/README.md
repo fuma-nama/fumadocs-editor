@@ -15,9 +15,12 @@ npm install @fumadocs-editor/ui
 ```
 
 ```tsx
-import { MdxEditor, fumadocsUiComponents } from "@fumadocs-editor/ui";
+import { MdxEditor } from "@fumadocs-editor/ui";
 
-<MdxEditor defaultValue={source} components={fumadocsUiComponents} onMarkdownChange={save} />;
+<MdxEditor defaultValue={source} onChange={save} />;
+
+// or, on the dev server with @fumadocs-editor/sync: autosave, live merge, collab
+<MdxEditor sync={{ path: "docs/index.mdx" }} />;
 ```
 
 Documentation — quick start, component authoring, sync, collaboration, auth —

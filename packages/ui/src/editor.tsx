@@ -6,6 +6,7 @@ import {
   Suspense,
   lazy,
   memo,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -18,10 +19,17 @@ import { StaticMdx } from "./static-mdx";
 import { parseDocCached, sameOptions } from "./doc-cache";
 import type { EditorCollab } from "./collab";
 import type { SerializeFn } from "./live-editor";
-import type { SessionStatus, WsTransport } from "@fumadocs-editor/sync";
+import type {
+  FileSession,
+  ReadResult,
+  SessionStatus,
+  SyncTransport,
+  WsTransport,
+} from "@fumadocs-editor/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
 import type { UiComponentSpec } from "./components/spec";
+import { fumadocsUiComponents } from "./components/fumadocs-ui";
 import { focusRing } from "./components/styles";
 import { useEditorTheme, type EditorTheme } from "./theme";
 import { cn } from "./utils/cn";
@@ -43,32 +51,51 @@ export interface MdxEditorRef {
   applyExternalMarkdown: (text: string) => Promise<number[]>;
   /** replace the document outright (e.g. resolving a conflict as "take disk") */
   setMarkdown: (text: string) => Promise<void>;
+  /**
+   * The document was saved as `text`: adopt it as the base future external
+   * changes merge against, without touching the live document. A
+   * `FileSession` calls this after every write.
+   */
+  markSaved: (text: string) => void;
 }
 
-export interface SyncIndicatorProps {
-  /** a `FileSession`'s status (or your own equivalent for a custom backend) */
-  status: SessionStatus;
-  /** conflict resolution: overwrite the disk with the local document */
-  onKeepMine: () => void;
-  /** conflict resolution: drop local edits for the disk version */
-  onTakeDisk: () => void;
+/** presence identity shown at a user's caret on other clients */
+export interface CollabUser {
+  name: string;
+  color: string;
 }
 
-export interface MdxEditorCollab {
-  /** the mirror websocket; the Yjs frames ride the same connection */
-  transport: WsTransport;
+export interface MdxEditorSync {
   /** the document's root-relative path — its identity on the sync server */
   path: string;
-  /** presence identity shown at this user's caret on other clients */
-  user: { name: string; color: string };
+  /**
+   * Where the documents live. Defaults to one shared websocket transport to
+   * the dev server on the current host (`wsTransport()`); bring your own for
+   * auth or a custom backend.
+   */
+  transport?: SyncTransport;
+  /**
+   * Edit collaboratively: the sync server holds the authoritative document
+   * and is its single writer, peers' carets show live, and undo covers only
+   * your own edits. `true` joins as a guest; pass `user` for the presence
+   * identity. Needs the websocket transport.
+   */
+  collab?: boolean | { user?: CollabUser };
+  /** the status is already shown beside the mode tabs; this mirrors it elsewhere */
+  onStatus?: (status: SessionStatus) => void;
+  /**
+   * The document has been read: its text plus the server's scope-derived
+   * data. Data only — wiring `writable` into `editable` is your call.
+   */
+  onOpen?: (result: ReadResult) => void;
 }
 
 export interface MdxEditorProps {
-  /** initial MDX source */
+  /** initial MDX source; with `sync`, the file's content is used instead */
   defaultValue?: string;
-  /** fires with the serialized MDX after each change */
-  onMarkdownChange?: (markdown: string) => void;
-  /** MDX components to render as WYSIWYG nodes with editable regions */
+  /** fires with the serialized MDX after each change (debounced) */
+  onChange?: (markdown: string) => void;
+  /** MDX components rendered as editable nodes; defaults to the fumadocs-ui set */
   components?: UiComponentSpec[];
   /**
    * Syntax dialect switches beyond the component specs (e.g. `{ math: true }`
@@ -77,8 +104,15 @@ export interface MdxEditorProps {
    */
   syntax?: SyntaxOptions;
   /**
+   * Keep the document in sync with a file on the sync server: autosave,
+   * external edits merged in live, conflicts surfaced as a chip, and
+   * optionally collaborative editing.
+   */
+  sync?: MdxEditorSync;
+  /**
    * Reuse the parsed document across mounts of the same document (a small
    * LRU): reopening a recently visited doc paints without reparsing.
+   * Defaults to `sync.path`.
    */
   cacheKey?: string;
   /**
@@ -93,16 +127,6 @@ export interface MdxEditorProps {
    * class, or the OS preference, which is what a real fumadocs site wants.
    */
   theme?: EditorTheme;
-  /** sync state shown beside the mode tabs; conflicts surface a quiet chip */
-  sync?: SyncIndicatorProps;
-  /**
-   * Edit this document collaboratively. The sync server holds the
-   * authoritative document and is its single writer; the client-side merge
-   * and conflict flow of the plain FS mirror is superseded (`sync` then only
-   * reports connectivity). Everything Yjs loads lazily, and only with this
-   * prop set.
-   */
-  collab?: MdxEditorCollab;
   /** where uploads go and how document srcs resolve for display */
   media?: MediaProvider;
   /** what the document can reference: include paths, page links */
@@ -116,6 +140,29 @@ export interface MdxEditorProps {
   editable?: boolean;
   className?: string;
   ref?: Ref<MdxEditorRef>;
+}
+
+/** what the view shows beside the mode tabs; conflicts surface a quiet chip */
+interface SyncIndicatorProps {
+  status: SessionStatus;
+  /** conflict resolution: overwrite the disk with the local document */
+  onKeepMine?: () => void;
+  /** conflict resolution: drop local edits for the disk version */
+  onTakeDisk?: () => void;
+  /** Cmd-S */
+  onFlush?: () => void;
+}
+
+/** a resolved collab session: the Yjs frames ride the mirror websocket */
+export interface CollabLink {
+  transport: WsTransport;
+  path: string;
+  user: CollabUser;
+}
+
+interface EditorViewProps extends Omit<MdxEditorProps, "sync"> {
+  sync?: SyncIndicatorProps;
+  collab?: CollabLink;
 }
 
 type Mode = "visual" | "source";
@@ -183,9 +230,9 @@ function sameSpecs(a: UiComponentSpec[], b: UiComponentSpec[]): boolean {
   return true;
 }
 
-export const MdxEditor = memo(function MdxEditor({
+const EditorView = memo(function EditorView({
   defaultValue = "",
-  onMarkdownChange,
+  onChange,
   components: componentsProp,
   syntax: syntaxProp,
   cacheKey,
@@ -198,11 +245,11 @@ export const MdxEditor = memo(function MdxEditor({
   editable = true,
   className,
   ref,
-}: MdxEditorProps) {
+}: EditorViewProps) {
   // hosts tend to pass `components`/`syntax` as inline literals; everything
   // downstream (the parse cache, the collab session, the live extensions)
   // keys on their identity, so churn is absorbed here by value comparison
-  const components = useStableValue(componentsProp ?? [], sameSpecs);
+  const components = useStableValue(componentsProp ?? fumadocsUiComponents, sameSpecs);
   const syntax = useStableValue(syntaxProp, sameOptions);
   const specMap = useMemo(() => new Map(components.map((spec) => [spec.name, spec])), [components]);
   const ambient = useEditorTheme();
@@ -221,8 +268,8 @@ export const MdxEditor = memo(function MdxEditor({
   const snapshotRef = useRef<DocSnapshot | undefined>(undefined);
   const captureRef = useRef<{ point?: { x: number; y: number }; keys: string[] }>({ keys: [] });
 
-  const onChangeRef = useRef(onMarkdownChange);
-  onChangeRef.current = onMarkdownChange;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
 
@@ -404,7 +451,13 @@ export const MdxEditor = memo(function MdxEditor({
     else editorRef.current?.commands.setContent(result.doc, { emitUpdate: false });
   };
 
-  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown }));
+  const markSaved = (text: string) => {
+    void parseDocCached(cacheKey, text, components, syntax).then((result) => {
+      snapshotRef.current = result.snapshot;
+    });
+  };
+
+  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown, markSaved }));
 
   function switchMode(next: Mode) {
     if (next === mode) return;
@@ -439,6 +492,12 @@ export const MdxEditor = memo(function MdxEditor({
           "flex flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-background text-fd-foreground text-[15px] leading-relaxed shadow-sm focus-within:border-fd-ring/60",
           className,
         )}
+        onKeyDown={(event) => {
+          if (sync?.onFlush && (event.metaKey || event.ctrlKey) && event.key === "s") {
+            event.preventDefault();
+            sync.onFlush();
+          }
+        }}
       >
         <Tabs.Root value={mode} onValueChange={(value) => switchMode(value as Mode)}>
           <div className="flex items-center justify-between gap-3 border-b border-fd-border bg-fd-card/40 px-2 py-1">
@@ -535,3 +594,150 @@ export const MdxEditor = memo(function MdxEditor({
     </ProvidersContext.Provider>
   );
 });
+
+/** one transport per page for editors that don't bring their own */
+let sharedTransport: WsTransport | undefined;
+
+const GUEST_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
+
+function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === "function") ref(value);
+  else if (ref) ref.current = value;
+}
+
+interface SyncLink {
+  text: string;
+  collab?: CollabLink;
+}
+
+/**
+ * The synced editor: opens the file, owns the `FileSession` (autosave,
+ * merge, conflicts, flush on leave) or the collab link, and hands the view
+ * the resolved document plus the status it shows. Everything from the sync
+ * package loads lazily, only here.
+ */
+function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEditorSync }) {
+  const { path, transport: transportProp } = sync;
+  const collabOn = Boolean(sync.collab);
+  const [link, setLink] = useState<SyncLink | null>(null);
+  const [status, setStatus] = useState<SessionStatus>("synced");
+  const viewRef = useRef<MdxEditorRef | null>(null);
+  const sessionRef = useRef<FileSession | null>(null);
+  const latest = useRef({ sync, props });
+  latest.current = { sync, props };
+
+  useEffect(() => {
+    let open = true;
+    let session: FileSession | undefined;
+    let stopStatus = () => {};
+    setLink(null);
+    const report = (next: SessionStatus) => {
+      if (!open) return;
+      setStatus(next);
+      latest.current.sync.onStatus?.(next);
+    };
+    void import("@fumadocs-editor/sync").then((mod) => {
+      if (!open) return;
+      const transport = transportProp ?? (sharedTransport ??= mod.wsTransport());
+      let read: Promise<ReadResult>;
+      if (collabOn) {
+        if (!("sendBinary" in transport)) {
+          throw new Error("collab needs the websocket transport");
+        }
+        const ws = transport as WsTransport;
+        // the server is the authority: only connectivity to report
+        stopStatus = ws.onStatus((next) => report(next === "online" ? "synced" : next));
+        read = ws.read(path);
+      } else {
+        session = mod.createFileSession({
+          transport,
+          path,
+          // the view mounts once the file is read; until then there is nothing to sync
+          document: {
+            getMarkdown: () => viewRef.current?.getMarkdown() ?? "",
+            applyExternalMarkdown: async (text) =>
+              (await viewRef.current?.applyExternalMarkdown(text)) ?? [],
+            setMarkdown: async (text) => viewRef.current?.setMarkdown(text),
+            markSaved: (text) => viewRef.current?.markSaved(text),
+          },
+          onStatus: report,
+        });
+        sessionRef.current = session;
+        read = session.open();
+      }
+      read.then(
+        (result) => {
+          if (!open) return;
+          const { sync: current } = latest.current;
+          current.onOpen?.(result);
+          const user = (typeof current.collab === "object" && current.collab.user) || {
+            name: "Guest",
+            color: GUEST_COLORS[Math.floor(Math.random() * GUEST_COLORS.length)],
+          };
+          setLink({
+            text: result.text,
+            collab: collabOn ? { transport: transport as WsTransport, path, user } : undefined,
+          });
+        },
+        // offline or denied: an unsynced editor, and the status says why
+        () => {
+          if (open) setLink({ text: latest.current.props.defaultValue ?? "" });
+        },
+      );
+    });
+    return () => {
+      open = false;
+      stopStatus();
+      void session?.flush();
+      session?.close();
+      sessionRef.current = null;
+    };
+  }, [path, transportProp, collabOn]);
+
+  // leaving the page flushes the pending autosave
+  useEffect(() => {
+    const flush = () => void sessionRef.current?.flush();
+    window.addEventListener("blur", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("blur", flush);
+      window.removeEventListener("beforeunload", flush);
+    };
+  }, []);
+
+  const onChange = useCallback((markdown: string) => {
+    sessionRef.current?.changed();
+    latest.current.props.onChange?.(markdown);
+  }, []);
+
+  const indicator = useMemo<SyncIndicatorProps>(
+    () => ({
+      status,
+      onKeepMine: () => void sessionRef.current?.keepMine(),
+      onTakeDisk: () => void sessionRef.current?.takeDisk(),
+      onFlush: () => void sessionRef.current?.flush(),
+    }),
+    [status],
+  );
+
+  if (!link) return null;
+  return (
+    <EditorView
+      key={path}
+      {...props}
+      defaultValue={link.text}
+      cacheKey={props.cacheKey ?? path}
+      onChange={onChange}
+      sync={indicator}
+      collab={link.collab}
+      ref={(value) => {
+        viewRef.current = value;
+        assignRef(ref, value);
+      }}
+    />
+  );
+}
+
+export function MdxEditor({ sync, ...props }: MdxEditorProps) {
+  return sync ? <SyncedEditor sync={sync} {...props} /> : <EditorView {...props} />;
+}

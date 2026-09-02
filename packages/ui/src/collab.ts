@@ -3,7 +3,7 @@ import { CollaborationCaret } from "@tiptap/extension-collaboration-caret";
 import type { Extensions } from "@tiptap/core";
 import type { SyntaxOptions } from "@fumadocs-editor/core/parse";
 import { createCollabSession } from "@fumadocs-editor/sync/collab";
-import type { MdxEditorCollab } from "./editor";
+import type { CollabLink } from "./editor";
 import type { UiComponentSpec } from "./components/spec";
 
 export interface EditorCollab {
@@ -20,7 +20,7 @@ export interface EditorCollab {
  * given a `collab` prop.
  */
 export function startCollab(
-  collab: MdxEditorCollab,
+  collab: CollabLink,
   components: UiComponentSpec[],
   syntax: SyntaxOptions | undefined,
   onReset: () => void,

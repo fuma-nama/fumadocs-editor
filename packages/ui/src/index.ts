@@ -1,5 +1,5 @@
 export { MdxEditor } from "./editor";
-export type { MdxEditorProps, MdxEditorRef, MdxEditorCollab, SyncIndicatorProps } from "./editor";
+export type { MdxEditorProps, MdxEditorRef, MdxEditorSync, CollabUser } from "./editor";
 export type { FileProvider, MediaProvider } from "./components/media";
 export { EditorThemeProvider, useEditorTheme } from "./theme";
 export type { EditorTheme, ResolvedTheme } from "./theme";

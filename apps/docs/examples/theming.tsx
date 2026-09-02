@@ -1,9 +1,9 @@
-import { EditorThemeProvider, MdxEditor, fumadocsUiComponents } from "@fumadocs-editor/ui";
+import { EditorThemeProvider, MdxEditor } from "@fumadocs-editor/ui";
 
-export function StandaloneEditor() {
+export function StandaloneEditor({ source }: { source: string }) {
   return (
     <EditorThemeProvider>
-      <MdxEditor defaultValue={"# Hello\n"} components={fumadocsUiComponents} />
+      <MdxEditor defaultValue={source} />
     </EditorThemeProvider>
   );
 }

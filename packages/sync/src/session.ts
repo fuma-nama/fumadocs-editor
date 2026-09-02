@@ -2,15 +2,28 @@ import type { FileState, ReadResult, SyncTransport } from "./transport";
 
 export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
+/**
+ * The editor side of a session. `MdxEditorRef` satisfies it; any document
+ * that can serialize itself, merge external text, and be replaced does.
+ */
+export interface SyncedDocument {
+  /** the current markdown, read at save time */
+  getMarkdown(): string;
+  /** merge disk text in; resolves with the conflicting block indices */
+  applyExternalMarkdown(text: string): Promise<number[]>;
+  /** replace the document with disk text outright (conflict → "take disk") */
+  setMarkdown(text: string): Promise<void>;
+  /**
+   * The disk now holds `text`, written from this document: adopt it as the
+   * base later external changes merge against. Edits made since stay local.
+   */
+  markSaved(text: string): void;
+}
+
 export interface FileSessionOptions {
   transport: SyncTransport;
   path: string;
-  /** the editor's current markdown, read at save time */
-  getText: () => string;
-  /** merge disk text into the editor; resolves with conflicting block indices */
-  applyRemote: (text: string) => Promise<number[]>;
-  /** replace the document with disk text outright (conflict → "take disk") */
-  resetToRemote: (text: string) => void;
+  document: SyncedDocument;
   onStatus?: (status: SessionStatus) => void;
 }
 
@@ -40,7 +53,7 @@ const MAX_WAIT_MS = 5000;
  * pausing writes until the user picks a side.
  */
 export function createFileSession(options: FileSessionOptions): FileSession {
-  const { transport, path, getText, applyRemote, resetToRemote, onStatus } = options;
+  const { transport, path, document, onStatus } = options;
 
   let baseVersion = "";
   let lastSynced = "";
@@ -87,7 +100,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
   const save = async (): Promise<void> => {
     clearTimers();
     if (closed || conflict || !online || saving || !dirty) return;
-    const text = getText();
+    const text = document.getMarkdown();
     if (text === lastSynced) {
       dirty = false;
       emit();
@@ -100,7 +113,8 @@ export function createFileSession(options: FileSessionOptions): FileSession {
       if (result.ok) {
         baseVersion = result.version;
         lastSynced = text;
-        dirty = getText() !== text;
+        document.markSaved(text);
+        dirty = document.getMarkdown() !== text;
       } else {
         // lost a race with the disk: merge what's there, then try again
         await incoming(result.current);
@@ -123,11 +137,11 @@ export function createFileSession(options: FileSessionOptions): FileSession {
   const incoming = async (state: FileState): Promise<void> => {
     baseVersion = state.version;
     lastSynced = state.text;
-    const conflicts = await applyRemote(state.text);
+    const conflicts = await document.applyExternalMarkdown(state.text);
     if (conflicts.length > 0) {
       conflict = true;
     } else {
-      dirty = getText() !== state.text;
+      dirty = document.getMarkdown() !== state.text;
       if (dirty) schedule();
     }
     emit();
@@ -161,7 +175,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
       // compare now (cheap with an incremental serializer): a change that
       // lands back on the synced text — a clean external merge's own update
       // event, or an undo — never even reports dirty
-      dirty = getText() !== lastSynced;
+      dirty = document.getMarkdown() !== lastSynced;
       emit();
       if (dirty) schedule();
     },
@@ -176,7 +190,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     async takeDisk() {
       if (!conflict) return;
       const state = await transport.read(path);
-      resetToRemote(state.text);
+      await document.setMarkdown(state.text);
       baseVersion = state.version;
       lastSynced = state.text;
       conflict = false;

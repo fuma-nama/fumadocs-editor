@@ -66,28 +66,21 @@ before anything is stored).
 
 ## The editor side
 
-A `FileSession` owns one open file: it autosaves (800 ms after the last
-change, 5 s max), merges external changes in as they land, and pauses on
-conflicts. Wire it to the editor through its ref:
+Give the editor a path and it owns the rest — the initial read, autosave
+(800 ms after the last change, 5 s max), external edits merged in as they
+land, conflicts, flush on Cmd-S and on leaving the page:
 
-<include meta='title="synced-editor.tsx"'>../examples/sync-editor.tsx</include>
+<include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
 
-The session never touches the editor directly — you hand it four callbacks:
-
-| Option          | Wire it to                    |
-| --------------- | ----------------------------- |
-| `getText`       | `ref.getMarkdown()`           |
-| `applyRemote`   | `ref.applyExternalMarkdown()` |
-| `resetToRemote` | `ref.setMarkdown()`           |
-| `onStatus`      | the editor's `sync` prop      |
-
-Call `session.changed()` from `onMarkdownChange`, and `session.flush()` on
-blur, `beforeunload`, or Cmd-S if you want saves at those moments too.
+Without a `transport`, editors share one websocket to the dev server on the
+current host. Pass your own for [auth](/auth) or a custom backend, and
+`onOpen` to receive the file's [scope data](/auth#exposed-data) once it has
+been read.
 
 ### Status
 
-`onStatus` reports a `SessionStatus`; passing it to the editor's `sync` prop
-renders the dot beside the mode tabs:
+The dot beside the mode tabs shows the session status; `onStatus` mirrors it
+to your own UI:
 
 | Status     | Meaning                                                |
 | ---------- | ------------------------------------------------------ |
@@ -105,8 +98,8 @@ and a block counts as "the same" exactly when the serializer would emit it
 byte-identically. Changes that only happened on disk apply to the live
 document as one non-undoable transaction — your caret stays put. A block
 edited on **both** sides becomes a conflict: the editor keeps the local
-version, pauses writes, and shows a quiet chip with two resolutions —
-`keepMine()` (overwrite the disk) or `takeDisk()` (drop local edits).
+version, pauses writes, and shows a quiet chip with two resolutions — keep
+mine (overwrite the disk) or take disk (drop local edits).
 
 ## Custom backends
 
@@ -128,4 +121,17 @@ Documents are addressed by root-relative posix paths. `version` strings are
 opaque compare-and-swap tokens: `write` must fail with the current state when
 `baseVersion` no longer matches, and that is all the session needs to merge
 and retry. `onStatus` is optional — omit it for a backend that cannot go
-offline.
+offline. Hand the transport to `sync` and everything above applies unchanged.
+
+### Your own session
+
+`sync` is built on `createFileSession`, which is public. Reach for it when
+the editor isn't the only party — a custom status UI, a non-React shell, a
+session shared by several views:
+
+<include meta='title="custom-session.tsx"'>../examples/sync-session.tsx</include>
+
+`document` is anything with the ref's four methods — `getMarkdown`,
+`applyExternalMarkdown`, `setMarkdown`, `markSaved` — so the session never
+depends on React. Call `changed()` from `onChange` and `flush()` whenever a
+save should happen now.
