@@ -51,7 +51,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const openTransport = () => wsTransport(`ws://127.0.0.1:${port}/__fde_sync`);
+const openTransport = () => wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
 
 function openSession(transport: WsTransport, extra?: { doc?: Y.Doc; onReset?: () => void }) {
   return createCollabSession({ transport, path: "doc.mdx", components: [], ...extra });

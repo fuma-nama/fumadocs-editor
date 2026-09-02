@@ -40,7 +40,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => http.listen(0, resolve));
   const { port } = http.address() as { port: number };
-  transport = wsTransport(`ws://127.0.0.1:${port}/__fde_sync`);
+  transport = wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
 });
 
 afterAll(async () => {
@@ -94,7 +94,7 @@ test("an external file change reaches watchers; own writes do not echo", async (
 
 test("a second client hears another client's write immediately", async () => {
   const { port } = http.address() as { port: number };
-  const other = wsTransport(`ws://127.0.0.1:${port}/__fde_sync`);
+  const other = wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
   const events: string[] = [];
   other.watch("readme.md", (state) => events.push(state.text));
   await other.read("readme.md"); // ensures the socket is open and watching

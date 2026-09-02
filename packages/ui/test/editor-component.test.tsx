@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core";
+import type { SyncTransport } from "@fumadocs-editor/sync";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
 import { setStringProp } from "../src/components/attr-values";
@@ -50,10 +51,10 @@ function mount(props: MdxEditorProps) {
   return hydrate();
 }
 
-test("onMarkdownChange is debounced and serializes the edit", async () => {
+test("onChange is debounced and serializes the edit", async () => {
   vi.useFakeTimers();
   const onChange = vi.fn<(markdown: string) => void>();
-  const { editor } = await mount({ defaultValue: "Hello world.\n", onMarkdownChange: onChange });
+  const { editor } = await mount({ defaultValue: "Hello world.\n", onChange: onChange });
 
   act(() => {
     editor.commands.setTextSelection(1);
@@ -71,7 +72,7 @@ test("blur flushes the pending serialize so no edit is lost", async () => {
   const onChange = vi.fn<(markdown: string) => void>();
   const { editor, dom } = await mount({
     defaultValue: "Hello world.\n",
-    onMarkdownChange: onChange,
+    onChange: onChange,
   });
 
   act(() => {
@@ -90,7 +91,7 @@ test("blur flushes the pending serialize so no edit is lost", async () => {
 test("the static view paints first and captures keystrokes for replay", async () => {
   vi.useFakeTimers();
   const onChange = vi.fn<(markdown: string) => void>();
-  render({ defaultValue: "Hello.\n", onMarkdownChange: onChange });
+  render({ defaultValue: "Hello.\n", onChange: onChange });
   await settle(); // parse chunk resolves; the live editor is still unmounted
 
   // before hydration: the static paint is up, no live editor exists
@@ -223,7 +224,7 @@ test("a throwing renderer degrades to the fallback card; document and siblings i
     const { editor } = await mount({
       defaultValue: source,
       components: [...fumadocsUiComponents, boomSpec],
-      onMarkdownChange: onChange,
+      onChange: onChange,
       ref: editorRef,
     });
 
@@ -345,7 +346,7 @@ test("unedited document round-trips byte-identical through the debounce", async 
   vi.useFakeTimers();
   const source = "# Title\n\nSome *rich* text.\n";
   const onChange = vi.fn<(markdown: string) => void>();
-  const { editor } = await mount({ defaultValue: source, onMarkdownChange: onChange });
+  const { editor } = await mount({ defaultValue: source, onChange: onChange });
 
   // a no-op edit pair: insert then undo, each reported
   act(() => {
@@ -358,4 +359,52 @@ test("unedited document round-trips byte-identical through the debounce", async 
 
   expect(onChange).toHaveBeenCalledTimes(2);
   expect(onChange.mock.calls[1][0]).toBe(source);
+});
+
+test("sync: a save advances the merge base, so a later disk edit elsewhere merges cleanly", async () => {
+  vi.useFakeTimers();
+  let disk = "First.\n\nSecond.\n";
+  let version = 1;
+  const watchers = new Set<(state: { text: string; version: string }) => void>();
+  const transport: SyncTransport = {
+    list: async () => ["doc.mdx"],
+    read: async () => ({ text: disk, version: String(version) }),
+    write: async (_path, text, base) => {
+      if (base !== String(version)) {
+        return { ok: false, current: { text: disk, version: String(version) } };
+      }
+      disk = text;
+      version++;
+      return { ok: true, version: String(version) };
+    },
+    watch: (_path, onChange) => {
+      watchers.add(onChange);
+      return () => watchers.delete(onChange);
+    },
+  };
+  const statuses: string[] = [];
+  render({ sync: { transport, path: "doc.mdx", onStatus: (status) => statuses.push(status) } });
+  await settle(); // the sync chunk loads and the file is read
+  await settle();
+  const { editor } = await hydrate();
+
+  // type into the first paragraph and let the autosave land
+  act(() => {
+    editor.commands.setTextSelection(1);
+    editor.commands.insertContent("LOCAL ");
+  });
+  act(() => void vi.advanceTimersByTime(2000)); // change debounce, then the 800 ms autosave
+  await settle();
+  expect(disk).toContain("LOCAL First.");
+  expect(statuses.at(-1)).toBe("synced");
+
+  // the disk edits the other paragraph: no conflict, nothing duplicated
+  disk = disk.replace("Second.", "Second, from disk.");
+  version++;
+  await act(async () => {
+    for (const notify of watchers) notify({ text: disk, version: String(version) });
+  });
+  await settle();
+  expect(statuses).not.toContain("conflict");
+  expect(editor.state.doc.textContent).toBe("LOCAL First.Second, from disk.");
 });

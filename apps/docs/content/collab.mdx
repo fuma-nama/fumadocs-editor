@@ -6,14 +6,13 @@ description: Real-time collaborative editing over the sync server
 ## Enabling it
 
 Collaboration rides the same [sync server](/sync) and the same websocket —
-pass the editor a `collab` prop and everything else is automatic:
+set `collab` on the `sync` prop and everything else is automatic:
 
 <include meta='title="collab-editor.tsx"'>../examples/collab.tsx</include>
 
-`user` is the presence identity shown at your caret on other clients. The
-initial `read` is only the first paint; once the collab session syncs, the
-server's document is authoritative. Everything Yjs loads lazily — clients
-that never pass `collab` never fetch it.
+`user` is the presence identity shown at your caret on other clients;
+`collab: true` joins as a guest. Everything Yjs loads lazily — editors that
+never turn it on never fetch it.
 
 ## The authority model
 

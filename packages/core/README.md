@@ -13,7 +13,7 @@ import { createSyntax, parseMdxToDoc, serializeDocToMdx } from "@fumadocs-editor
 
 const syntax = createSyntax(components, { math: true });
 const { doc, snapshot } = parseMdxToDoc(source, syntax);
-serializeDocToMdx(doc, snapshot, syntax); // === source
+serializeDocToMdx(doc, snapshot); // === source
 ```
 
 Documentation lives in the

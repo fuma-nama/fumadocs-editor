@@ -52,13 +52,13 @@ export function tryNormalize(node: JSONContent, syntax: Syntax): string | undefi
 
 /**
  * Serialize a TipTap document back to MDX. With a snapshot from
- * `parseMdxToDoc`, unedited blocks are emitted from their original source;
- * without one, the whole document is normalized.
+ * `parseMdxToDoc`, unedited blocks are emitted from their original source
+ * (and its syntax is used); without one, the whole document is normalized.
  */
 export function serializeDocToMdx(
   doc: JSONContent,
   snapshot?: DocSnapshot,
-  syntax: Syntax = EMPTY_SYNTAX,
+  syntax: Syntax = snapshot?.syntax ?? EMPTY_SYNTAX,
 ): string {
   const normalized: string[] = [];
   for (const node of doc.content ?? []) {

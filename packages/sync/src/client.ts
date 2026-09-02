@@ -1,5 +1,6 @@
 import {
   CLOSE_DENIED,
+  SYNC_ENDPOINT,
   type ConnectionStatus,
   type FileState,
   type ReadResult,
@@ -8,6 +9,8 @@ import {
 } from "./transport";
 
 export interface WsTransportOptions {
+  /** websocket url; defaults to the dev-server mount on the current host */
+  url?: string;
   /**
    * Produces the opaque payload the connection hello carries to the server's
    * `authenticate` hook. Called on every connection attempt, so reconnects
@@ -40,7 +43,10 @@ export interface WsTransport extends SyncTransport {
  * re-registers every watch on reconnect — sessions listen to `onStatus` to
  * flush once it returns. A denied hello stops the retrying for good.
  */
-export function wsTransport(url: string, options: WsTransportOptions = {}): WsTransport {
+export function wsTransport(options: WsTransportOptions = {}): WsTransport {
+  const url =
+    options.url ??
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${SYNC_ENDPOINT}`;
   let socket: WebSocket | null = null;
   let nextId = 1;
   let closed = false;

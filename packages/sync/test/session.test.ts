@@ -77,14 +77,17 @@ beforeEach(async () => {
   session = createFileSession({
     transport: mem.transport,
     path: "doc.mdx",
-    getText: () => text,
-    applyRemote: async (remote) => {
-      remoteApplied.push(remote);
-      if (conflictsToReport.length === 0) text = remote; // clean merge: adopt disk
-      return conflictsToReport;
-    },
-    resetToRemote: (remote) => {
-      text = remote;
+    document: {
+      getMarkdown: () => text,
+      applyExternalMarkdown: async (remote) => {
+        remoteApplied.push(remote);
+        if (conflictsToReport.length === 0) text = remote; // clean merge: adopt disk
+        return conflictsToReport;
+      },
+      setMarkdown: async (remote) => {
+        text = remote;
+      },
+      markSaved: (saved) => saved,
     },
     onStatus: (status) => statuses.push(status),
   });

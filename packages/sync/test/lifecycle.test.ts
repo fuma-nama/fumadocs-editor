@@ -50,7 +50,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const openTransport = () => wsTransport(`ws://127.0.0.1:${port}/__fde_sync`);
+const openTransport = () => wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
 const collabOpen = (transport: ReturnType<typeof openTransport>) =>
   transport.request<{ epoch: string }>({ type: "collab-open", path: "doc.mdx", components: [] });
 

@@ -64,12 +64,16 @@ site theme already defines those tokens and simply wins.
 
 - `defaultValue` is the initial MDX source — the editor owns the document from
   there (uncontrolled, like a `<textarea defaultValue>`).
-- `components` is the list of MDX components the editor understands.
-  `fumadocsUiComponents` covers the fumadocs-ui set; components not in the
-  list still round-trip untouched, they just aren't editable in place.
-- `onMarkdownChange` fires with the serialized MDX after each change,
-  debounced. `ref` exposes [`getMarkdown()`](/sync#the-editor-side) when you'd
-  rather pull.
+- `onChange` fires with the serialized MDX after each change, debounced. A
+  `ref` exposes `getMarkdown()` when you'd rather pull.
+- The fumadocs-ui components are understood out of the box. To add
+  [your own](/components), pass `components={[...fumadocsUiComponents, mine]}`;
+  components not in the list still round-trip untouched, they just aren't
+  editable in place.
+
+On the dev server, [`sync`](/sync) replaces the plumbing entirely:
+
+<include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
 
 ## Theming
 
