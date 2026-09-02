@@ -15,7 +15,7 @@
     "@fumadocs-editor/ui": "workspace:*",
     "fumadocs-core": "^16.15.4",
     "fumadocs-mdx": "^15.4.0",
-    "fumadocs-ui": "@fumadocs/base-ui@^16.15.4",
+    "fumadocs-ui": "npm:@fumadocs/base-ui@^16.15.4",
     "fumapress": "^1.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
