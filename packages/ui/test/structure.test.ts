@@ -116,6 +116,32 @@ describe("structure guard", () => {
     expect(callout.node.child(1).attrs.region).toBe("body");
   });
 
+  test("a stray inline region in a Tab dissolves into its label", () => {
+    const { editor, serialize } = makeEditor(`<Tabs items={["One", "Two"]}>
+  <Tab value="One">First.</Tab>
+  <Tab value="Two">Second.</Tab>
+</Tabs>
+`);
+    // a DOM edit beside the label parses as a fresh, unnamed region
+    const label = findNode(
+      editor,
+      (node) => node.type.name === "mdxInlineRegion" && node.textContent === "One",
+    );
+    const { schema } = editor.state;
+    const stray = schema.nodes.mdxInlineRegion.create({ region: null }, [schema.text("x")]);
+    editor.view.dispatch(editor.state.tr.insert(label.pos + label.node.nodeSize, stray));
+
+    const tab = findNode(
+      editor,
+      (node) => node.type.name === "mdxComponent" && node.attrs.name === "Tab",
+    );
+    expect(tab.node.childCount).toBe(2);
+    expect(tab.node.child(0).attrs.region).toBe("label");
+    expect(tab.node.child(0).textContent).toBe("Onex");
+    expect(tab.node.child(1).attrs.region).toBe("body");
+    expect(serialize()).toContain('items={["Onex", "Two"]}');
+  });
+
   test("healing is undone together with the damage", () => {
     const { editor, serialize } = makeEditor(FILES);
     const region = findNode(

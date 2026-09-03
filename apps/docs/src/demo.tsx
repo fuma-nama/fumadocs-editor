@@ -9,9 +9,9 @@ Click anywhere and type. Press \`/\` on an empty line to insert a block.
   Callouts, cards, tabs and other fumadocs-ui components are edited in place.
 </Callout>
 
-- Select text for the formatting toolbar
-- Drag the handle beside a block to move it
-- Switch to the **Source** tab to see the MDX
+- Select text for the toolbar; hold its joystick to drag the block
+- Press ⌘B, type in bold, then → at the line's end to stop
+- Switch to the **MDX** tab to see the source
 `;
 
 export function EditorDemo() {

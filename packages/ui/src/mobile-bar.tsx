@@ -6,14 +6,13 @@ import { tokens } from "./styles/tokens.stylex";
 import { Fragment, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Popover } from "@base-ui/react/popover";
-import { Bold, ChevronDown, Code, Italic, Plus, Redo2, Strikethrough, Undo2 } from "lucide-react";
+import { Bold, Code, Italic, Plus, Redo2, Strikethrough, Undo2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
-import { activeComponent } from "./components/attributes";
-import { BlockPanel } from "./block-menu";
-import { BlockTypePicker, activeBlock } from "./bubble-menu";
+import { BlockMenu, useBlockMenuOpen } from "./block-panel";
+import { BlockTypePicker, activeBlock, bubbleState } from "./bubble-menu";
+import { DragHandle } from "./drag-handle";
 import { insertItems } from "./slash-menu";
 import { chrome } from "./styles/shared";
 
@@ -69,7 +68,6 @@ const styles = stylex.create({
     opacity: { default: null, ":disabled": 0.35 },
   },
   labeled: { paddingInline: "0.625rem", color: tokens.foreground },
-  chipIcon: { display: "inline-flex", color: tokens.mutedForeground },
   divider: { height: "1.25rem" },
   spacer: { minWidth: "0.25rem", flex: 1 },
   /* popups hang below the bar; capped so they stay usable with the keyboard up */
@@ -86,17 +84,15 @@ const styles = stylex.create({
     paddingInline: "0.5rem",
     paddingTop: "0.5rem",
     paddingBottom: "0.125rem",
-    fontSize: 10.5,
-    fontWeight: 600,
-    letterSpacing: "0.025em",
-    textTransform: "uppercase",
+    fontSize: 11.5,
+    fontWeight: 500,
     color: tokens.mutedForeground,
   },
   item: { minHeight: "2.5rem", flexShrink: 0 },
-  panel: { display: "flex", width: "16rem", flexDirection: "column" },
 });
 
 const labeledClass = stylex.props(chrome.button, styles.button, styles.labeled).className!;
+const iconClass = stylex.props(chrome.button, styles.button).className!;
 
 function useMediaQuery(query: string): boolean {
   const [subscribe, getSnapshot] = useMemo(() => {
@@ -171,22 +167,14 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
   const [bar, setBar] = useState<HTMLElement | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
 
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const { $from } = current.state.selection;
-      let inInlineRegion = false;
-      for (let depth = $from.depth; depth > 0; depth--) {
-        if ($from.node(depth).type.name === INLINE_REGION_NODE) inInlineRegion = true;
-      }
       return {
-        inInlineRegion,
-        format: !inInlineRegion && $from.parent.type.name !== "codeBlock",
-        block: activeBlock(current),
-        active: activeComponent(current.state),
+        ...bubbleState(current.state, specs),
+        turnInto: activeBlock(current),
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
@@ -199,8 +187,9 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
     },
   });
 
+  const target = state?.active?.pos ?? state?.block?.pos;
+  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
   if (state == null) return null;
-  const spec = state.active ? specs.get(state.active.name) : undefined;
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
     fn(editor.chain().focus()).run();
@@ -214,7 +203,7 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
       <div {...stylex.props(styles.row)}>
         <BlockTypePicker
           editor={editor}
-          block={state.block}
+          block={state.turnInto}
           open={typeOpen}
           onOpenChange={setTypeOpen}
           side="bottom"
@@ -295,41 +284,24 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
         >
           <Code size={17} />
         </BarButton>
-        {state.active && spec && (
+        {target != null && (
           <>
             <span {...stylex.props(chrome.divider, styles.divider)} />
-            <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
-              <Popover.Trigger
-                aria-label={`${spec.label ?? spec.name} options`}
-                className={labeledClass}
-              >
-                <span {...stylex.props(styles.chipIcon)}>{spec.icon}</span>
-                {spec.label ?? spec.name}
-                <ChevronDown size={12} {...stylex.props(styles.chipIcon)} />
-              </Popover.Trigger>
-              <Popover.Portal container={bar}>
-                <Popover.Positioner
-                  side="bottom"
-                  sideOffset={4}
-                  align="start"
-                  {...stylex.props(chrome.layer)}
-                >
-                  <Popover.Popup
-                    data-fde-popup=""
-                    initialFocus={false}
-                    finalFocus={false}
-                    {...stylex.props(chrome.popup, styles.panel)}
-                  >
-                    <BlockPanel
-                      editor={editor}
-                      specs={specs}
-                      active={state.active}
-                      onDone={() => setPanelOpen(false)}
-                    />
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
+            <DragHandle editor={editor} pos={target} specs={specs} look={styles.button} size={22} />
+            <BlockMenu
+              editor={editor}
+              specs={specs}
+              active={state.active}
+              block={state.block}
+              open={panelOpen}
+              onOpenChange={setPanelOpen}
+              container={bar ?? undefined}
+              side="bottom"
+              align="start"
+              chipCls={labeledClass}
+              iconCls={iconClass}
+              touch
+            />
           </>
         )}
         <span {...stylex.props(styles.spacer)} />

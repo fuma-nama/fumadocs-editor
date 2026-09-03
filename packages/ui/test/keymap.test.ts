@@ -18,6 +18,34 @@ const CALLOUT = `<Callout type="info" title="Heads up">
 </Callout>
 `;
 
+describe("marks at the caret", () => {
+  test("a shortcut toggle with no selection marks what is typed next", () => {
+    const { editor, serialize } = makeEditor("Hello\n");
+    caret(editor, "Hello");
+    editor.commands.insertContent(" ");
+    editor.commands.toggleBold();
+    editor.commands.insertContent("big");
+    expect(serialize()).toBe("Hello **big**\n");
+  });
+
+  test("ArrowRight at the end of a marked line drops the marks", () => {
+    const { editor, serialize } = makeEditor("Hello **bold**\n");
+    caret(editor, "bold");
+    editor.commands.insertContent("er");
+    expect(press(editor, "ArrowRight")).toBe(true);
+    editor.commands.insertContent(" plain");
+    expect(serialize()).toBe("Hello **bolder** plain\n");
+  });
+
+  test("ArrowRight mid-line, or with no marks, is left to the browser", () => {
+    const { editor } = makeEditor("Hello **bold** end\n");
+    caret(editor, "bold");
+    expect(press(editor, "ArrowRight")).toBe(false);
+    caret(editor, "end");
+    expect(press(editor, "ArrowRight")).toBe(false);
+  });
+});
+
 describe("Enter", () => {
   test("in a file name inserts a sibling row and focuses it", () => {
     const { editor, serialize } = makeEditor(FILES);

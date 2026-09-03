@@ -322,14 +322,11 @@ export const content = stylex.create({
     },
     outlineOffset: { default: null, ":is([data-selected])": 2 },
   },
-  /** the `.react-renderer` wrapper of every component node view. Its own
-   * paint layer: a dragged element's ghost is rasterized from it; without
-   * one Chromium snapshots the whole page. Fresh inserts settle in once the
-   * editor is `settled`, so the hydration swap never animates. Entries
-   * nested in a folder indent along a guide rail. */
+  /** the `.react-renderer` wrapper of every component node view. Fresh
+   * inserts settle in once the editor is `settled`, so the hydration swap
+   * never animates. Entries nested in a folder indent along a guide rail. */
   component: {
     position: "relative",
-    isolation: "isolate",
     marginInlineStart: { default: null, [stylex.when.ancestor("[data-folder]", folder)]: "1rem" },
     paddingInlineStart: {
       default: null,
@@ -372,6 +369,16 @@ export const content = stylex.create({
     },
   },
   regionBlock: { "--fde-gap": "0.5em" },
+  /** the block a joystick would drag: lit while its handle is hovered or held */
+  lifted: {
+    borderRadius: 6,
+    backgroundColor: `color-mix(in oklab, ${tokens.foreground} 8%, transparent)`,
+    boxShadow: `0 0 0 4px color-mix(in oklab, ${tokens.foreground} 8%, transparent)`,
+    transition: {
+      default: "background-color 120ms, box-shadow 120ms",
+      [consts.reduceMotion]: "none",
+    },
+  },
   /** drag preview line, placed by the drop-indicator plugin at the target */
   dropIndicator: {
     position: "absolute",
@@ -384,10 +391,10 @@ export const content = stylex.create({
     pointerEvents: "none",
     willChange: "transform",
   },
-  /** the copy of a block riding under the finger of a touch drag:
-   * rasterized once, then moved on the compositor */
+  /** the copy of a block riding under the pointer of a drag: translucent
+   * enough to read the target through, always under the line */
   dragGhost: {
-    opacity: 0.9,
+    opacity: 0.6,
     boxShadow: consts.shadowLg,
     willChange: "transform",
   },
@@ -463,5 +470,6 @@ export const contentClass = {
   component: cls(content.block, content.component),
   atom: cls(content.atom),
   dropIndicator: cls(content.dropIndicator),
+  lifted: cls(content.lifted),
   dragGhost: cls(content.dragGhost),
 };

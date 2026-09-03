@@ -1,7 +1,6 @@
 "use client";
 import {
   Check,
-  ChevronDown,
   ChevronRight,
   CircleCheck,
   CircleX,
@@ -15,7 +14,6 @@ import {
   LayoutGrid,
   Link as LinkIcon,
   ListOrdered,
-  ListTree,
   PanelTop,
   Plus,
   Rows3,
@@ -186,8 +184,13 @@ const styles = stylex.create({
     backgroundColor: card,
     "--fde-gap": "0px",
   },
-  /** the divider is a shadow, so the container's overflow clips the first */
-  accordion: { position: "relative", boxShadow: `0 -1px 0 0 ${border}` },
+  /** the divider is a shadow, so the container's overflow clips the first.
+   * The gutter holding the chevron is the item's own chrome. */
+  accordion: {
+    position: "relative",
+    paddingInlineStart: "2.25rem",
+    boxShadow: `0 -1px 0 0 ${border}`,
+  },
   accordionChevron: {
     position: "absolute",
     insetInlineStart: "0.75rem",
@@ -212,8 +215,7 @@ const styles = stylex.create({
   },
   accordionTitle: {
     fontWeight: 500,
-    padding: "0.625rem 2.5rem 0.625rem 2.25rem",
-    "--fde-ph-x": "2.25rem",
+    padding: "0.625rem 2.5rem 0.625rem 0",
     "--fde-ph-y": "0.625rem",
   },
   accordionBody: {
@@ -221,10 +223,9 @@ const styles = stylex.create({
       default: null,
       [stylex.when.ancestor(":not([data-open])", accordionMarker)]: "none",
     },
-    padding: "0 1rem 0.75rem 2.25rem",
+    padding: "0 1rem 0.75rem 0",
     fontSize: "0.9375rem",
     color: muted,
-    "--fde-ph-x": "2.25rem",
   },
 
   files: {
@@ -249,7 +250,6 @@ const styles = stylex.create({
     top: "0.5rem",
     zIndex: 1,
     display: "inline-flex",
-    cursor: { default: "grab", ":active": "grabbing" },
     color: muted,
   },
   entryName: {
@@ -259,21 +259,25 @@ const styles = stylex.create({
     "--fde-ph-y": "0.3rem",
   },
 
+  /** the frame around the tabs is the container's own chrome */
   tabs: {
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden",
+    gap: 6,
     borderRadius: "0.75rem",
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: border,
     backgroundColor: tokens.secondary,
+    padding: "0 6px 6px",
     "--fde-gap": "0px",
   },
   tabLabel: {
     boxSizing: "border-box",
-    display: "inline-block",
-    margin: "8px 16px 0",
+    // a block, not inline: no line box beside it for a caret to rest in
+    display: "block",
+    width: "fit-content",
+    margin: "8px 10px 0",
     // room for a caret while the label is still empty
     minWidth: { default: null, ":is([data-empty])": "4ch" },
     paddingBottom: 5,
@@ -286,10 +290,13 @@ const styles = stylex.create({
   },
   tabBody: {
     backgroundColor: tokens.background,
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: border,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: border,
     padding: "12px 16px",
+    "--fde-ph-x": "16px",
+    "--fde-ph-y": "12px",
   },
 
   include: {
@@ -364,10 +371,8 @@ const styles = stylex.create({
     paddingInline: "0.75rem",
     paddingBlock: "0.5rem",
     textAlign: "left",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.025em",
+    fontSize: 12,
+    fontWeight: 500,
     color: muted,
   },
   narrow: { width: 0 },
@@ -441,24 +446,6 @@ const styles = stylex.create({
     fontSize: 12,
     color: { default: muted, ":hover": tokens.foreground },
     backgroundColor: { default: "transparent", ":hover": tokens.accent },
-  },
-
-  inlineToc: {
-    borderRadius: "0.75rem",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: border,
-    backgroundColor: card,
-    paddingInline: "1rem",
-    paddingBlock: "0.75rem",
-    fontSize: 14,
-    lineHeight: "1.25rem",
-  },
-  inlineTocIcon: {
-    float: "right",
-    display: "inline-flex",
-    marginInlineStart: "0.5rem",
-    color: muted,
   },
 });
 
@@ -625,11 +612,10 @@ function Files({ children }: ComponentRenderProps) {
 }
 
 /**
- * File and Folder rows share one geometry; the icon reads as the drag grip
- * (cursor only: pressing any chrome drags the row via the node's native
- * draggability). `zIndex: 1` lifts it above the name region (`position:
- * relative`, later in DOM order), which would otherwise swallow every
- * pointer event aimed at it.
+ * File and Folder rows share one geometry; the icon is the row's chrome (a
+ * double-click on it selects the row). `zIndex: 1` lifts it above the name
+ * region (`position: relative`, later in DOM order), which would otherwise
+ * swallow every pointer event aimed at it.
  */
 function File({ children }: ComponentRenderProps) {
   return (
@@ -754,7 +740,7 @@ function TypeCell({
  * The `type` object edited in place as the table it renders as: one row per
  * property, cells for the fields fumadocs' TypeTable reads. Unknown fields
  * stay on the property. A dynamic (non-literal) expression keeps the
- * summary card and stays source-editable via the ⋯ menu.
+ * summary card and stays source-editable from its menu.
  */
 function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
   const rows =
@@ -767,7 +753,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
         <div {...stylex.props(styles.minWidth0)}>
           <p {...stylex.props(styles.infoTitle)}>TypeTable</p>
           <p {...stylex.props(styles.infoNote, styles.truncate, styles.monoSmall)}>
-            dynamic type={"{…}"}; edit the expression via the ⋯ menu
+            dynamic type={"{…}"}; edit the expression from its menu
           </p>
         </div>
       </div>
@@ -888,17 +874,6 @@ function GithubInfoBox({ props }: ComponentRenderProps) {
         </p>
         <p {...stylex.props(styles.infoNote)}>GitHub repository</p>
       </div>
-    </div>
-  );
-}
-
-function InlineTOC({ children }: ComponentRenderProps) {
-  return (
-    <div {...stylex.props(styles.inlineToc)}>
-      <span {...stylex.props(chrome.static, styles.inlineTocIcon)} contentEditable={false}>
-        <ChevronDown size={16} />
-      </span>
-      {children}
     </div>
   );
 }
@@ -1272,36 +1247,9 @@ export const githubInfoSpec: UiComponentSpec = {
   insert: () => ({ type: "mdxComponent", attrs: { name: "GithubInfo", attributes: [] } }),
 };
 
-// Banner is absent: it is a site-layout component (mounted in the app
-// shell), not document content. In a doc it stays on the lossless generic
-// fallback.
-
-export const inlineTocSpec: UiComponentSpec = {
-  name: "InlineTOC",
-  label: "Inline TOC",
-  icon: <ListTree size={13} />,
-  childrenRegion: { region: "body", placeholder: "Table of Contents" },
-  props: [
-    { name: "items", label: "Items", type: "expression", placeholder: "{toc}", default: "toc" },
-  ],
-  render: InlineTOC,
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: {
-      name: "InlineTOC",
-      attributes: [
-        {
-          type: "mdxJsxAttribute",
-          name: "items",
-          value: { type: "mdxJsxAttributeValueExpression", value: "toc" },
-        },
-      ],
-    },
-    content: [
-      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
-    ],
-  }),
-};
+// Banner and InlineTOC are absent: they are page-layout components (mounted
+// by the app shell, fed the page's own TOC), not document content. In a doc
+// they stay on the lossless generic fallback.
 
 /**
  * All built-in fumadocs-ui component specs. Child-only specs ({@link cardSpec},
@@ -1325,5 +1273,4 @@ export const fumadocsUiComponents: UiComponentSpec[] = [
   includeSpec,
   typeTableSpec,
   githubInfoSpec,
-  inlineTocSpec,
 ];

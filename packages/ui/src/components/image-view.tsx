@@ -6,6 +6,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tip
 import type { Editor, Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { ImageIcon } from "lucide-react";
+import { useState } from "react";
 import { content } from "../styles/content";
 import { resolveSrc, type MediaProvider } from "./media";
 import { nodeViewOptions } from "./node-view-options";
@@ -15,6 +16,7 @@ const styles = stylex.create({
   /** empty-source chip: the node stays visible until a src is set */
   placeholder: {
     display: "inline-flex",
+    maxWidth: "100%",
     alignItems: "center",
     gap: "0.5rem",
     borderRadius: "0.5rem",
@@ -27,6 +29,7 @@ const styles = stylex.create({
     fontSize: 13,
     color: tokens.mutedForeground,
   },
+  note: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   /** `content.atom`'s ring, driven by the node view's `selected` prop */
   selected: { outline: `2px solid ${tokens.ring}`, outlineOffset: 2 },
 });
@@ -54,20 +57,29 @@ export async function insertImages(
 function makeImageView(media: MediaProvider | undefined) {
   return function ImageView({ node, selected }: NodeViewProps) {
     const src = (node.attrs.src as string) ?? "";
+    // the src that failed to load: the chip keeps the node visible and
+    // selectable, and a new src retries
+    const [broken, setBroken] = useState("");
+    const failed = src !== "" && broken === src;
     return (
       <NodeViewWrapper as="span" data-image="" {...stylex.props(styles.wrapper)}>
-        {src ? (
+        {src && !failed ? (
           <img
             src={resolveSrc(media, src)}
             alt={(node.attrs.alt as string) ?? ""}
             title={(node.attrs.title as string) ?? undefined}
             draggable={false}
+            onError={() => setBroken(src)}
             {...stylex.props(content.img, selected && styles.selected)}
           />
         ) : (
           <span {...stylex.props(styles.placeholder, selected && styles.selected)}>
             <ImageIcon size={14} />
-            No image yet. Set a source from the bubble
+            <span {...stylex.props(styles.note)}>
+              {failed
+                ? `Image failed to load: ${src}`
+                : "No image yet. Set a source from the toolbar"}
+            </span>
           </span>
         )}
       </NodeViewWrapper>

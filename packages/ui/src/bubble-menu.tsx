@@ -9,13 +9,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import {
-  NodeSelection,
-  TextSelection,
-  type EditorState,
-  type Transaction as PMTransaction,
-} from "@tiptap/pm/state";
-import { COMPONENT_NODE, INLINE_REGION_NODE, type MdxAttribute } from "@fumadocs-editor/core";
+import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
+import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
@@ -40,9 +35,10 @@ import {
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
-import { BlockPanel } from "./block-menu";
-import { updateAtomAttributes } from "./components/attributes";
-import { OPEN_COMPONENT_MENU } from "./components/caret-policy";
+import { BlockMenu, useBlockMenuOpen, type ActiveComponent } from "./block-panel";
+import { DragHandle } from "./drag-handle";
+import { activeComponent, updateAtomAttributes } from "./components/attributes";
+import { handleBlock } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
 import { chrome } from "./styles/shared";
@@ -54,8 +50,19 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, and stays under the popovers it opens. */
-  bubble: { zIndex: 40, minWidth: 0, display: "flex", alignItems: "center", gap: "0.125rem" },
+   * controls, and stays under the popovers it opens. It glides to a new
+   * position (the plugin writes `top`/`left`), e.g. after a block is
+   * dragged; while hidden and re-shown the inline override lands it. */
+  bubble: {
+    zIndex: 40,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.125rem",
+    transitionProperty: "top, left",
+    transitionDuration: { default: "200ms", [consts.reduceMotion]: "0ms" },
+    transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+  },
   linkPopup: {
     display: "flex",
     width: "16rem",
@@ -131,11 +138,11 @@ const styles = stylex.create({
       ":is([data-popup-open])": tokens.accent,
     },
   },
-  chipIcon: { display: "inline-flex", color: muted },
-  panel: { display: "flex", width: "14rem", flexDirection: "column" },
 });
 
 const ghostSelectClass = stylex.props(chrome.button, chrome.ghostSelect).className!;
+const chipClass = stylex.props(chrome.button, styles.chip).className!;
+const iconClass = stylex.props(chrome.button, chrome.iconButton).className!;
 
 /** The turn-into list: every block a text selection can become. */
 export const TURN_INTO = [
@@ -267,67 +274,68 @@ export function BlockTypePicker({
 }
 
 /**
- * The one floating surface. What it holds follows the selection: a text
- * selection gets the formatting controls, a caret inside a component gets that
- * component's chip (props, inserts, moves, delete), and a text selection
- * inside a component gets both: never two competing menus.
+ * The one floating surface, under a selection. What it holds follows the
+ * selection: text gets the formatting controls, a node-selected atom its
+ * editor, and the block around the selection (the innermost component,
+ * else the innermost plain block) its joystick and menu: never two
+ * competing menus. A resting caret has no chrome: the marks it types with
+ * come from the shortcuts, and ArrowRight at the line's end drops them.
  */
-interface BubbleState {
+export interface BubbleState {
   format: boolean;
-  active: { pos: number; name: string } | null;
-  /** text selection sits inside a table: row/column controls apply */
+  /** the caret sits inside a table: row/column controls apply */
   table: boolean;
   /** a node-selected atom the bubble edits directly */
   atom: { kind: "image" | "frontmatter"; pos: number } | null;
+  /** the innermost registered component around the caret */
+  active: ActiveComponent | null;
+  /** the plain block the joystick and ⋯ serve when no component is */
+  block: { pos: number } | null;
 }
 
-function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
+export function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
   const selection = state.selection;
   const { $from } = selection;
-
-  // a selection of structural tokens only (a double-click at a region's end
-  // can produce one) renders nothing: it must not summon the bubble
-  const textual =
-    selection instanceof TextSelection &&
-    !selection.empty &&
-    state.doc.textBetween(selection.from, selection.to).length > 0;
-
-  let format = textual;
-  if (format && $from.parent.type.name === "codeBlock") format = false;
-  if (format) {
-    for (let depth = $from.depth; depth > 0; depth--) {
-      if ($from.node(depth).type.name === INLINE_REGION_NODE) format = false;
-    }
+  let format = selection instanceof TextSelection && $from.parent.type.name !== "codeBlock";
+  let table = false;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const name = $from.node(depth).type.name;
+    if (name === INLINE_REGION_NODE) format = false;
+    else if (name === "table") table = true;
   }
 
-  // the chip appears only when something is selected: a resting caret keeps
-  // the ⋯ handle instead of a floating menu
-  let active: BubbleState["active"] = null;
   let atom: BubbleState["atom"] = null;
   if (selection instanceof NodeSelection) {
     const name = selection.node.type.name;
-    if (name === COMPONENT_NODE) {
-      const componentName = selection.node.attrs.name as string;
-      if (specs.has(componentName)) active = { pos: selection.from, name: componentName };
-    } else if (name === "image" || name === "frontmatter") {
-      atom = { kind: name, pos: selection.from };
-    }
-  } else if (textual) {
-    for (let depth = $from.depth; !active && depth > 0; depth--) {
-      if ($from.node(depth).type.name === COMPONENT_NODE) {
-        const name = $from.node(depth).attrs.name as string;
-        if (specs.has(name)) active = { pos: $from.before(depth), name };
-      }
-    }
+    if (name === "image" || name === "frontmatter") atom = { kind: name, pos: selection.from };
   }
 
-  let table = false;
-  if (textual) {
-    for (let depth = $from.depth; depth > 0; depth--) {
-      if ($from.node(depth).type.name === "table") table = true;
-    }
+  const component = activeComponent(state);
+  const active = component && specs.has(component.name) ? component : null;
+  return {
+    format,
+    table: format && table,
+    atom,
+    active,
+    block: active ? null : handleBlock(selection),
+  };
+}
+
+/** what summons the bubble: selected text, or a node-selected component or atom */
+function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
+  const selection = state.selection;
+  if (selection instanceof NodeSelection) {
+    const { node } = selection;
+    if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
+    return node.type.name === "image" || node.type.name === "frontmatter";
   }
-  return { format, active, table, atom };
+  // a selection of structural tokens only (a double-click at a region's
+  // end can produce one) renders nothing: it must not summon the bubble
+  return (
+    selection instanceof TextSelection &&
+    !selection.empty &&
+    state.doc.textBetween(selection.from, selection.to).length > 0
+  );
 }
 
 function MarkButton({
@@ -596,7 +604,6 @@ export function EditorBubble({
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
 }) {
-  const [panelOpen, setPanelOpen] = useState(false);
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
   // Portal target has three constraints: the menu hides on editor blur
   // unless focus lands inside the bubble's parent (plugin checks
@@ -610,13 +617,12 @@ export function EditorBubble({
   // where a state-setter callback would be a cross-component setState. The
   // element is created eagerly and never replaced, so mount effects see it.
   const menuRef = useRef<HTMLDivElement>(null);
-  const panelContainer = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
+  const wrapper = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
       const bubble = bubbleState(current.state, specs);
-      const doc = current.state.doc;
       return {
         ...bubble,
         bold: current.isActive("bold"),
@@ -624,40 +630,36 @@ export function EditorBubble({
         strike: current.isActive("strike"),
         code: current.isActive("code"),
         link: current.isActive("link") ? String(current.getAttributes("link").href ?? "") : null,
-        block: activeBlock(current),
+        turnInto: activeBlock(current),
         // the panels render these: without them in the snapshot, attribute
         // edits don't re-render and React resets the controlled inputs'
         // caret on every keystroke
-        componentAttrs: bubble.active
-          ? ((doc.nodeAt(bubble.active.pos)?.attrs.attributes ?? []) as MdxAttribute[])
-          : null,
-        atomAttrs: bubble.atom ? (doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
+        atomAttrs: bubble.atom ? (current.state.doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
       };
     },
   });
 
-  const active = state?.active ?? null;
-  const hasActive = active != null;
-
-  useEffect(() => {
-    if (!hasActive) setPanelOpen(false);
-  }, [hasActive]);
-
-  // a click on a leaf component (nothing to type into) opens its menu
-  useEffect(() => {
-    const onTransaction = ({ transaction }: { transaction: PMTransaction }) => {
-      if (transaction.getMeta(OPEN_COMPONENT_MENU)) setPanelOpen(true);
-    };
-    editor.on("transaction", onTransaction);
-    return () => {
-      editor.off("transaction", onTransaction);
-    };
-  }, [editor]);
-
   useEffect(() => {
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
+
+  const target = state?.active?.pos ?? state?.block?.pos;
+  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
+
+  // Mod-. opens the block's menu from a resting caret: the bubble is
+  // summoned first, and the popover's focus then keeps it up
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "." || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "show"));
+      setPanelOpen(!panelOpen);
+    };
+    dom.addEventListener("keydown", onKeyDown);
+    return () => dom.removeEventListener("keydown", onKeyDown);
+  }, [editor, panelOpen, setPanelOpen]);
 
   // the plugin positions the bubble once on show, before React fills it in,
   // and never again when its size changes (chip ↔ full toolbar). Re-anchor
@@ -676,19 +678,33 @@ export function EditorBubble({
     fn(editor.chain().focus()).run();
   };
 
-  const spec = active ? specs.get(active.name) : undefined;
-
   return (
     <BubbleMenu
       ref={menuRef}
       editor={editor}
       updateDelay={150}
-      options={{ placement: "bottom", offset: 6 }}
-      shouldShow={({ state: editorState }) => {
+      options={{
+        placement: "bottom-start",
+        offset: 6,
+        onHide: () => setPanelOpen(false),
+        // re-shown, it lands in place: the glide is for moves while visible
+        onShow: () => {
+          menuRef.current!.style.transition = "none";
+        },
+        onUpdate: () => {
+          const el = menuRef.current!;
+          if (!el.style.transition) return;
+          // flush the landing position before transitions come back
+          void el.offsetTop;
+          el.style.transition = "";
+        },
+      }}
+      shouldShow={({ state: editorState, view }) => {
         // touch has the mobile bar; one surface per input mode
         if (window.matchMedia("(pointer: coarse)").matches) return false;
-        const { format, active: current, atom } = bubbleState(editorState, specs);
-        return format || current != null || atom != null;
+        // focus in one of its popovers (portalled into the wrapper) keeps it
+        if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
+        return summoned(editorState, specs);
       }}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
@@ -696,11 +712,11 @@ export function EditorBubble({
         <>
           <BlockTypePicker
             editor={editor}
-            block={state.block}
+            block={state.turnInto}
             open={turnIntoOpen}
             onOpenChange={setTurnIntoOpen}
             triggerCls={ghostSelectClass}
-            container={panelContainer}
+            container={wrapper}
           />
           <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
@@ -727,37 +743,34 @@ export function EditorBubble({
           >
             <Code size={15} />
           </MarkButton>
-          <LinkControl editor={editor} href={state.link} container={panelContainer} />
-          {state.table && <TableControl editor={editor} container={panelContainer} />}
+          <LinkControl editor={editor} href={state.link} container={wrapper} />
+          {state.table && <TableControl editor={editor} container={wrapper} />}
         </>
       )}
       {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
       {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
-      {active && spec && (
+      {state && target != null && (
         <>
-          {state?.format && <span {...stylex.props(chrome.divider)} />}
-          <Popover.Root open={panelOpen} onOpenChange={setPanelOpen}>
-            <Popover.Trigger
-              aria-label={`${spec.label ?? spec.name} options`}
-              {...stylex.props(chrome.button, styles.chip)}
-            >
-              <span {...stylex.props(styles.chipIcon)}>{spec.icon}</span>
-              {spec.label ?? spec.name}
-              <ChevronDown size={12} {...stylex.props(styles.muted)} />
-            </Popover.Trigger>
-            <Popover.Portal container={panelContainer}>
-              <Popover.Positioner sideOffset={6} align="end" {...stylex.props(chrome.layer)}>
-                <Popover.Popup data-fde-popup="" {...stylex.props(chrome.popup, styles.panel)}>
-                  <BlockPanel
-                    editor={editor}
-                    specs={specs}
-                    active={{ ...active, attributes: state?.componentAttrs ?? [] }}
-                    onDone={() => setPanelOpen(false)}
-                  />
-                </Popover.Popup>
-              </Popover.Positioner>
-            </Popover.Portal>
-          </Popover.Root>
+          {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
+          <DragHandle
+            editor={editor}
+            pos={target}
+            specs={specs}
+            look={chrome.iconButton}
+            size={20}
+          />
+          <BlockMenu
+            editor={editor}
+            specs={specs}
+            active={state.active}
+            block={state.block}
+            open={panelOpen}
+            onOpenChange={setPanelOpen}
+            container={wrapper}
+            align="end"
+            chipCls={chipClass}
+            iconCls={iconClass}
+          />
         </>
       )}
     </BubbleMenu>

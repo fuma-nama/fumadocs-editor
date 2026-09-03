@@ -23,6 +23,24 @@ import { MdxEditor } from "@fumadocs-editor/ui";
 The ref satisfies `SyncedDocument`, so it can be handed to
 [`createFileSession`](/sync#your-own-session) directly.
 
+## Keyboard
+
+The toolbar appears over selected text. A resting caret has no chrome, so
+formatting comes from the keyboard:
+
+| Keys                  | Does                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `⌘B` `⌘I` `⌘E` `⌘⇧S`  | Toggle bold, italic, code or strikethrough; with no selection, for what you type next |
+| `→` at the line's end | Stop the marks in force, so the next words come out plain                             |
+| `⌘.`                  | Open the block's menu (attributes, inserts, move, delete)                             |
+| `⌥↑` `⌥↓`             | Move the block                                                                        |
+| `Esc`                 | Select the component around the caret, then its parent                                |
+| `Tab` `⇧Tab`          | Next or previous region of a component                                                |
+| `⌘Enter`              | Insert the next sibling (a new Step, Tab, File) from anywhere inside one              |
+
+With a mouse, double-click a component's chrome (its icon, rail or padded
+edge) to select it; its menu and joystick follow.
+
 ## EditorThemeProvider
 
 Theme context for standalone hosts. Tracks the choice, persists it and sets

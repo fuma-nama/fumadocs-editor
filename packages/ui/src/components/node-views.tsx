@@ -1,6 +1,6 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
-import { Extension as ExtensionBase, type Extension, type Node } from "@tiptap/core";
+import { Extension as ExtensionBase, type Editor, type Extension, type Node } from "@tiptap/core";
 import {
   MdxBlockRegion,
   MdxComponent,
@@ -13,7 +13,7 @@ import {
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from "@tiptap/react";
-import { NodeSelection, Plugin } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { UiComponentSpec } from "./spec";
 import { FallbackCard, RenderBoundary } from "../static-mdx";
@@ -193,6 +193,49 @@ const activeComponent = ExtensionBase.create({
   },
 });
 
+const liftKey = new PluginKey<number | null>("fdeLift");
+
+/** light the block at `pos` (none when null): the joystick's target */
+export function setLifted(editor: Editor, pos: number | null): void {
+  if (liftKey.getState(editor.state) === pos) return;
+  editor.view.dispatch(editor.state.tr.setMeta(liftKey, pos));
+}
+
+/**
+ * The block a joystick would drag, lit while its handle is hovered or held.
+ * A decoration, not a class on the node's DOM: ProseMirror owns that DOM
+ * and redraws it. Any edit clears it; the handle lights again on its own.
+ */
+const liftedBlock = ExtensionBase.create({
+  name: "fdeLiftedBlock",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<number | null>({
+        key: liftKey,
+        state: {
+          init: () => null,
+          apply(tr, pos) {
+            const meta = tr.getMeta(liftKey) as number | null | undefined;
+            if (meta !== undefined) return meta;
+            return tr.docChanged ? null : pos;
+          },
+        },
+        props: {
+          decorations(state) {
+            const pos = liftKey.getState(state);
+            if (pos == null) return DecorationSet.empty;
+            const node = state.doc.nodeAt(pos);
+            if (!node) return DecorationSet.empty;
+            return DecorationSet.create(state.doc, [
+              Decoration.node(pos, pos + node.nodeSize, { class: contentClass.lifted }),
+            ]);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 /**
  * TipTap extensions for the component node types, each wired to a React node
  * view. Replaces the base (view-less) nodes from `editorExtensions`.
@@ -224,6 +267,7 @@ export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
     structureGuard(map),
     caretPolicy,
     activeComponent,
+    liftedBlock,
   ] as unknown as Extension[];
 }
 

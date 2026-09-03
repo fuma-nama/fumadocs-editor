@@ -49,10 +49,8 @@ export const chrome = stylex.create({
     outline: "none",
     boxShadow: { default: null, ":focus-visible": consts.focusRing },
   },
-  /** non-editable chrome inside the document: never part of a text
-   * selection or drag; its own paint layer so a drag ghost is rasterized
-   * from it rather than the whole page */
-  static: { position: "relative", isolation: "isolate", userSelect: "none" },
+  /** non-editable chrome inside the document: never part of a text selection */
+  static: { position: "relative", userSelect: "none" },
   /** stacking for positioners and fixed surfaces */
   layer: { zIndex: 50 },
   /* Padding scale: menus/lists keep p-1 (items px-2); form popovers

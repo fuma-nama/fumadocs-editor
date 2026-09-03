@@ -10,3 +10,5 @@ export const accordion = stylex.defineMarker();
 export const folder = stylex.defineMarker();
 /** a type-table row: the remove button shows on hover */
 export const row = stylex.defineMarker();
+/** the joystick button; `data-dragging` while the pointer holds it */
+export const joystick = stylex.defineMarker();

@@ -78,7 +78,9 @@ once; there is no separate slot per region.
 - To style a region, target `data-region="<name>"` from the wrapper. The
   example bolds the title with `[&_[data-region=title]]:font-medium`.
 - Mark chrome `contentEditable={false}` (the "Soon" badge) so the caret
-  cannot enter it. Clicking chrome puts the caret in the nearest region.
+  cannot enter it. Clicking chrome puts the caret in the nearest region;
+  double-clicking it selects the component, so give every component some
+  chrome to double-click: an icon, a rail, a padded edge.
 
 ## Props and literals
 

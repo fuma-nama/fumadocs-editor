@@ -13,7 +13,6 @@ export const MdxComponent = Node.create({
   defining: true,
   isolating: true,
   selectable: true,
-  draggable: true,
   addAttributes: () => ({
     name: { default: null as string | null },
     attributes: { default: [] as MdxAttribute[] },

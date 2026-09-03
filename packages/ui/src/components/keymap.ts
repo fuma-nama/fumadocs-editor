@@ -508,9 +508,9 @@ export function moveBlockAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
 }
 
 /**
- * The block the ⋯ handle serves: the innermost block around the selection
- * that sits directly in the document or in a body region, unless that is a
- * component (it carries its own handle) or the frontmatter.
+ * The plain block the toolbar serves: the innermost block around the
+ * selection that sits directly in the document or in a body region, unless
+ * that is a component (it has its own menu) or the frontmatter.
  */
 export function handleBlock(selection: Selection): { pos: number; type: string } | null {
   const { $from } = selection;
@@ -779,7 +779,24 @@ function handleSelectScope(editor: Editor): boolean {
   return false; // everything covered: fall through to select-all
 }
 
-/* ---- arrows across structural boundaries ---- */
+/* ---- arrows ---- */
+
+/**
+ * ArrowRight at the end of a textblock, with marks set for the next
+ * character, drops them instead of moving: the caret has nowhere to go, so
+ * the key's one useful meaning is "stop bolding" (as in Notion). A second
+ * press crosses the boundary as usual.
+ */
+function exitMarks(editor: Editor): boolean {
+  const { state } = editor;
+  const { $from, empty } = state.selection;
+  if (!empty || !$from.parent.isTextblock || $from.parentOffset < $from.parent.content.size) {
+    return false;
+  }
+  if ((state.storedMarks ?? $from.marks()).length === 0) return false;
+  editor.view.dispatch(state.tr.setStoredMarks([]));
+  return true;
+}
 
 /**
  * Arrow keys at a textblock edge, when the crossing is structural (into, out
@@ -841,6 +858,14 @@ function handleBoundaryArrow(editor: Editor, dir: 1 | -1, axis: "v" | "h"): bool
 
 export function componentKeymap(specs: SpecMap): Extension[] {
   return [
+    // ahead of the code mark's own exit, which inserts a space
+    Extension.create({
+      name: "fdeExitMarks",
+      priority: 110,
+      addKeyboardShortcuts() {
+        return { ArrowRight: ({ editor }) => exitMarks(editor) };
+      },
+    }),
     Extension.create({
       name: "fdeComponentKeymap",
       addKeyboardShortcuts() {

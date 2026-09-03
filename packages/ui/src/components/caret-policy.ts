@@ -1,11 +1,37 @@
 import { Extension } from "@tiptap/core";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
 /** transaction meta set when a leaf component is clicked: the bubble opens
  * that component's menu, since there is nothing in it to type into */
 export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";
+
+/**
+ * The component whose chrome a mouse event landed on. handleClickOn depends
+ * on ProseMirror resolving the click to a position inside the component; on
+ * fully non-editable chrome the hit test often lands in the gap outside it.
+ * The node-view wrapper carries the component, so read it from the DOM.
+ */
+function componentAt(
+  view: EditorView,
+  target: EventTarget | null,
+): { node: PMNode; pos: number } | null {
+  const dom = (target as Element | null)?.closest?.("[data-component]");
+  if (!dom || !view.dom.contains(dom)) return null;
+  let inside: number;
+  try {
+    inside = view.posAtDOM(dom, 0);
+  } catch {
+    return null;
+  }
+  // posAtDOM of the wrapper resolves just inside the node
+  const pos = inside - 1;
+  const node = view.state.doc.nodeAt(pos);
+  return node?.type.name === COMPONENT_NODE ? { node, pos } : null;
+}
 
 /*
  * Caret and selection policy: the caret rests in editable text, a component is
@@ -59,23 +85,34 @@ export const caretPolicy = Extension.create({
             if (text) editor.view.dispatch(editor.state.tr.insertText(text).scrollIntoView());
             return true;
           },
-          // Double-click at or past the end of an inline region's text selects
-          // the whole name. The default word selection there has no word to
-          // grab and spans only structural tokens across the region boundary:
-          // an invisible, non-empty selection.
-          handleDoubleClick(view, pos) {
-            const $pos = view.state.doc.resolve(pos);
-            for (let depth = $pos.depth; depth > 0; depth--) {
-              if ($pos.node(depth).type.name !== INLINE_REGION_NODE) continue;
-              const start = $pos.start(depth);
-              const end = $pos.end(depth);
-              if (start === end || $pos.pos < end) return false;
-              view.dispatch(
-                view.state.tr.setSelection(TextSelection.create(view.state.doc, start, end)),
-              );
-              return true;
+          // In a region, a double-click at or past the end of an inline
+          // region's text selects the whole name: the default word selection
+          // there has no word to grab and spans only structural tokens across
+          // the region boundary, an invisible, non-empty selection. On a
+          // component's chrome (its icon, rail, padding: anything outside a
+          // region) it selects the component.
+          handleDoubleClick(view, pos, event) {
+            const target = event.target as Element | null;
+            if (target?.closest?.("[data-region]")) {
+              const $pos = view.state.doc.resolve(pos);
+              for (let depth = $pos.depth; depth > 0; depth--) {
+                if ($pos.node(depth).type.name !== INLINE_REGION_NODE) continue;
+                const start = $pos.start(depth);
+                const end = $pos.end(depth);
+                if (start === end || $pos.pos < end) return false;
+                view.dispatch(
+                  view.state.tr.setSelection(TextSelection.create(view.state.doc, start, end)),
+                );
+                return true;
+              }
+              return false;
             }
-            return false;
+            const hit = componentAt(view, target);
+            if (!hit) return false;
+            view.dispatch(
+              view.state.tr.setSelection(NodeSelection.create(view.state.doc, hit.pos)),
+            );
+            return true;
           },
           // a click on a component's own chrome (padding, rails, icons) places
           // the caret in the nearest editable text instead of node-selecting
@@ -103,28 +140,13 @@ export const caretPolicy = Extension.create({
             view.dispatch(view.state.tr.setSelection(selection));
             return true;
           },
-          // handleClickOn depends on ProseMirror resolving the click to a
-          // position inside the component. On fully non-editable chrome the
-          // hit test often lands in the gap outside it and the click dies.
-          // Fall back to the DOM: the node-view wrapper carries the
-          // component, and a leaf still deserves its menu.
+          // a click that died on a leaf's chrome still deserves its menu
           handleClick(view, _pos, event) {
-            const target = event.target as Element | null;
-            const dom = target?.closest?.("[data-component]");
-            if (!dom || !view.dom.contains(dom)) return false;
-            let inside: number;
-            try {
-              inside = view.posAtDOM(dom, 0);
-            } catch {
-              return false;
-            }
-            // posAtDOM of the wrapper resolves just inside the node
-            const at = inside - 1;
-            const node = view.state.doc.nodeAt(at);
-            if (!node || node.type.name !== COMPONENT_NODE || node.childCount > 0) return false;
+            const hit = componentAt(view, event.target);
+            if (!hit || hit.node.childCount > 0) return false;
             view.dispatch(
               view.state.tr
-                .setSelection(NodeSelection.create(view.state.doc, at))
+                .setSelection(NodeSelection.create(view.state.doc, hit.pos))
                 .setMeta(OPEN_COMPONENT_MENU, true),
             );
             return true;

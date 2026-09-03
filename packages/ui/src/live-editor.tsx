@@ -12,7 +12,6 @@ import { codeBlockExtension } from "./components/code-block";
 import { mathExtensions } from "./components/math";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
-import { BlockMenu } from "./block-menu";
 import { MobileBar } from "./mobile-bar";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
@@ -183,7 +182,6 @@ export function LiveEditor({
       )}
       <EditorContent editor={editor} />
       {editor && editable && <EditorBubble editor={editor} specs={specs} media={media} />}
-      {editor && editable && <BlockMenu editor={editor} specs={specs} />}
     </div>
   );
 }
