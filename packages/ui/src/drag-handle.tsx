@@ -147,7 +147,9 @@ export function DragHandle({
         if (event.button !== 0) return;
         // no mousedown follows, so focus stays in the editor
         event.preventDefault();
-        startPointerDrag(editor.view, pos, event.nativeEvent, specs, tilt);
+        // React's currentTarget is this button; the native event's is the
+        // node React listens on (a root container, or the document)
+        startPointerDrag(editor.view, pos, event.currentTarget, event.nativeEvent, specs, tilt);
       }}
     >
       <span {...stylex.props(styles.socket)} aria-hidden>

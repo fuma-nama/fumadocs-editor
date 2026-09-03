@@ -434,6 +434,7 @@ const SLOP = 3;
 export function startPointerDrag(
   view: EditorView,
   pos: number,
+  handle: HTMLElement,
   event: PointerEvent,
   specs: SpecMap,
   /** the pointer's offset from the press, for the handle's own motion; (0, 0) at the end */
@@ -441,8 +442,7 @@ export function startPointerDrag(
 ): void {
   const node = view.state.doc.nodeAt(pos);
   const dom = view.nodeDOM(pos);
-  const handle = event.currentTarget;
-  if (!node || !(dom instanceof HTMLElement) || !(handle instanceof HTMLElement)) return;
+  if (!node || !(dom instanceof HTMLElement)) return;
   const childOnly = childOnlyNames(specs.values());
   const viewport = window.visualViewport;
   const source = { from: pos, to: pos + node.nodeSize };
