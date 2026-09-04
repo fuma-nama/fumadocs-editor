@@ -113,6 +113,7 @@ export function Picker<T extends PickerItem>({
       </Combobox.Trigger>
       <Combobox.Portal container={container ?? portal.container}>
         <Combobox.Positioner
+          positionMethod="fixed"
           side={side}
           sideOffset={6}
           align={align}

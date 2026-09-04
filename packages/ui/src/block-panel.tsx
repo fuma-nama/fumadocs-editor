@@ -113,6 +113,7 @@ export function BlockMenu({
   chipCls,
   iconCls,
   touch,
+  compact,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
@@ -128,6 +129,8 @@ export function BlockMenu({
   iconCls: string;
   /** a touch surface: the popup must not raise the keyboard */
   touch?: boolean;
+  /** icon-only trigger, for a spot too small for the chip */
+  compact?: boolean;
 }) {
   const spec = active ? specs.get(active.name) : undefined;
   const pos = active ? active.pos : block?.pos;
@@ -139,9 +142,9 @@ export function BlockMenu({
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger
         aria-label={label ? `${label} options` : "Block options"}
-        className={label ? chipCls : iconCls}
+        className={label && !compact ? chipCls : iconCls}
       >
-        {label ? (
+        {label && !compact ? (
           <>
             <span {...stylex.props(styles.chipIcon)}>{spec!.icon}</span>
             {label}
@@ -153,6 +156,7 @@ export function BlockMenu({
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner
+          positionMethod="fixed"
           side={side}
           sideOffset={6}
           align={align}

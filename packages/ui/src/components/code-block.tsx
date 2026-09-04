@@ -261,7 +261,7 @@ function MetaSettings({
         <Settings2 size={13} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="end">
+        <Popover.Positioner positionMethod="fixed" sideOffset={6} align="end">
           <Popover.Popup {...stylex.props(chrome.popup, styles.settingsPopup)}>
             <label {...stylex.props(styles.row)}>
               Line numbers

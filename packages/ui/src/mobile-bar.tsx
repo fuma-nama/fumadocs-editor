@@ -3,7 +3,15 @@
 import "@tiptap/starter-kit";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
-import { Fragment, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Fragment,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { Popover } from "@base-ui/react/popover";
@@ -15,6 +23,10 @@ import { BlockTypePicker, activeBlock, bubbleState } from "./bubble-menu";
 import { DragHandle } from "./drag-handle";
 import { insertItems } from "./slash-menu";
 import { chrome } from "./styles/shared";
+import { useEditorPortal } from "./utils/portal";
+
+/** the gutter buttons' side, in px */
+const GUTTER_BUTTON = 28;
 
 const styles = stylex.create({
   /* Heads the editor and sticks to the top of the viewport while scrolling,
@@ -89,10 +101,37 @@ const styles = stylex.create({
     color: tokens.mutedForeground,
   },
   item: { minHeight: "2.5rem", flexShrink: 0 },
+  /* the block's own controls: stacked in the gutter left of its first line,
+   * or a row in the spot the component reserves for them */
+  gutter: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    zIndex: 1,
+    display: "flex",
+    flexDirection: { default: "column", ":is([data-row])": "row" },
+    alignItems: "center",
+    willChange: "transform",
+  },
+  gutterButton: {
+    display: "inline-flex",
+    width: GUTTER_BUTTON,
+    height: GUTTER_BUTTON,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "0.375rem",
+    outline: "none",
+    color: { default: tokens.mutedForeground, ":is([data-popup-open])": tokens.foreground },
+    backgroundColor: {
+      default: "transparent",
+      ":active": tokens.accent,
+      ":is([data-popup-open])": tokens.accent,
+    },
+  },
 });
 
 const labeledClass = stylex.props(chrome.button, styles.button, styles.labeled).className!;
-const iconClass = stylex.props(chrome.button, styles.button).className!;
+const gutterIconClass = stylex.props(chrome.button, styles.gutterButton).className!;
 
 function useMediaQuery(query: string): boolean {
   const [subscribe, getSnapshot] = useMemo(() => {
@@ -152,13 +191,115 @@ interface MobileBarProps {
   math?: boolean;
 }
 
-/** Touch editing surface: a toolbar heading the editor, stuck to the top while scrolling. */
+/**
+ * Touch editing surface: a toolbar heading the editor, stuck to the top while
+ * scrolling, and the block's own controls beside the block.
+ */
 export function MobileBar(props: MobileBarProps) {
   // gate the whole subtree, not just its output: TouchBar's editor-state
   // selector (two can() trial runs) would otherwise run per transaction on
   // desktop only to render null
   const coarse = useMediaQuery("(pointer: coarse)");
-  return coarse ? <TouchBar {...props} /> : null;
+  if (!coarse) return null;
+  return (
+    <>
+      <TouchBar {...props} />
+      <BlockGutter editor={props.editor} specs={props.specs} />
+    </>
+  );
+}
+
+/** the spot a component reserves for the controls inside its own chrome */
+function controlsSlot(dom: HTMLElement): HTMLElement | null {
+  const slot = dom.querySelector("[data-fde-controls]");
+  const own = dom.querySelector("[data-component]");
+  // a slot the component shows only on touch screens is `display: none` elsewhere
+  return slot instanceof HTMLElement &&
+    slot.offsetWidth > 0 &&
+    own &&
+    slot.closest("[data-component]") === own
+    ? slot
+    : null;
+}
+
+/**
+ * The joystick and menu of the caret's block: in the spot the block
+ * reserves for them, else in the gutter left of its first line (a nested
+ * block's gutter would be its parent's chrome). From the bar they were a
+ * screen away from the block: a drag lifted the ghost far from the finger
+ * while the line sat under it.
+ */
+function BlockGutter({ editor, specs }: { editor: Editor; specs: Map<string, UiComponentSpec> }) {
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: current }) => {
+      if (!current) return null;
+      const { active, block } = bubbleState(current.state, specs);
+      return { active, block };
+    },
+  });
+  const target = state?.active?.pos ?? state?.block?.pos;
+  const [open, setOpen] = useBlockMenuOpen(editor, target);
+  const { anchorRef, container } = useEditorPortal();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // re-placed whenever the document's layout changes under it (an edit
+  // above, a resize, an image loading); a transform, so nothing lays out
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || target == null) return;
+    const place = () => {
+      const dom = editor.view.nodeDOM(target);
+      const frame = el.offsetParent;
+      if (!(dom instanceof HTMLElement) || !frame) return;
+      const base = frame.getBoundingClientRect();
+      const slot = controlsSlot(dom);
+      el.toggleAttribute("data-row", slot != null);
+      if (slot) {
+        const at = slot.getBoundingClientRect();
+        el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
+        return;
+      }
+      const rect = dom.getBoundingClientRect();
+      const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
+      // centred on the block's first line, in the 24px gutter of the content's padding
+      const x = rect.left - base.left - (24 + GUTTER_BUTTON) / 2;
+      const y = rect.top - base.top + (Math.min(line, rect.height) - GUTTER_BUTTON) / 2;
+      el.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(editor.view.dom);
+    return () => observer.disconnect();
+  }, [editor, target]);
+
+  if (state == null || target == null) return null;
+  return (
+    <div
+      ref={(node) => {
+        ref.current = node;
+        anchorRef(node);
+      }}
+      {...stylex.props(styles.gutter)}
+    >
+      <DragHandle editor={editor} pos={target} specs={specs} look={styles.gutterButton} size={18} />
+      <BlockMenu
+        editor={editor}
+        specs={specs}
+        active={state.active}
+        block={state.block}
+        open={open}
+        onOpenChange={setOpen}
+        container={container}
+        side="bottom"
+        align="start"
+        chipCls={gutterIconClass}
+        iconCls={gutterIconClass}
+        touch
+        compact
+      />
+    </div>
+  );
 }
 
 function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
@@ -187,8 +328,6 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
     },
   });
 
-  const target = state?.active?.pos ?? state?.block?.pos;
-  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
   if (state == null) return null;
 
   const run = (fn: (chain: ReturnType<Editor["chain"]>) => { run: () => boolean }) => {
@@ -217,6 +356,7 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
           </Popover.Trigger>
           <Popover.Portal container={bar}>
             <Popover.Positioner
+              positionMethod="fixed"
               side="bottom"
               sideOffset={4}
               align="start"
@@ -284,26 +424,6 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
         >
           <Code size={17} />
         </BarButton>
-        {target != null && (
-          <>
-            <span {...stylex.props(chrome.divider, styles.divider)} />
-            <DragHandle editor={editor} pos={target} specs={specs} look={styles.button} size={22} />
-            <BlockMenu
-              editor={editor}
-              specs={specs}
-              active={state.active}
-              block={state.block}
-              open={panelOpen}
-              onOpenChange={setPanelOpen}
-              container={bar ?? undefined}
-              side="bottom"
-              align="start"
-              chipCls={labeledClass}
-              iconCls={iconClass}
-              touch
-            />
-          </>
-        )}
         <span {...stylex.props(styles.spacer)} />
         <BarButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
           <Undo2 size={17} />

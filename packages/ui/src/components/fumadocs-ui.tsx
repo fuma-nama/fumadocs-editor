@@ -59,6 +59,7 @@ const muted = tokens.mutedForeground;
 const border = tokens.border;
 const card = tokens.card;
 const barTint = "color-mix(in oklab, var(--callout-color) 50%, transparent)";
+const COARSE = "@media (pointer: coarse)";
 const calloutWash = "color-mix(in oklab, var(--callout-color) 15%, transparent)";
 
 const styles = stylex.create({
@@ -108,7 +109,24 @@ const styles = stylex.create({
   calloutBody: { marginTop: 6, color: muted },
   body: { minWidth: 0, flex: 1 },
 
+  /* Touch: the block's joystick and menu dock in a spot the component
+   * reserves inside its own chrome (`data-fde-controls`), never over its
+   * parent's; the region beside it keeps clear. */
+  slot: {
+    position: "absolute",
+    display: { default: "none", [COARSE]: "block" },
+    width: 56,
+    height: 28,
+    pointerEvents: "none",
+  },
+  slotCorner: { top: "0.5rem", insetInlineEnd: "0.5rem" },
+  slotRow: { top: 1, insetInlineEnd: 2 },
+  slotStep: { top: 0, insetInlineEnd: 0 },
+  slotTab: { top: 4, insetInlineEnd: 6 },
+  clearSlot: { paddingInlineEnd: { default: null, [COARSE]: "3.75rem" } },
+
   card: {
+    position: "relative",
     borderRadius: "0.75rem",
     borderWidth: 1,
     borderStyle: "solid",
@@ -127,7 +145,11 @@ const styles = stylex.create({
       ":hover": `color-mix(in oklab, ${tokens.accent} 80%, transparent)`,
     },
   },
-  cardTitle: { fontSize: "0.95em", fontWeight: 500 },
+  cardTitle: {
+    fontSize: "0.95em",
+    fontWeight: 500,
+    paddingInlineEnd: { default: null, [COARSE]: "3.75rem" },
+  },
   cardBody: { marginTop: 6, fontSize: "0.9em", color: muted },
   cards: {
     display: "grid",
@@ -210,12 +232,14 @@ const styles = stylex.create({
     position: "absolute",
     insetInlineEnd: "0.75rem",
     top: "0.75rem",
-    display: "inline-flex",
+    display: { default: "inline-flex", [COARSE]: "none" },
     color: muted,
   },
   accordionTitle: {
     fontWeight: 500,
-    padding: "0.625rem 2.5rem 0.625rem 0",
+    paddingBlock: "0.625rem",
+    paddingInlineStart: 0,
+    paddingInlineEnd: { default: "2.5rem", [COARSE]: "4.25rem" },
     "--fde-ph-y": "0.625rem",
   },
   accordionBody: {
@@ -253,7 +277,9 @@ const styles = stylex.create({
     color: muted,
   },
   entryName: {
-    padding: "0.3rem 0.5rem 0.3rem 1.875rem",
+    paddingBlock: "0.3rem",
+    paddingInlineStart: "1.875rem",
+    paddingInlineEnd: { default: "0.5rem", [COARSE]: "4rem" },
     borderRadius: "0.375rem",
     "--fde-ph-x": "1.875rem",
     "--fde-ph-y": "0.3rem",
@@ -272,12 +298,16 @@ const styles = stylex.create({
     padding: "0 6px 6px",
     "--fde-gap": "0px",
   },
+  tab: { position: "relative" },
   tabLabel: {
     boxSizing: "border-box",
     // a block, not inline: no line box beside it for a caret to rest in
     display: "block",
     width: "fit-content",
-    margin: "8px 10px 0",
+    marginTop: 8,
+    marginBottom: 0,
+    marginInlineStart: 10,
+    marginInlineEnd: { default: 10, [COARSE]: "4rem" },
     // room for a caret while the label is still empty
     minWidth: { default: null, ":is([data-empty])": "4ch" },
     paddingBottom: 5,
@@ -389,12 +419,17 @@ const styles = stylex.create({
       ":has(:focus)": `color-mix(in oklab, ${tokens.accent} 40%, transparent)`,
     },
   },
+  /** the input is the whole cell: a tap anywhere in it edits */
+  cellInput: { paddingInline: 0, paddingBlock: 0 },
   cellName: { width: "18%", minWidth: "7rem" },
   cellType: { width: "22%", minWidth: "8rem" },
   cellDefault: { width: "15%", minWidth: "5rem" },
   cellRemove: { paddingRight: "0.5rem", paddingLeft: 0 },
   input: {
+    boxSizing: "border-box",
     width: "100%",
+    paddingInline: "0.75rem",
+    paddingBlock: { default: "0.375rem", [COARSE]: "0.625rem" },
     outline: "none",
     "::placeholder": {
       color: `color-mix(in oklab, ${tokens.mutedForeground} 50%, transparent)`,
@@ -508,7 +543,12 @@ function CalloutTypeSelect({
         <Current size={20} strokeWidth={2} {...stylex.props(styles.calloutIcon)} />
       </Select.Trigger>
       <Select.Portal container={container}>
-        <Select.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
+        <Select.Positioner
+          positionMethod="fixed"
+          sideOffset={6}
+          align="start"
+          alignItemWithTrigger={false}
+        >
           <Select.Popup {...stylex.props(chrome.popup)}>
             {items.map((item) => {
               const Icon = CALLOUT_ICONS[item.visual] ?? Info;
@@ -580,12 +620,25 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
   );
 }
 
+/** the spot the touch controls dock into; the component reserves it in its chrome */
+function ControlsSlot({ at }: { at: stylex.StyleXStyles }) {
+  return (
+    <span
+      {...stylex.props(styles.slot, at)}
+      data-fde-controls=""
+      contentEditable={false}
+      aria-hidden
+    />
+  );
+}
+
 function Card({ props, children }: ComponentRenderProps) {
   return (
     <div
       {...stylex.props(styles.card, Boolean(props.href) && styles.cardLink)}
       data-has-href={props.href ? "" : undefined}
     >
+      <ControlsSlot at={styles.slotCorner} />
       {children}
     </div>
   );
@@ -600,7 +653,12 @@ function Steps({ children }: ComponentRenderProps) {
 }
 
 function Step({ children }: ComponentRenderProps) {
-  return <div {...stylex.props(styles.step)}>{children}</div>;
+  return (
+    <div {...stylex.props(styles.step)}>
+      <ControlsSlot at={styles.slotStep} />
+      {children}
+    </div>
+  );
 }
 
 function Accordions({ children }: ComponentRenderProps) {
@@ -623,6 +681,7 @@ function File({ children }: ComponentRenderProps) {
       <span {...stylex.props(chrome.static, styles.entryIcon)} contentEditable={false}>
         <FileIcon size={15} />
       </span>
+      <ControlsSlot at={styles.slotRow} />
       {children}
     </div>
   );
@@ -634,6 +693,7 @@ function Folder({ children }: ComponentRenderProps) {
       <span {...stylex.props(chrome.static, styles.entryIcon)} contentEditable={false}>
         <FolderIcon size={15} />
       </span>
+      <ControlsSlot at={styles.slotRow} />
       {children}
     </div>
   );
@@ -672,6 +732,7 @@ function Accordion({ props, children }: ComponentRenderProps) {
           <LinkIcon size={13} />
         </span>
       ) : null}
+      <ControlsSlot at={styles.slotCorner} />
       {children}
     </div>
   );
@@ -682,7 +743,12 @@ function Tabs({ children }: ComponentRenderProps) {
 }
 
 function Tab({ children }: ComponentRenderProps) {
-  return <div>{children}</div>;
+  return (
+    <div {...stylex.props(styles.tab)}>
+      <ControlsSlot at={styles.slotTab} />
+      {children}
+    </div>
+  );
 }
 
 function Include({ props, children }: ComponentRenderProps) {
@@ -793,7 +859,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
         <tbody>
           {entries.map(([name, def], index) => (
             <tr key={index} {...stylex.props(row)}>
-              <td {...stylex.props(styles.cell, styles.cellName)}>
+              <td {...stylex.props(styles.cell, styles.cellInput, styles.cellName)}>
                 <TypeCell
                   value={name}
                   placeholder="name"
@@ -801,7 +867,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => write((rows) => (rows[index][0] = next))}
                 />
               </td>
-              <td {...stylex.props(styles.cell, styles.cellType)}>
+              <td {...stylex.props(styles.cell, styles.cellInput, styles.cellType)}>
                 <TypeCell
                   value={def.type}
                   placeholder="string"
@@ -809,7 +875,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => patch(index, "type", next)}
                 />
               </td>
-              <td {...stylex.props(styles.cell, styles.cellDefault)}>
+              <td {...stylex.props(styles.cell, styles.cellInput, styles.cellDefault)}>
                 <TypeCell
                   value={def.default}
                   placeholder="–"
@@ -817,7 +883,7 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
                   onChange={(next) => patch(index, "default", next)}
                 />
               </td>
-              <td {...stylex.props(styles.cell)}>
+              <td {...stylex.props(styles.cell, styles.cellInput)}>
                 <TypeCell
                   value={def.description}
                   placeholder="Description…"
@@ -960,6 +1026,7 @@ export const stepSpec: UiComponentSpec = {
   name: "Step",
   label: "Step",
   childrenRegion: { region: "body", placeholder: "Describe this step…" },
+  regions: { body: regionClass(styles.clearSlot) },
   render: Step,
   insert: () => ({
     type: "mdxComponent",

@@ -408,7 +408,12 @@ function LinkControl({
         <Link2 size={15} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="start" {...stylex.props(chrome.layer)}>
+        <Popover.Positioner
+          positionMethod="fixed"
+          sideOffset={6}
+          align="start"
+          {...stylex.props(chrome.layer)}
+        >
           <Popover.Popup {...stylex.props(chrome.popup, styles.linkPopup)}>
             <Autocomplete.Root
               items={paths}
@@ -438,7 +443,11 @@ function LinkControl({
                 }}
               />
               <Autocomplete.Portal container={container}>
-                <Autocomplete.Positioner sideOffset={6} {...stylex.props(chrome.layer)}>
+                <Autocomplete.Positioner
+                  positionMethod="fixed"
+                  sideOffset={6}
+                  {...stylex.props(chrome.layer)}
+                >
                   <Autocomplete.Popup {...stylex.props(chrome.popup, styles.linkList)}>
                     <Autocomplete.List>
                       {(path: string) => (
@@ -500,7 +509,12 @@ function TableControl({
         <Table2 size={15} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
-        <Popover.Positioner sideOffset={6} align="start" {...stylex.props(chrome.layer)}>
+        <Popover.Positioner
+          positionMethod="fixed"
+          sideOffset={6}
+          align="start"
+          {...stylex.props(chrome.layer)}
+        >
           <Popover.Popup {...stylex.props(chrome.popup, styles.tablePopup)}>
             {TABLE_OPS.map((op) => (
               <button

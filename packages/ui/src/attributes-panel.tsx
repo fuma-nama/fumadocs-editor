@@ -69,7 +69,7 @@ export function PropControl({
             <ChevronDown size={13} {...stylex.props(styles.chevron)} />
           </Select.Trigger>
           <Select.Portal container={container}>
-            <Select.Positioner sideOffset={4} alignItemWithTrigger={false}>
+            <Select.Positioner positionMethod="fixed" sideOffset={4} alignItemWithTrigger={false}>
               <Select.Popup {...stylex.props(chrome.popup)}>
                 {items.map((item) => (
                   <Select.Item key={item.value} value={item.value} {...stylex.props(chrome.item)}>

@@ -12,6 +12,13 @@ import { useCallback, useState } from "react";
  * popup instead: portalled to the root it would sit outside the parent's
  * DOM, and picking an option would register as an outside press and dismiss
  * the parent panel.
+ *
+ * Every positioner uses `positionMethod="fixed"`. Base UI keeps a popup
+ * `position: fixed` until its first placement is computed, and Floating UI
+ * measures that pass against the viewport; the `absolute` method then
+ * applies those coordinates inside the container's positioned ancestor (the
+ * sticky touch bar, the bubble's wrapper) and lands the popup off by that
+ * ancestor's offset until a scroll recomputes it.
  */
 export function useEditorPortal() {
   const [container, setContainer] = useState<HTMLElement | undefined>(undefined);
