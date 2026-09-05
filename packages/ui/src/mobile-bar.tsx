@@ -3,19 +3,11 @@
 import "@tiptap/starter-kit";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
-import {
-  Fragment,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { Popover } from "@base-ui/react/popover";
-import { Bold, Code, Italic, Plus, Redo2, Strikethrough, Undo2 } from "lucide-react";
+import { Plus, Redo2, Undo2 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockMenu, useBlockMenuOpen } from "./block-panel";
@@ -80,7 +72,6 @@ const styles = stylex.create({
     opacity: { default: null, ":disabled": 0.35 },
   },
   labeled: { paddingInline: "0.625rem", color: tokens.foreground },
-  divider: { height: "1.25rem" },
   spacer: { minWidth: "0.25rem", flex: 1 },
   /* popups hang below the bar; capped so they stay usable with the keyboard up */
   insertPopup: {
@@ -133,30 +124,13 @@ const styles = stylex.create({
 const labeledClass = stylex.props(chrome.button, styles.button, styles.labeled).className!;
 const gutterIconClass = stylex.props(chrome.button, styles.gutterButton).className!;
 
-function useMediaQuery(query: string): boolean {
-  const [subscribe, getSnapshot] = useMemo(() => {
-    let list: MediaQueryList | undefined;
-    const resolve = () => (list ??= window.matchMedia(query));
-    return [
-      (onChange: () => void) => {
-        resolve().addEventListener("change", onChange);
-        return () => resolve().removeEventListener("change", onChange);
-      },
-      () => resolve().matches,
-    ] as const;
-  }, [query]);
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
-
 function BarButton({
   label,
-  active,
   disabled,
   onClick,
   children,
 }: {
   label: string;
-  active?: boolean;
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
@@ -166,7 +140,6 @@ function BarButton({
       type="button"
       aria-label={label}
       {...stylex.props(chrome.button, styles.button)}
-      data-active={active || undefined}
       disabled={disabled}
       // Keep focus (and the virtual keyboard) in the editor by cancelling the
       // mouse focus transfer, but never a touch pointerdown: WebKit then
@@ -193,14 +166,10 @@ interface MobileBarProps {
 
 /**
  * Touch editing surface: a toolbar heading the editor, stuck to the top while
- * scrolling, and the block's own controls beside the block.
+ * scrolling, and the block's own controls beside the block. Formatting a
+ * selection is the bubble's, below the selection.
  */
 export function MobileBar(props: MobileBarProps) {
-  // gate the whole subtree, not just its output: TouchBar's editor-state
-  // selector (two can() trial runs) would otherwise run per transaction on
-  // desktop only to render null
-  const coarse = useMediaQuery("(pointer: coarse)");
-  if (!coarse) return null;
   return (
     <>
       <TouchBar {...props} />
@@ -302,7 +271,7 @@ function BlockGutter({ editor, specs }: { editor: Editor; specs: Map<string, UiC
   );
 }
 
-function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
+function TouchBar({ editor, components, media, math }: MobileBarProps) {
   // popups portal into the bar itself: inside the theme scope, and moving
   // with it rather than repositioned on every scroll
   const [bar, setBar] = useState<HTMLElement | null>(null);
@@ -314,12 +283,7 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
     selector: ({ editor: current }) => {
       if (!current) return null;
       return {
-        ...bubbleState(current.state, specs),
         turnInto: activeBlock(current),
-        bold: current.isActive("bold"),
-        italic: current.isActive("italic"),
-        strike: current.isActive("strike"),
-        code: current.isActive("code"),
         // through the registered undo command, so this is the plugin history
         // in single-user mode and the Y undo manager under collab
         canUndo: current.can().undo(),
@@ -391,39 +355,6 @@ function TouchBar({ editor, components, specs, media, math }: MobileBarProps) {
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
-        <span {...stylex.props(chrome.divider, styles.divider)} />
-        <BarButton
-          label="Bold"
-          active={state.bold}
-          disabled={!state.format}
-          onClick={() => run((c) => c.toggleBold())}
-        >
-          <Bold size={17} />
-        </BarButton>
-        <BarButton
-          label="Italic"
-          active={state.italic}
-          disabled={!state.format}
-          onClick={() => run((c) => c.toggleItalic())}
-        >
-          <Italic size={17} />
-        </BarButton>
-        <BarButton
-          label="Strikethrough"
-          active={state.strike}
-          disabled={!state.format}
-          onClick={() => run((c) => c.toggleStrike())}
-        >
-          <Strikethrough size={17} />
-        </BarButton>
-        <BarButton
-          label="Inline code"
-          active={state.code}
-          disabled={!state.format}
-          onClick={() => run((c) => c.toggleCode())}
-        >
-          <Code size={17} />
-        </BarButton>
         <span {...stylex.props(styles.spacer)} />
         <BarButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
           <Undo2 size={17} />

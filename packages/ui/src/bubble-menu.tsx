@@ -5,11 +5,12 @@ import { consts } from "./styles/consts.stylex";
 // side-effect imports: register starter-kit + table command typings
 import "@tiptap/starter-kit";
 import "@tiptap/extension-table";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
@@ -50,13 +51,16 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, and stays under the popovers it opens. It glides to a new
-   * position (the plugin writes `top`/`left`), e.g. after a block is
-   * dragged; while hidden and re-shown the inline override lands it. */
+   * controls, wraps on a phone, and stays under the popovers it opens and
+   * the sticky touch bar. It glides to a new position (the plugin writes
+   * `top`/`left`), e.g. after a block is dragged; while hidden and re-shown
+   * the inline override lands it. */
   bubble: {
-    zIndex: 40,
+    zIndex: 30,
     minWidth: 0,
+    maxWidth: "calc(100vw - 1rem)",
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: "0.125rem",
     transitionProperty: "top, left",
@@ -75,7 +79,7 @@ const styles = stylex.create({
   mono: { fontFamily: consts.mono },
   muted: { color: muted },
   tablePopup: { display: "flex", width: "11rem", flexDirection: "column" },
-  imageRow: { display: "flex", alignItems: "center", gap: "0.375rem" },
+  imageRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.375rem" },
   imageSrc: { width: "13rem" },
   imageAlt: { width: "9rem" },
   yaml: {
@@ -322,11 +326,12 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
 }
 
 /** what summons the bubble: selected text, or a node-selected component or atom */
-function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
+function summoned(state: EditorState, specs: Map<string, UiComponentSpec>, touch: boolean) {
   const selection = state.selection;
   if (selection instanceof NodeSelection) {
     const { node } = selection;
-    if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
+    // on touch a selected component's controls are in the gutter already
+    if (node.type.name === COMPONENT_NODE) return !touch && specs.has(node.attrs.name as string);
     return node.type.name === "image" || node.type.name === "frontmatter";
   }
   // a selection of structural tokens only (a double-click at a region's
@@ -613,10 +618,17 @@ export function EditorBubble({
   editor,
   specs,
   media,
+  touch,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
+  /**
+   * A touch screen: the bubble keeps the marks and the atom panels (block
+   * type is in the bar, the block's controls in the gutter) and sits below
+   * the selection, clear of the system's copy menu above it.
+   */
+  touch: boolean;
 }) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
   // Portal target has three constraints: the menu hides on editor blur
@@ -658,7 +670,7 @@ export function EditorBubble({
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
 
-  const target = state?.active?.pos ?? state?.block?.pos;
+  const target = touch ? undefined : (state?.active?.pos ?? state?.block?.pos);
   const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
 
   // Mod-. opens the block's menu from a resting caret: the bubble is
@@ -692,47 +704,60 @@ export function EditorBubble({
     fn(editor.chain().focus()).run();
   };
 
+  // stable: the plugin re-reads its options in a transaction whenever they change
+  const options = useMemo(
+    () => ({
+      placement: touch ? ("bottom" as const) : ("bottom-start" as const),
+      // past the selection handles, which hang below the last line
+      offset: touch ? 20 : 6,
+      onHide: () => setPanelOpen(false),
+      // re-shown, it lands in place: the glide is for moves while visible
+      onShow: () => {
+        menuRef.current!.style.transition = "none";
+      },
+      onUpdate: () => {
+        const el = menuRef.current!;
+        if (!el.style.transition) return;
+        // flush the landing position before transitions come back
+        void el.offsetTop;
+        el.style.transition = "";
+      },
+    }),
+    [touch, setPanelOpen],
+  );
+  const shouldShow = useCallback(
+    ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
+      // focus in one of its popovers (portalled into the wrapper) keeps it
+      if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
+      return summoned(editorState, specs, touch);
+    },
+    [wrapper, specs, touch],
+  );
+
   return (
     <BubbleMenu
       ref={menuRef}
       editor={editor}
       updateDelay={150}
-      options={{
-        placement: "bottom-start",
-        offset: 6,
-        onHide: () => setPanelOpen(false),
-        // re-shown, it lands in place: the glide is for moves while visible
-        onShow: () => {
-          menuRef.current!.style.transition = "none";
-        },
-        onUpdate: () => {
-          const el = menuRef.current!;
-          if (!el.style.transition) return;
-          // flush the landing position before transitions come back
-          void el.offsetTop;
-          el.style.transition = "";
-        },
-      }}
-      shouldShow={({ state: editorState, view }) => {
-        // touch has the mobile bar; one surface per input mode
-        if (window.matchMedia("(pointer: coarse)").matches) return false;
-        // focus in one of its popovers (portalled into the wrapper) keeps it
-        if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-        return summoned(editorState, specs);
-      }}
+      options={options}
+      shouldShow={shouldShow}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
       {state?.format && (
         <>
-          <BlockTypePicker
-            editor={editor}
-            block={state.turnInto}
-            open={turnIntoOpen}
-            onOpenChange={setTurnIntoOpen}
-            triggerCls={ghostSelectClass}
-            container={wrapper}
-          />
-          <span {...stylex.props(chrome.divider)} />
+          {!touch && (
+            <>
+              <BlockTypePicker
+                editor={editor}
+                block={state.turnInto}
+                open={turnIntoOpen}
+                onOpenChange={setTurnIntoOpen}
+                triggerCls={ghostSelectClass}
+                container={wrapper}
+              />
+              <span {...stylex.props(chrome.divider)} />
+            </>
+          )}
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={15} />
           </MarkButton>
