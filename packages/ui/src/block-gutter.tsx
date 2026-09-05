@@ -18,16 +18,13 @@ import { useEditorPortal } from "./utils/portal";
 const GUTTER_BUTTON = 28;
 
 const styles = stylex.create({
-  /* the block's own controls: stacked in the gutter left of its first line,
-   * or a row in the spot the component reserves for them */
+  /* the block's control: in the gutter left of its first line, or in the
+   * spot the component reserves for it */
   gutter: {
     position: "absolute",
     top: 0,
     left: 0,
     zIndex: 1,
-    display: "flex",
-    flexDirection: { default: "column", ":is([data-row])": "row" },
-    alignItems: "center",
     willChange: "transform",
   },
   gutterButton: {
@@ -83,12 +80,12 @@ function controlsSlot(dom: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Touch chrome beside the caret's block: its joystick, and on an empty line
- * an insert button that fills it as `/` would. In the spot the block
- * reserves for them, else in the gutter left of its first line (a nested
- * block's gutter would be its parent's chrome). The joystick lives here,
- * not in the bubble: from a toolbar a drag lifted the ghost far from the
- * finger while the line sat under it.
+ * Touch chrome beside the caret's block: its joystick, or on an empty line
+ * (nothing to drag) an insert button that fills it as `/` would. In the
+ * spot the block reserves for it, else in the gutter left of its first line
+ * (a nested block's gutter would be its parent's chrome). The joystick
+ * lives here, not in the bubble: from a toolbar a drag lifted the ghost far
+ * from the finger while the line sat under it.
  */
 export function BlockGutter({
   editor,
@@ -130,7 +127,6 @@ export function BlockGutter({
       if (!(dom instanceof HTMLElement) || !frame) return;
       const base = frame.getBoundingClientRect();
       const slot = controlsSlot(dom);
-      el.toggleAttribute("data-row", slot != null);
       if (slot) {
         const at = slot.getBoundingClientRect();
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
@@ -162,14 +158,7 @@ export function BlockGutter({
       }}
       {...stylex.props(styles.gutter)}
     >
-      <DragHandle
-        editor={editor}
-        pos={state.target}
-        specs={specs}
-        look={styles.gutterButton}
-        size={18}
-      />
-      {state.empty && (
+      {state.empty ? (
         <Popover.Root open={insertOpen} onOpenChange={setInsertOpen}>
           <Popover.Trigger aria-label="Insert" className={gutterIconClass}>
             <Plus size={18} />
@@ -211,6 +200,14 @@ export function BlockGutter({
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
+      ) : (
+        <DragHandle
+          editor={editor}
+          pos={state.target}
+          specs={specs}
+          look={styles.gutterButton}
+          size={18}
+        />
       )}
     </div>
   );
