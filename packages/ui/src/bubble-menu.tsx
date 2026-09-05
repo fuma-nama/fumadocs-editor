@@ -6,6 +6,7 @@ import { consts } from "./styles/consts.stylex";
 import "@tiptap/starter-kit";
 import "@tiptap/extension-table";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { posToDOMRect } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -281,8 +282,9 @@ export function BlockTypePicker({
  * selection: text gets the formatting controls, a node-selected atom its
  * editor, and the block around the selection (the innermost component,
  * else the innermost plain block) its joystick and menu: never two
- * competing menus. A resting caret has no chrome: the marks it types with
- * come from the shortcuts, and ArrowRight at the line's end drops them.
+ * competing menus. With a pointer a resting caret has no chrome: the marks
+ * it types with come from the shortcuts, and ArrowRight at the line's end
+ * drops them. On touch the bubble stays up under the caret instead.
  */
 export interface BubbleState {
   format: boolean;
@@ -622,8 +624,9 @@ export function EditorBubble({
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
   /**
-   * A touch screen: the bubble sits below the selection, clear of the
-   * system's copy menu above it, and leaves the joystick to the gutter.
+   * A touch screen: the bubble stays up while the editor has focus, sits
+   * below the caret or selection, clear of the system's copy menu above it,
+   * and leaves the joystick to the gutter.
    */
   touch: boolean;
 }) {
@@ -705,7 +708,7 @@ export function EditorBubble({
   const options = useMemo(
     () => ({
       placement: touch ? ("bottom" as const) : ("bottom-start" as const),
-      // past the selection handles, which hang below the last line
+      // past the selection and caret handles, which hang below the line
       offset: touch ? 20 : 6,
       onHide: () => setPanelOpen(false),
       // re-shown, it lands in place: the glide is for moves while visible
@@ -726,10 +729,22 @@ export function EditorBubble({
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
       // focus in one of its popovers (portalled into the wrapper) keeps it
       if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-      return summoned(editorState, specs);
+      // touch has no shortcuts: the bubble stays up while the caret rests,
+      // so the marks it types with are a tap away
+      return touch ? view.hasFocus() : summoned(editorState, specs);
     },
-    [wrapper, specs],
+    [wrapper, specs, touch],
   );
+  // a resting caret anchors the bubble on its whole line: centred under
+  // the line, moving only when the caret leaves it, not with every keystroke
+  const getReferencedVirtualElement = useCallback(() => {
+    const { selection } = editor.state;
+    if (!touch || !selection.empty) return null;
+    const caret = posToDOMRect(editor.view, selection.from, selection.to);
+    const { left, width } = editor.view.dom.getBoundingClientRect();
+    const rect = new DOMRect(left, caret.top, width, caret.height);
+    return { getBoundingClientRect: () => rect };
+  }, [editor, touch]);
 
   return (
     <BubbleMenu
@@ -738,6 +753,7 @@ export function EditorBubble({
       updateDelay={150}
       options={options}
       shouldShow={shouldShow}
+      getReferencedVirtualElement={getReferencedVirtualElement}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
       {state?.format && (
