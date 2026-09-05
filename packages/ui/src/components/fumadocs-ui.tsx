@@ -109,7 +109,7 @@ const styles = stylex.create({
   calloutBody: { marginTop: 6, color: muted },
   body: { minWidth: 0, flex: 1 },
 
-  /* Touch: the block's joystick and menu dock in a spot the component
+  /* Touch: the block's joystick and insert button dock in a spot the component
    * reserves inside its own chrome (`data-fde-controls`), never over its
    * parent's; the region beside it keeps clear. */
   slot: {

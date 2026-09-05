@@ -51,12 +51,11 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, wraps on a phone, and stays under the popovers it opens and
-   * the sticky touch bar. It glides to a new position (the plugin writes
-   * `top`/`left`), e.g. after a block is dragged; while hidden and re-shown
-   * the inline override lands it. */
+   * controls, wraps on a phone, and stays under the popovers it opens. It
+   * glides to a new position (the plugin writes `top`/`left`), e.g. after a
+   * block is dragged; while hidden and re-shown the inline override lands it. */
   bubble: {
-    zIndex: 30,
+    zIndex: 40,
     minWidth: 0,
     maxWidth: "calc(100vw - 1rem)",
     display: "flex",
@@ -326,12 +325,11 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
 }
 
 /** what summons the bubble: selected text, or a node-selected component or atom */
-function summoned(state: EditorState, specs: Map<string, UiComponentSpec>, touch: boolean) {
+function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
   const selection = state.selection;
   if (selection instanceof NodeSelection) {
     const { node } = selection;
-    // on touch a selected component's controls are in the gutter already
-    if (node.type.name === COMPONENT_NODE) return !touch && specs.has(node.attrs.name as string);
+    if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
     return node.type.name === "image" || node.type.name === "frontmatter";
   }
   // a selection of structural tokens only (a double-click at a region's
@@ -624,9 +622,8 @@ export function EditorBubble({
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
   /**
-   * A touch screen: the bubble keeps the marks and the atom panels (block
-   * type is in the bar, the block's controls in the gutter) and sits below
-   * the selection, clear of the system's copy menu above it.
+   * A touch screen: the bubble sits below the selection, clear of the
+   * system's copy menu above it, and leaves the joystick to the gutter.
    */
   touch: boolean;
 }) {
@@ -670,7 +667,7 @@ export function EditorBubble({
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
 
-  const target = touch ? undefined : (state?.active?.pos ?? state?.block?.pos);
+  const target = state?.active?.pos ?? state?.block?.pos;
   const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
 
   // Mod-. opens the block's menu from a resting caret: the bubble is
@@ -729,9 +726,9 @@ export function EditorBubble({
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
       // focus in one of its popovers (portalled into the wrapper) keeps it
       if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-      return summoned(editorState, specs, touch);
+      return summoned(editorState, specs);
     },
-    [wrapper, specs, touch],
+    [wrapper, specs],
   );
 
   return (
@@ -745,19 +742,15 @@ export function EditorBubble({
     >
       {state?.format && (
         <>
-          {!touch && (
-            <>
-              <BlockTypePicker
-                editor={editor}
-                block={state.turnInto}
-                open={turnIntoOpen}
-                onOpenChange={setTurnIntoOpen}
-                triggerCls={ghostSelectClass}
-                container={wrapper}
-              />
-              <span {...stylex.props(chrome.divider)} />
-            </>
-          )}
+          <BlockTypePicker
+            editor={editor}
+            block={state.turnInto}
+            open={turnIntoOpen}
+            onOpenChange={setTurnIntoOpen}
+            triggerCls={ghostSelectClass}
+            container={wrapper}
+          />
+          <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
             <Bold size={15} />
           </MarkButton>
@@ -791,13 +784,15 @@ export function EditorBubble({
       {state && target != null && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
-          <DragHandle
-            editor={editor}
-            pos={target}
-            specs={specs}
-            look={chrome.iconButton}
-            size={20}
-          />
+          {!touch && (
+            <DragHandle
+              editor={editor}
+              pos={target}
+              specs={specs}
+              look={chrome.iconButton}
+              size={20}
+            />
+          )}
           <BlockMenu
             editor={editor}
             specs={specs}
@@ -809,6 +804,7 @@ export function EditorBubble({
             align="end"
             chipCls={chipClass}
             iconCls={iconClass}
+            touch={touch}
           />
         </>
       )}

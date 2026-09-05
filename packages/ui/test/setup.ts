@@ -7,7 +7,7 @@ if (!Range.prototype.getClientRects) {
   Range.prototype.getBoundingClientRect = () => new DOMRect();
 }
 
-// jsdom has no matchMedia; theme + mobile bar query it (never matches here)
+// jsdom has no matchMedia; theme + touch chrome query it (never matches here)
 if (!window.matchMedia) {
   window.matchMedia = (media: string) =>
     ({

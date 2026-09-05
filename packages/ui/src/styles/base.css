@@ -49,8 +49,6 @@
   /* type: the editing surface, and every text field in the chrome */
   --fde-font-size: 15px;
   --fde-field-size: 13px;
-  /* where the touch toolbar sticks: below a site header */
-  --fde-sticky-top: 0px;
 }
 
 .dark {

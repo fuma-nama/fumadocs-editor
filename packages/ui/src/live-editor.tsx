@@ -12,7 +12,7 @@ import { codeBlockExtension } from "./components/code-block";
 import { mathExtensions } from "./components/math";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
-import { MobileBar } from "./mobile-bar";
+import { BlockGutter } from "./block-gutter";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
@@ -165,8 +165,8 @@ export function LiveEditor({
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
-  // touch splits the chrome: the bar heads the editor, the block's controls
-  // sit in its gutter, and the bubble keeps only what follows a selection
+  // touch: the joystick and insert button sit beside the block, and the
+  // bubble drops below the selection
   const touch = useMediaQuery("(pointer: coarse)");
 
   // insert animations arm one painted frame after the editor shows: the
@@ -190,18 +190,20 @@ export function LiveEditor({
       hidden={hidden}
       data-fde-settled={settled || undefined}
     >
-      {editor && editable && touch && (
-        <MobileBar
-          editor={editor}
-          components={components}
-          specs={specs}
-          media={media}
-          math={syntax?.math}
-        />
-      )}
       <EditorContent editor={editor} />
       {editor && editable && (
-        <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
+        <>
+          {touch && (
+            <BlockGutter
+              editor={editor}
+              components={components}
+              specs={specs}
+              media={media}
+              math={syntax?.math}
+            />
+          )}
+          <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
+        </>
       )}
     </div>
   );

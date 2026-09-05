@@ -30,5 +30,4 @@ export const tokens = stylex.defineConsts({
   idea: "var(--fde-idea)",
   fontSize: "var(--fde-font-size)",
   fieldSize: "var(--fde-field-size)",
-  stickyTop: "var(--fde-sticky-top)",
 });

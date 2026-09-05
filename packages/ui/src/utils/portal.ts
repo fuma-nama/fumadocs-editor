@@ -17,8 +17,8 @@ import { useCallback, useState } from "react";
  * `position: fixed` until its first placement is computed, and Floating UI
  * measures that pass against the viewport; the `absolute` method then
  * applies those coordinates inside the container's positioned ancestor (the
- * sticky touch bar, the bubble's wrapper) and lands the popup off by that
- * ancestor's offset until a scroll recomputes it.
+ * bubble's wrapper) and lands the popup off by that ancestor's offset until
+ * a scroll recomputes it.
  */
 export function useEditorPortal() {
   const [container, setContainer] = useState<HTMLElement | undefined>(undefined);
