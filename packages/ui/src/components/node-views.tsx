@@ -28,8 +28,6 @@ type SpecMap = Map<string, UiComponentSpec>;
 
 const COMPONENT = "mdxComponent";
 
-/* ---- node views ---- */
-
 const hole = <NodeViewContent {...stylex.props(content.hole)} data-fde-hole="" />;
 
 function makeComponentView(specs: SpecMap) {
@@ -92,9 +90,6 @@ function makeRegionView(
   return function RegionView({ node, editor, getPos }: NodeViewProps) {
     const region = (node.attrs.region as string | null) ?? "";
     const empty = node.textContent.length === 0;
-    // region names (title / body) repeat across components, so placeholder
-    // and styles are keyed by the enclosing component: resolve it from the
-    // doc position
     let placeholder: string | undefined;
     let className: string | undefined;
     try {
@@ -129,7 +124,6 @@ function makeRegionView(
   };
 }
 
-/** `${component}:${region}` → placeholder text, gathered from every spec */
 function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const spec of specs) {
@@ -167,8 +161,6 @@ const activeComponent = ExtensionBase.create({
       new Plugin({
         props: {
           decorations(state) {
-            // while a component is node-selected its ring is the one signal;
-            // don't also tint the parent
             if (
               state.selection instanceof NodeSelection &&
               state.selection.node.type.name === COMPONENT
@@ -195,7 +187,6 @@ const activeComponent = ExtensionBase.create({
 
 const liftKey = new PluginKey<number | null>("fdeLift");
 
-/** light the block at `pos` (none when null): the joystick's target */
 export function setLifted(editor: Editor, pos: number | null): void {
   if (liftKey.getState(editor.state) === pos) return;
   editor.view.dispatch(editor.state.tr.setMeta(liftKey, pos));
@@ -236,10 +227,6 @@ const liftedBlock = ExtensionBase.create({
   },
 });
 
-/**
- * TipTap extensions for the component node types, each wired to a React node
- * view. Replaces the base (view-less) nodes from `editorExtensions`.
- */
 export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
   const map: SpecMap = new Map(specs.map((spec) => [spec.name, spec]));
   const ComponentView = makeComponentView(map);

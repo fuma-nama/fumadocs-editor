@@ -47,30 +47,15 @@ export interface LiveEditorProps {
   specs: Map<string, UiComponentSpec>;
   snapshotRef: RefObject<DocSnapshot | undefined>;
   onChangeRef: RefObject<((markdown: string) => void) | undefined>;
-  /** fires once the editor exists and its view is mounted */
   onReady: (editor: Editor, serialize: SerializeFn) => void;
-  /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
-  /** read-only rendering: no typing, no mutating chrome */
   editable: boolean;
   media?: MediaProvider;
   files?: FileProvider;
-  /** dialect switches; must match what the document was parsed with */
   syntax?: SyntaxOptions;
-  /**
-   * Already-started collab runtime (a separate chunk, loaded by the shell).
-   * The Y.Doc is then the source of truth: `doc` is ignored, local history
-   * yields to the Y undo manager, and `onReady` waits for the first sync.
-   */
   collab?: EditorCollab;
 }
 
-/**
- * Stage-1 hydration: the real TipTap editor. Mounted lazily by the shell
- * (idle or first intent), constructed after mount (`immediatelyRender:
- * false`) so the static paint never waits on ProseMirror, and never
- * re-rendered per transaction. Chrome subscribes via `useEditorState`.
- */
 export function LiveEditor({
   doc,
   components,
@@ -110,8 +95,6 @@ export function LiveEditor({
     [components, syntax],
   );
 
-  // unchanged blocks serialize from a per-node cache, so cost tracks the
-  // edited block; still debounced so bursts of keystrokes report once
   const serializeTimer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(serializeTimer.current), []);
 
@@ -134,8 +117,6 @@ export function LiveEditor({
       },
     },
     onCreate({ editor }) {
-      // hold the static → live swap until the shared doc has arrived, so the
-      // first visible state is the document and replayed input lands in it
       if (collab) {
         void collab.whenSynced.then(() => {
           if (!editor.isDestroyed) onReady(editor, serialize);
@@ -160,13 +141,10 @@ export function LiveEditor({
     },
   });
 
-  // `editable` is a live prop (scope data can arrive after mount)
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
-  // touch: the joystick sits beside the block, and the bubble drops below
-  // the caret
   const touch = useMediaQuery("(pointer: coarse)");
 
   // insert animations arm one painted frame after the editor shows: the
@@ -193,7 +171,7 @@ export function LiveEditor({
       <EditorContent editor={editor} />
       {editor && editable && (
         <>
-          {touch && <BlockGutter editor={editor} specs={specs} />}
+          <BlockGutter editor={editor} specs={specs} touch={touch} />
           <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
         </>
       )}

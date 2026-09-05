@@ -23,7 +23,6 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-/** Read the OS colour-scheme preference; SSR-safe (falls back to `light`). */
 function systemTheme(): ResolvedTheme {
   if (typeof window === "undefined" || !window.matchMedia) return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";

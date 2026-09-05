@@ -19,10 +19,8 @@ import { consts } from "./styles/consts.stylex";
 import { chrome } from "./styles/shared";
 
 /**
- * Stage-0 paint: the parsed PM document as plain React, no TipTap and no
- * ProseMirror. Same DOM shape and classes as the live editor
- * (`.react-renderer` / `data-node-view-*` shells) so the swap has no
- * visible shift.
+ * Same DOM shape and classes as the live editor (`.react-renderer` /
+ * `data-node-view-*` shells) so the swap has no visible shift.
  */
 
 type SpecMap = Map<string, UiComponentSpec>;
@@ -43,13 +41,6 @@ function StaticImg({ node }: { node: JSONContent }) {
 
 const noop = () => {};
 
-/**
- * Contains a throwing third-party renderer to its own component: the fallback
- * keeps that component's (still editable) regions visible while the document
- * and the rest of the editor stay intact. Colocated here, not its own module,
- * because both the static paint and the live node views need it and this file
- * is already eager; extracting a module on this path costs real bytes.
- */
 export class RenderBoundary extends ReactComponent<
   { resetOn?: unknown; fallback: ReactNode; children: ReactNode },
   { failed: boolean }
@@ -59,7 +50,6 @@ export class RenderBoundary extends ReactComponent<
     return { failed: true };
   }
   componentDidUpdate(prev: { resetOn?: unknown }) {
-    // a node update retries the renderer, so an attr fix heals the component
     if (this.state.failed && prev.resetOn !== this.props.resetOn) this.setState({ failed: false });
   }
   render() {
@@ -96,7 +86,6 @@ const styles = stylex.create({
   root: { whiteSpace: "pre-wrap" },
 });
 
-/** the generic dashed card: unregistered components and crashed renderers */
 export function FallbackCard({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div data-component-fallback="" {...stylex.props(styles.fallback)}>
@@ -262,7 +251,6 @@ function Region({
   );
 }
 
-/** the code-block figure without its language picker or copy button */
 function StaticCodeBlock({ node }: { node: JSONContent }) {
   const language = (node.attrs?.language as string | null) ?? "";
   return (
@@ -404,8 +392,6 @@ function renderNode(
       );
     case "codeBlock":
       return <StaticCodeBlock key={key} node={node} />;
-    // math paints as its TeX source: the live editor looks identical until
-    // the lazy KaTeX chunk arrives, so the hydration swap stays still
     case "mathInline":
       return (
         <span key={key} className="react-renderer node-mathInline">

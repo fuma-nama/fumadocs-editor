@@ -8,14 +8,6 @@ import {
   type ComponentSpec,
 } from "@fumadocs-editor/core";
 
-/*
- * Component keyboard grammar. Derived from `ComponentSpec` (`listLike`,
- * `childComponent`, regions): no behaviour keyed on literal names.
- * Structural moves only place a component into parents whose spec accepts
- * it, so invalid MDX is unproducible.
- */
-
-/** read-only, so a `Map<string, UiComponentSpec>` passes without casts */
 export type SpecMap = ReadonlyMap<string, ComponentSpec>;
 
 export function childNames(spec: ComponentSpec | undefined): string[] {
@@ -23,7 +15,6 @@ export function childNames(spec: ComponentSpec | undefined): string[] {
   return Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
 }
 
-/** components that only exist inside a container (File, Card, Step, …) */
 export function childOnlyNames(specs: Iterable<ComponentSpec>): Set<string> {
   const out = new Set<string>();
   for (const spec of specs) {
@@ -32,7 +23,6 @@ export function childOnlyNames(specs: Iterable<ComponentSpec>): Set<string> {
   return out;
 }
 
-/** child specs a container can insert */
 export function insertableChildren<S extends ComponentSpec>(
   spec: ComponentSpec | undefined,
   specs: ReadonlyMap<string, S>,
@@ -45,11 +35,6 @@ export function insertableChildren<S extends ComponentSpec>(
   return out;
 }
 
-/**
- * What a component's panel can insert and where: the component's own children
- * at its end, or: for a childless entry like a File row, the nearest
- * ancestor container's children as siblings after the entry.
- */
 export function childInsertContext<S extends ComponentSpec>(
   state: EditorState,
   pos: number,
@@ -71,17 +56,11 @@ export function childInsertContext<S extends ComponentSpec>(
   for (let depth = self - 1; depth > 0; depth--) {
     if ($inside.node(depth).type.name !== COMPONENT_NODE) continue;
     const children = insertableChildren(specs.get($inside.node(depth).attrs.name as string), specs);
-    // insert after the ancestor's child that contains `pos`
     if (children.length > 0) return { children, insertAt: $inside.after(depth + 1) };
   }
   return null;
 }
 
-/**
- * Put the caret on the nearest text position at/after (`dir: 1`) or at/before
- * (`dir: -1`) `pos`. Refuses to move against `dir`, so a caller can never
- * teleport the caret out of the area it intended.
- */
 function focusNear(editor: Editor, pos: number, dir: 1 | -1): boolean {
   const { view } = editor;
   const tr = view.state.tr;
@@ -98,7 +77,6 @@ export function focusAt(editor: Editor, pos: number): void {
   focusNear(editor, pos, 1);
 }
 
-/** depth of the enclosing inline region at the cursor, or -1 */
 function inlineRegionDepth($from: ResolvedPos): number {
   for (let depth = $from.depth; depth > 0; depth--) {
     if ($from.node(depth).type.name === INLINE_REGION_NODE) return depth;
@@ -106,7 +84,6 @@ function inlineRegionDepth($from: ResolvedPos): number {
   return -1;
 }
 
-/** depth of the enclosing inline or block region, or -1 */
 function regionDepth($from: ResolvedPos): number {
   for (let depth = $from.depth; depth > 0; depth--) {
     const name = $from.node(depth).type.name;
@@ -115,7 +92,6 @@ function regionDepth($from: ResolvedPos): number {
   return -1;
 }
 
-/** depth of the innermost enclosing component, or -1 */
 /** the YAML frontmatter atom: pinned first, so never moved or moved past */
 export const FRONTMATTER_NODE = "frontmatter";
 
@@ -134,7 +110,6 @@ function hasComponentChild(node: PMNode): boolean {
   return found;
 }
 
-/** innermost component whose range fully contains [from, to], or null */
 function enclosingComponent(
   editor: Editor,
   from: number,
@@ -150,11 +125,6 @@ function enclosingComponent(
   return null;
 }
 
-/**
- * The entry component of a list-like container at the cursor: the innermost
- * component whose parent is a component with `listLike` accepting it (a File
- * or Folder row). Null when the innermost component is anything else.
- */
 export function listEntryDepth($from: ResolvedPos, specs: SpecMap): number {
   const depth = componentDepth($from);
   if (depth < 2) return -1;
@@ -166,14 +136,6 @@ export function listEntryDepth($from: ResolvedPos, specs: SpecMap): number {
   return childNames(containerSpec).includes(name) ? depth : -1;
 }
 
-/* ---- Enter ---- */
-
-/**
- * Enter on an empty trailing paragraph of a block region leaves the component:
- * move to the next sibling component when there is one, otherwise pop levels
- * until a paragraph fits and start one there. Each press pops one component,
- * mirroring how double-Enter lifts out of a list.
- */
 function exitOnEmptyParagraph(editor: Editor): boolean {
   const { state } = editor;
   const { $from, empty } = state.selection;
@@ -210,14 +172,6 @@ function exitOnEmptyParagraph(editor: Editor): boolean {
   return false;
 }
 
-/**
- * Enter inside an inline region never splits it (the backing attribute is a
- * single string). Behaviour depends on the component:
- *   - list-like container's own name (Folder): insert a child entry inside it;
- *   - repeated child of a list-like container (File): insert a sibling entry;
- *   - anything else (Card / Accordion title): move to the component's next
- *     editable region, matching how Tab-style field navigation reads.
- */
 function handleEnter(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const selection = state.selection;
@@ -243,7 +197,6 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
   if (!comp || comp.type.name !== COMPONENT_NODE) return true;
   const spec = specs.get(comp.attrs.name as string);
 
-  // list-like container name (Folder): add the default child after the name
   if (spec?.listLike) {
     const childSpec = insertableChildren(spec, specs)[0];
     if (childSpec) {
@@ -254,7 +207,6 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
     }
   }
 
-  // repeated child of a list-like container (File): add a sibling after it
   const container = compDepth >= 1 ? $from.node(compDepth - 1) : null;
   const containerSpec =
     container?.type.name === COMPONENT_NODE ? specs.get(container.attrs.name as string) : undefined;
@@ -269,17 +221,11 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
     return true;
   }
 
-  // otherwise: jump to the next region in this component, if any
   const nextRegionStart = $from.after(regionDepth);
   if (nextRegionStart < $from.end(compDepth)) focusAt(editor, nextRegionStart + 1);
   return true; // never split an inline region
 }
 
-/**
- * Mod-Enter inserts the next sibling from anywhere inside a container child
- * (a new Step mid-typing); inside a standalone component it starts a
- * paragraph after it.
- */
 export function handleModEnter(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from } = state.selection;
@@ -314,13 +260,6 @@ function outermostComponentDepth($from: ResolvedPos): number {
   return -1;
 }
 
-/* ---- Tab ---- */
-
-/**
- * The type a list entry toggles to: a plain row becomes the type that can
- * hold rows like it (File → Folder), an empty container row goes back to the
- * plain type. Null when the row cannot toggle (a folder with children).
- */
 export function entryToggleTarget<S extends ComponentSpec>(
   $from: ResolvedPos,
   specs: ReadonlyMap<string, S>,
@@ -346,12 +285,6 @@ export function entryToggleTarget<S extends ComponentSpec>(
   return null;
 }
 
-/**
- * Tab toggles the row in place between the container's plain entry type and
- * its container type (File ↔ Folder). Only attributes change: the node and
- * its text are kept, so the node view updates in place and the caret never
- * moves.
- */
 export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from } = state.selection;
@@ -359,7 +292,6 @@ export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   if (!toggle) return false;
   const { depth, entry, target } = toggle;
 
-  // regions must correspond one to one for a clean retag
   const regions = target.attributeRegions ?? [];
   const sources: number[] = [];
   entry.forEach((child, off) => {
@@ -395,7 +327,6 @@ export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   return true;
 }
 
-/** the folder a nested list entry can move out of, when its grandparent accepts it */
 export function entryParentFolder<S extends ComponentSpec>(
   $from: ResolvedPos,
   specs: ReadonlyMap<string, S>,
@@ -409,7 +340,6 @@ export function entryParentFolder<S extends ComponentSpec>(
   return specs.get($from.node(depth - 1).attrs.name as string) ?? null;
 }
 
-/** Shift-Tab moves the entry out, right after its parent folder. */
 export function outdentEntry(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from } = state.selection;
@@ -427,7 +357,6 @@ export function outdentEntry(editor: Editor, specs: SpecMap): boolean {
   return true;
 }
 
-/** Tab as field navigation: next/previous region, then the next sibling child. */
 function navigateRegion(editor: Editor, dir: 1 | -1): boolean {
   const { $from } = editor.state.selection;
   const depth = regionDepth($from);
@@ -468,14 +397,6 @@ function handleTab(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean {
   return navigateRegion(editor, dir);
 }
 
-/* ---- moving blocks ---- */
-
-/**
- * Swap the block at `pos` with its previous/next sibling: the keyboard and
- * touch counterpart of dragging it. Regions are not siblings a block may
- * cross (a row never moves above its folder's name), nor is the
- * frontmatter, so those swaps are refused.
- */
 export function moveBlockAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
   const { state } = editor;
   const node = state.doc.nodeAt(pos);
@@ -507,11 +428,6 @@ export function moveBlockAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
   return true;
 }
 
-/**
- * The plain block the toolbar serves: the innermost block around the
- * selection that sits directly in the document or in a body region, unless
- * that is a component (it has its own menu) or the frontmatter.
- */
 export function handleBlock(selection: Selection): { pos: number; type: string } | null {
   const { $from } = selection;
   const pick = (node: PMNode, parent: PMNode, pos: number) => {
@@ -530,7 +446,6 @@ export function handleBlock(selection: Selection): { pos: number; type: string }
   return null;
 }
 
-/** Alt-Arrow: move the innermost component containing the selection, else the block the handle serves */
 function handleMove(editor: Editor, dir: 1 | -1): boolean {
   const { selection } = editor.state;
   if (selection instanceof NodeSelection && selection.node.type.name === COMPONENT_NODE) {
@@ -542,14 +457,6 @@ function handleMove(editor: Editor, dir: 1 | -1): boolean {
   return block ? moveBlockAt(editor, block.pos, dir) : false;
 }
 
-/* ---- Backspace / Delete ---- */
-
-/**
- * Delete a whole leaf component when a selection wipes out all of its text at
- * once (e.g. select-all inside a Callout → Delete), instead of leaving an empty
- * shell behind. Only fires for leaf components (no child components) so a
- * cross-item selection in a container is left to the default handler.
- */
 function handleClearingDelete(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { selection } = state;
@@ -561,7 +468,6 @@ function handleClearingDelete(editor: Editor, specs: SpecMap): boolean {
   if (!spec || spec.childComponent) return false;
   if (comp.node.textContent.length === 0) return false;
 
-  // nothing textual survives on either side of the selection within the component
   const start = comp.pos;
   const end = comp.pos + comp.node.nodeSize;
   const before = state.doc.textBetween(start, selection.from, "", "");
@@ -588,7 +494,6 @@ export function crossesRegion(state: EditorState): boolean {
   return startOf(selection.$from) !== startOf(selection.$to);
 }
 
-/** clear the selected text block-by-block, leaving every node intact */
 export function deleteAcrossRegions(editor: Editor): boolean {
   if (!crossesRegion(editor.state)) return false;
   const { from, to } = editor.state.selection;
@@ -605,10 +510,6 @@ export function deleteAcrossRegions(editor: Editor): boolean {
   return true;
 }
 
-/**
- * Backspace/Delete at the edge of a fully empty, childless component removes
- * the component itself: an empty File row, an emptied Callout.
- */
 function deleteEmptyComponent(editor: Editor, dir: 1 | -1): boolean {
   const { state } = editor;
   const { $from, empty } = state.selection;
@@ -621,7 +522,6 @@ function deleteEmptyComponent(editor: Editor, dir: 1 | -1): boolean {
   const comp = $from.node(depth);
   if (comp.textContent.length > 0 || hasComponentChild(comp)) return false;
 
-  // the caret must sit at the component's own edge, not an inner one
   const start = $from.before(depth);
   const inside = dir === -1 ? start + 1 : start + comp.nodeSize - 1;
   const edge = TextSelection.near(state.doc.resolve(inside), dir === -1 ? 1 : -1);
@@ -633,10 +533,6 @@ function deleteEmptyComponent(editor: Editor, dir: 1 | -1): boolean {
   return true;
 }
 
-/**
- * Backspace in an emptied folder name deletes the folder itself: its children
- * splice up into its place, so no content is lost with it.
- */
 function unwrapEmptyEntry(editor: Editor, specs: SpecMap): boolean {
   const { state } = editor;
   const { $from, empty } = state.selection;
@@ -699,7 +595,6 @@ function handleUnitDelete(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean 
   );
 }
 
-/** Swallow joins across region boundaries so structure can't be damaged. */
 function guardRegionBoundary(editor: Editor, dir: 1 | -1): boolean {
   const { $from, empty } = editor.state.selection;
   if (!empty) return false;
@@ -713,9 +608,6 @@ function guardRegionBoundary(editor: Editor, dir: 1 | -1): boolean {
   return dir === -1 ? $from.index(depth) === 0 : $from.index(depth) === region.childCount - 1;
 }
 
-/* ---- Escape / Mod-A ---- */
-
-/** Escape steps the selection up: component → parent component → blur. */
 function handleEscape(editor: Editor): boolean {
   const { state } = editor;
   const selection = state.selection;
@@ -745,7 +637,6 @@ function selectNode(editor: Editor, pos: number): void {
   editor.view.dispatch(tr.scrollIntoView());
 }
 
-/** Mod-A widens the selection: region text → component → outer component → doc. */
 function handleSelectScope(editor: Editor): boolean {
   const { state } = editor;
   const selection = state.selection;
@@ -779,14 +670,6 @@ function handleSelectScope(editor: Editor): boolean {
   return false; // everything covered: fall through to select-all
 }
 
-/* ---- arrows ---- */
-
-/**
- * ArrowRight at the end of a textblock, with marks set for the next
- * character, drops them instead of moving: the caret has nowhere to go, so
- * the key's one useful meaning is "stop bolding" (as in Notion). A second
- * press crosses the boundary as usual.
- */
 function exitMarks(editor: Editor): boolean {
   const { state } = editor;
   const { $from, empty } = state.selection;
@@ -842,7 +725,6 @@ function handleBoundaryArrow(editor: Editor, dir: 1 | -1, axis: "v" | "h"): bool
       selectNode(editor, dir === -1 ? $from.before(depth) - sibling.nodeSize : $from.after(depth));
       return true;
     }
-    // structural: the sibling is a component, or the move exits one
     let structural = sibling.type.name === COMPONENT_NODE;
     for (let d = depth; !structural && d <= $from.depth; d++) {
       structural = $from.node(d).type.name === COMPONENT_NODE;
@@ -853,8 +735,6 @@ function handleBoundaryArrow(editor: Editor, dir: 1 | -1, axis: "v" | "h"): bool
   }
   return false;
 }
-
-/* ---- the extensions ---- */
 
 export function componentKeymap(specs: SpecMap): Extension[] {
   return [

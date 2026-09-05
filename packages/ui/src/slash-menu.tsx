@@ -36,8 +36,6 @@ import type { MediaProvider } from "./components/media";
 const muted = tokens.mutedForeground;
 
 const styles = stylex.create({
-  /** placed by hand under the caret, in the editor frame so it scrolls with
-   * the text */
   popup: { position: "absolute", maxHeight: "18rem", width: "13rem", overflowY: "auto" },
   empty: {
     margin: 0,
@@ -67,7 +65,6 @@ export interface SlashItem {
   title: string;
   group: string;
   icon?: ReactNode;
-  /** file paths render in the code face */
   mono?: boolean;
   run: (editor: Editor, range: Range) => void;
 }
@@ -111,8 +108,6 @@ const BLOCKS: SlashItem[] = [
   ),
 ];
 
-/** offered only while the math dialect is on: the nodes have no MDX form
- * otherwise */
 const MATH_ITEMS: SlashItem[] = [
   block("Math block", <Sigma size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).setNode("mathBlock").run(),
@@ -128,8 +123,6 @@ const MATH_ITEMS: SlashItem[] = [
   ),
 ];
 
-/** Image: pick + upload with a provider, otherwise a source-less node the
- * bubble fills in. */
 function imageItem(media: MediaProvider | undefined): SlashItem {
   return block("Image", <ImageIcon size={15} />, (e, r) => {
     if (media) {
@@ -153,7 +146,6 @@ function imageItem(media: MediaProvider | undefined): SlashItem {
   });
 }
 
-/** every spec with an insert, minus child-only specs (File, Card, Step, …) */
 function componentItems(specs: UiComponentSpec[]): SlashItem[] {
   const childOnly = childOnlyNames(specs);
   const items: SlashItem[] = [];
@@ -179,14 +171,12 @@ export interface PopupProps {
   onSelect: (index: number) => void;
 }
 
-/** shared suggestion list: the slash menu and the file-path suggest */
 export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     const base = el?.offsetParent?.getBoundingClientRect();
     if (!el || !base || !rect) return;
-    // kept inside the viewport as placed, then anchored to the frame
     const { width, height } = el.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     const top =
@@ -293,7 +283,6 @@ export function suggestionRender(): {
   };
 }
 
-/** the full insert list: block types plus registered top-level components */
 export function insertItems(
   specs: UiComponentSpec[],
   media?: MediaProvider,
@@ -302,11 +291,6 @@ export function insertItems(
   return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(media), ...componentItems(specs)];
 }
 
-/**
- * `/` at the start of an empty list-entry name offers the container's row
- * types instead (File, Folder): selecting one replaces the entry, so
- * Enter → `/` → Folder turns a fresh row into a folder.
- */
 export function entryItems(
   editor: Editor,
   specs: Map<string, UiComponentSpec>,
@@ -334,7 +318,6 @@ export function entryItems(
   }));
 }
 
-/** `/` in a paragraph opens the insert menu: block types plus registered components. */
 export function slashMenu(
   components: UiComponentSpec[],
   specMap: Map<string, UiComponentSpec>,
@@ -354,7 +337,6 @@ export function slashMenu(
           allow: ({ state, range }) => {
             const $pos = state.doc.resolve(range.from);
             if ($pos.parent.type.name === "paragraph") return true;
-            // an otherwise-empty list-entry name: offer the row types
             return (
               $pos.parent.type.name === INLINE_REGION_NODE &&
               $pos.parentOffset === 0 &&

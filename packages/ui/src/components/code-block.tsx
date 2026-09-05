@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
 import { chrome } from "../styles/shared";
+import { BlockActions } from "../block-panel";
 import { content, contentClass } from "../styles/content";
 import { nodeViewOptions } from "./node-view-options";
 import { Picker } from "./picker";
@@ -24,14 +25,6 @@ import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { MermaidDiagram } from "./mermaid";
 import { useEditorPortal } from "../utils/portal";
 
-/**
- * Syntax highlighting for fenced code. `lowlight` (highlight.js) decorates
- * the PM document synchronously; Shiki's async model can't. Chrome matches
- * fumadocs-ui `CodeBlock` (shiki-flavoured card, border, title bar).
- *
- * Starts with no grammars: the highlight.js chunk loads on first code-block
- * render, then registers into this instance and re-decorates.
- */
 const lowlight = createLowlight();
 
 let grammars: Promise<void> | undefined;
@@ -55,7 +48,6 @@ function ensureGrammars(editor: Editor) {
   });
 }
 
-/** Info-string language token → menu label. Order is the menu order. */
 const LANGUAGES: { value: string; label: string }[] = [
   { value: "plaintext", label: "Plain text" },
   { value: "bash", label: "Bash" },
@@ -78,7 +70,6 @@ const LANGUAGES: { value: string; label: string }[] = [
   { value: "package-install", label: "Package install" },
 ];
 
-/** highlight.js aliases that a fence may use → the canonical menu value */
 const ALIASES: Record<string, string> = {
   ts: "typescript",
   js: "javascript",
@@ -92,7 +83,6 @@ const ALIASES: Record<string, string> = {
 };
 
 const styles = stylex.create({
-  /** header controls: 24px squares, hover (and an open popup) wash in accent */
   iconButton: {
     display: "inline-flex",
     width: "1.5rem",
@@ -172,7 +162,6 @@ const styles = stylex.create({
     textAlign: "end",
     fontSize: tokens.fieldSize,
   },
-  /** the fence flags this editor has no control for, shown verbatim */
   rest: {
     borderTopWidth: 1,
     borderTopStyle: "solid",
@@ -182,15 +171,27 @@ const styles = stylex.create({
     fontSize: 11,
     color: tokens.mutedForeground,
   },
-  /** the gutter row: line numbers beside the horizontal scroller */
+  actions: {
+    display: "flex",
+    flexDirection: "column",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+    paddingTop: "0.25rem",
+  },
+  actionItem: {
+    marginInline: "-0.25rem",
+    paddingInline: "0.25rem",
+    paddingBlock: "0.25rem",
+    fontSize: 12.5,
+    lineHeight: "1.125rem",
+  },
   body: { display: "flex" },
   pointer: { cursor: "pointer" },
 });
 
 const languageTriggerClass = stylex.props(chrome.button, styles.languageTrigger).className!;
 
-/** Copies the block's text; briefly confirms with a check. Purely chrome: it
- * is `contentEditable={false}` and never mutates the document. */
 function CopyButton({ getText }: { getText: () => string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -217,7 +218,6 @@ function normalize(lang: string | null): string {
 
 function LanguageSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const current = normalize(value);
-  // surface an unknown language so the trigger never renders blank
   const items = LANGUAGES.some((item) => item.value === current)
     ? LANGUAGES
     : [{ value: current, label: current }, ...LANGUAGES];
@@ -239,19 +239,23 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
   );
 }
 
-/** Fence options fumadocs' rehypeCode reads: line numbers and the copy button. */
 function MetaSettings({
+  editor,
+  getPos,
   meta,
   onChange,
 }: {
+  editor: Editor;
+  getPos: () => number | undefined;
   meta: ReturnType<typeof parseCodeMeta>;
   onChange: (next: ReturnType<typeof parseCodeMeta>) => void;
 }) {
   const { anchorRef, container } = useEditorPortal();
+  const [open, setOpen] = useState(false);
   const denseSwitch = stylex.props(chrome.switchRoot, styles.denseSwitch);
   const thumb = stylex.props(chrome.switchThumb);
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         ref={anchorRef}
         aria-label="Code block options"
@@ -299,6 +303,14 @@ function MetaSettings({
               </Switch.Root>
             </label>
             {meta.rest && <p {...stylex.props(styles.rest)}>{meta.rest}</p>}
+            <div {...stylex.props(styles.actions)}>
+              <BlockActions
+                editor={editor}
+                pos={getPos}
+                onDone={() => setOpen(false)}
+                itemLook={styles.actionItem}
+              />
+            </div>
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -306,13 +318,11 @@ function MetaSettings({
   );
 }
 
-function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
+function CodeBlockView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const language = (node.attrs.language as string | null) ?? null;
   const meta = parseCodeMeta(node.attrs.meta as string | null);
   useEffect(() => ensureGrammars(editor), [editor]);
 
-  // the meta's `lineNumbers` previewed in the editor: one number per line,
-  // in a gutter matching the code's metrics (no wrapping, so 1 line = 1 row)
   let gutter: string | null = null;
   if (meta.lineNumbers !== false) {
     const start = typeof meta.lineNumbers === "number" ? meta.lineNumbers : 1;
@@ -324,7 +334,11 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper as="figure" dir="ltr" {...stylex.props(content.codeBlock)}>
-      <div {...stylex.props(chrome.static, content.codeHeader)} contentEditable={false}>
+      <div
+        {...stylex.props(chrome.static, content.codeHeader)}
+        contentEditable={false}
+        data-fde-row=""
+      >
         <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
         <input
           {...stylex.props(chrome.input, styles.titleInput)}
@@ -337,6 +351,8 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
           }
         />
         <MetaSettings
+          editor={editor}
+          getPos={getPos}
           meta={meta}
           onChange={(next) => updateAttributes({ meta: buildCodeMeta(next) })}
         />
@@ -367,12 +383,6 @@ function CodeBlockView({ node, editor, updateAttributes }: NodeViewProps) {
   );
 }
 
-/**
- * The UI-layer code-block node: syntax highlighting via lowlight plus a
- * node-view with a language picker. Carries the fence `meta` string so the
- * document still round-trips losslessly. Replaces the core `CodeBlockMdx`
- * (pass `codeBlock: false` to `editorExtensions`).
- */
 export function codeBlockExtension(): Extension {
   return CodeBlockLowlight.extend({
     addAttributes() {

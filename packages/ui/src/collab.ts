@@ -9,18 +9,11 @@ import * as stylex from "@stylexjs/stylex";
 import { content } from "./styles/content";
 
 export interface EditorCollab {
-  /** Collaboration (Y binding + own-edits undo) and peer carets */
   extensions: Extensions;
-  /** resolves once the server's document has landed in the Y.Doc */
   whenSynced: Promise<void>;
   destroy(): void;
 }
 
-/**
- * Everything collaborative lives behind this module's dynamic import: yjs,
- * the y binding and both TipTap extensions load only when an editor is
- * given a `collab` prop.
- */
 export function startCollab(
   collab: CollabLink,
   components: UiComponentSpec[],

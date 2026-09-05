@@ -13,31 +13,17 @@ import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs
 import { FRONTMATTER_NODE, childNames, childOnlyNames, type SpecMap } from "./keymap";
 import { contentClass } from "../styles/content";
 
-/*
- * Structural invariants the schema can't express: a component's regions are
- * part of its identity. `mdxComponent` content must stay repeatable (regions
- * vary per spec), so a DOM edit (native word delete, autocorrect, IME) can
- * parse a region out of the document. After each transaction this reconciles
- * touched components against their spec, and vets drops so a child row only
- * lands in a container that accepts it.
- */
-
 type Fix =
   | { kind: "retag"; pos: number; attrs: Record<string, unknown> }
   | { kind: "insert"; pos: number; node: PMNode }
   | { kind: "remove"; pos: number; size: number }
-  /** move a stray block into a region (append at `target`, a pos inside it) */
   | { kind: "fold"; pos: number; target: number }
-  /** dissolve a surplus region: its content moves to `target` inside the real one */
   | { kind: "merge"; pos: number; target: number };
 
-/** missing regions inserted, present ones retagged to the spec's names in order */
 function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap, fixes: Fix[]) {
   const spec = specs.get(node.attrs.name as string);
   if (!spec) return;
   const inline: { region: string }[] = [];
-  // a container's `itemsAttribute` (Tabs `items`) gives each child a label
-  // region, first: part of the child's own shape
   const parent = state.doc.resolve(pos).parent;
   const items =
     parent.type.name === COMPONENT_NODE
@@ -48,9 +34,6 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
   if (spec.contentRegion) inline.push(spec.contentRegion);
   const block = spec.childrenRegion;
 
-  // a container with no regions of its own (Files, Cards, Steps) has no
-  // editable surface once its last child goes: it dies with it. A leaf
-  // component (no childComponent either) is legitimately empty.
   if (spec.childComponent && inline.length === 0 && !block && node.childCount === 0) {
     fixes.push({ kind: "remove", pos, size: node.nodeSize });
     return;
@@ -81,9 +64,6 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
       node: state.schema.nodes[INLINE_REGION_NODE].create({ region: inline[i].region }),
     });
   }
-  // a paste can split regions or smuggle wrapped ones in: a component owns
-  // exactly the spec's regions, so surplus ones dissolve into the last real
-  // one (their content survives, the duplicate identity does not)
   if (inline.length > 0) {
     for (let i = inline.length; i < inlinePresent.length; i++) {
       const into = inlinePresent[inline.length - 1];
@@ -108,10 +88,6 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
         target: present.pos + present.node.nodeSize - 1,
       });
     }
-    // a component with a body region owns ALL its block content through it
-    // (that's what childrenRegion folding means at parse time). A bare block
-    // that lands directly in the component (cross-region type-over, a
-    // native edit) is folded into the body, never left floating.
     node.forEach((child, offset) => {
       const at = pos + 1 + offset;
       if (
@@ -124,7 +100,6 @@ function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap
     });
     return;
   }
-  // after the inline regions, before any child component
   const last = inlinePresent[inlinePresent.length - 1];
   fixes.push({
     kind: "insert",
@@ -174,7 +149,6 @@ function applyFixes(state: EditorState, fixes: Fix[]): Transaction | null {
   return tr;
 }
 
-/** components overlapping the ranges these transactions touched, deduped */
 function touchedComponents(
   state: EditorState,
   transactions: readonly Transaction[],
@@ -210,7 +184,6 @@ function touchedComponents(
   return fixes;
 }
 
-/** the block a drop from outside carries, when it is exactly one we manage */
 function draggedBlock(slice: Slice | undefined, specs: SpecMap): PMNode | null {
   if (!slice || slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount !== 1) {
     return null;
@@ -265,8 +238,6 @@ function dropTarget(
     } else {
       const child = $pos.node(depth + 1);
       if (child.type.name === INLINE_REGION_NODE || child.type.name === BLOCK_REGION_NODE) {
-        // never split a component's regions: land right after them
-        // (dropping on a folder's name nests as its first row)
         insert = $pos.after(depth + 1);
       } else {
         const dom = view.nodeDOM($pos.before(depth + 1));
@@ -287,13 +258,6 @@ function dropTarget(
   return null;
 }
 
-/*
- * The drag preview line, drawn from `dropTarget` so it always shows the real
- * destination: one line between same-level siblings, and an indented one
- * when the drop nests into a folder. Hidden entirely over invalid targets.
- * Replaces the stock dropcursor, which previews its own dropPoint and paints
- * a different line for every schema-valid position sharing one visual gap.
- */
 let line: HTMLElement | null = null;
 
 /**
@@ -331,8 +295,6 @@ function showIndicator(view: EditorView, target: number) {
   const ref = next ?? prev ?? ($pos.depth > 0 ? view.nodeDOM($pos.before()) : null);
   if (!(ref instanceof HTMLElement)) return hideIndicator();
   const rect = ref.getBoundingClientRect();
-  // between two blocks the line splits their gap; at a container's edge it
-  // hugs the only neighbour
   let y = next ? rect.top : rect.bottom;
   if (next && prev instanceof HTMLElement) y = (prev.getBoundingClientRect().bottom + y) / 2;
   const root = overlay(view);
@@ -346,7 +308,6 @@ function showIndicator(view: EditorView, target: number) {
   line.style.width = `${rect.width}px`;
 }
 
-/** the line at the pointer's target, or none; the target itself */
 function hover(
   view: EditorView,
   dragged: PMNode,
@@ -362,19 +323,12 @@ function hover(
   return target;
 }
 
-/**
- * A copy of the block riding under the pointer, rasterized once at its own
- * place and moved by transform only: on the compositor, dirtying no
- * layout before the next hit test. It sits below the line, so the target
- * always reads through it.
- */
 function lift(root: HTMLElement, dom: HTMLElement, x: number, y: number) {
   const rect = dom.getBoundingClientRect();
   const at = local(root, rect.left, rect.top);
   const base = local(root, x, y);
   const ghost = dom.cloneNode(true) as HTMLElement;
   ghost.className += ` ${contentClass.dragGhost}`;
-  // inline: the copy keeps the block's own classes, which position it
   ghost.style.cssText = `position:absolute;left:${at.left}px;top:${at.top}px;width:${rect.width}px;box-sizing:border-box;margin:0;z-index:49;pointer-events:none`;
   root.appendChild(ghost);
   return {
@@ -386,7 +340,6 @@ function lift(root: HTMLElement, dom: HTMLElement, x: number, y: number) {
   };
 }
 
-/** move `node` to `insert`, removing it from `source` first */
 function placeDrop(
   view: EditorView,
   node: PMNode,
@@ -400,8 +353,6 @@ function placeDrop(
   // boundary, so dropping into itself is a no-op
   const mapped = tr.mapping.map(insert);
   tr.insert(mapped, node);
-  // a selection inside the block travels with it, so the next drag needs
-  // no reselecting; otherwise the caret lands on the block's first text
   const shift =
     source && selection.from >= source.from && selection.to <= source.to
       ? mapped - source.from
@@ -417,10 +368,8 @@ function placeDrop(
   view.dispatch(tr.scrollIntoView());
 }
 
-/** window scroll while the pointer rides the viewport's top or bottom edge */
 const EDGE = 48;
 
-/** movement before a press becomes a drag */
 const SLOP = 3;
 
 /**
@@ -437,7 +386,6 @@ export function startPointerDrag(
   handle: HTMLElement,
   event: PointerEvent,
   specs: SpecMap,
-  /** the pointer's offset from the press, for the handle's own motion; (0, 0) at the end */
   tilt: (dx: number, dy: number) => void,
 ): void {
   const node = view.state.doc.nodeAt(pos);
@@ -517,8 +465,6 @@ export function structureGuard(specs: SpecMap): Extension {
   return Extension.create({
     name: "fdeStructureGuard",
 
-    // documents from disk may predate the invariants: normalize once on mount,
-    // outside the undo history
     onBeforeCreate() {
       this.editor.on("mount", ({ editor }) => {
         const state = editor.state;

@@ -56,7 +56,6 @@ export function setComponentAttributes(
   editor.view.dispatch(tr);
 }
 
-/** update a (possibly node-selected) atom's attrs, keeping the selection */
 export function updateAtomAttributes(
   editor: Editor,
   type: string,

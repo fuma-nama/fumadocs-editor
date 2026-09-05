@@ -7,8 +7,6 @@ import type { EditorView } from "@tiptap/pm/view";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
-/** transaction meta set when a leaf component is clicked: the bubble opens
- * that component's menu, since there is nothing in it to type into */
 export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";
 
 /**
@@ -35,11 +33,6 @@ function componentAt(
   return node?.type.name === COMPONENT_NODE ? { node, pos } : null;
 }
 
-/*
- * Caret and selection policy: the caret rests in editable text, a component is
- * selected only by explicit gesture (Escape, Mod-A), and a selected node is
- * never destroyed by a stray keystroke.
- */
 export const caretPolicy = Extension.create({
   name: "fdeCaretPolicy",
 
@@ -75,8 +68,6 @@ export const caretPolicy = Extension.create({
               return true;
             },
           },
-          // typing never replaces a selected component or atom; deleting or
-          // Enter-to-drill-in stay explicit gestures
           handleTextInput(view, _from, _to, text) {
             const selection = view.state.selection;
             if (
@@ -85,15 +76,12 @@ export const caretPolicy = Extension.create({
             ) {
               return true;
             }
-            // type-over of a region-crossing selection: clear it in place
-            // (never a structural replace), then type at the caret
             if (crossesRegion(view.state) && deleteAcrossRegions(editor)) {
               editor.view.dispatch(editor.state.tr.insertText(text).scrollIntoView());
               return true;
             }
             return false;
           },
-          // same rule for paste: clear per-block, insert the plain text
           handlePaste(view, _event, slice) {
             if (!crossesRegion(view.state) || !deleteAcrossRegions(editor)) return false;
             const text = slice.content.textBetween(0, slice.content.size, "\n");
@@ -129,13 +117,8 @@ export const caretPolicy = Extension.create({
             );
             return true;
           },
-          // a click on a component's own chrome (padding, rails, icons) places
-          // the caret in the nearest editable text instead of node-selecting
-          // the whole component
           handleClickOn(view, pos, node, nodePos, _event, direct) {
             if (!direct || node.type.name !== COMPONENT_NODE) return false;
-            // a leaf (GithubInfo, a dynamic TypeTable) has nothing to type
-            // into: clicking it selects it and surfaces its menu instead
             if (node.childCount === 0) {
               view.dispatch(
                 view.state.tr
@@ -155,7 +138,6 @@ export const caretPolicy = Extension.create({
             view.dispatch(view.state.tr.setSelection(selection));
             return true;
           },
-          // a click that died on a leaf's chrome still deserves its menu
           handleClick(view, _pos, event) {
             const hit = componentAt(view, event.target);
             if (!hit || hit.node.childCount > 0) return false;

@@ -1,11 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
-/*
- * Typed references to the editor's `--fde-*` design tokens. The values live
- * in base.css (`:root`, `.light`, `.dark`) so a host themes the editor the
- * way it themes everything else: a `.dark` class, or overriding the
- * variables after importing the stylesheet.
- */
+/* The values live in base.css (`:root`, `.light`, `.dark`). */
 export const tokens = stylex.defineConsts({
   background: "var(--fde-background)",
   foreground: "var(--fde-foreground)",

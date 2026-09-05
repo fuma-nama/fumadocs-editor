@@ -31,5 +31,4 @@ function ignoreMutation({ mutation }: { mutation: { type: string; target: Node }
   return true;
 }
 
-/** shared by every React node view in the editor */
 export const nodeViewOptions: Partial<NodeViewRendererOptions> = { stopEvent, ignoreMutation };

@@ -13,10 +13,7 @@ export interface PickerItem {
 }
 
 const styles = stylex.create({
-  /** the picker pads each section itself, so the popup keeps none */
   popup: { width: "13rem", overflow: "hidden", padding: 0 },
-  /* the inline padding puts the input text on the item labels' left edge
-   * (list padding 0.25rem + item padding 0.5rem) */
   input: {
     height: "2rem",
     width: "100%",
@@ -50,10 +47,6 @@ const styles = stylex.create({
   },
 });
 
-/**
- * Combobox for long lists (block types, code languages): trigger button,
- * popup filters as you type.
- */
 export function Picker<T extends PickerItem>({
   items,
   value,
@@ -78,17 +71,11 @@ export function Picker<T extends PickerItem>({
   align?: "start" | "end";
   side?: "top" | "bottom";
   ariaLabel?: string;
-  /** the trigger is a native button: include `chrome.button` in this class */
   triggerCls: string;
   triggerTabIndex?: number;
-  /** overrides the default `[data-fde-root]` portal (the bubble menu portals
-   * into the editor wrapper so its blur handling keeps working) */
   container?: HTMLElement;
-  /** trigger content */
   children: ReactNode;
-  /** leading cell rendered before an item's label (icons) */
   lead?: (item: T) => ReactNode;
-  /** pinned below the list; unaffected by filtering */
   footer?: ReactNode;
 }) {
   const portal = useEditorPortal();

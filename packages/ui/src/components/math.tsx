@@ -28,15 +28,6 @@ import { nodeViewOptions } from "./node-view-options";
 import { chrome } from "../styles/shared";
 import { math } from "../styles/markers.stylex";
 
-/*
- * UI slice of the remark-math syntax (core/src/syntax/math): in-place TeX
- * source editing with a KaTeX preview, matching fumadocs' rehype-katex.
- * Caret position drives which face shows: a plugin sets `data-active` on
- * the math node holding the caret and the styles below swap source and
- * preview from that attribute, so activation never re-renders React. KaTeX
- * (and its stylesheet) load in their own chunk on the first math node.
- */
-
 type Katex = typeof import("katex").default;
 
 const styles = stylex.create({
@@ -51,14 +42,11 @@ const styles = stylex.create({
   srcBlock: {
     display: { default: "block", [stylex.when.ancestor(":not([data-active])", math)]: "none" },
   },
-  /** inline preview: replaced by the source while editing */
   preview: {
     cursor: "text",
     display: { default: null, [stylex.when.ancestor("[data-active]", math)]: "none" },
   },
-  /** block preview: sits below the source while editing */
   previewBlock: { cursor: "text", display: "block", overflowX: "auto" },
-  /** ring around a block being edited, where both faces are visible */
   blockActive: {
     borderRadius: { default: null, [stylex.when.ancestor("[data-active]", math)]: 10 },
     outline: {
@@ -70,8 +58,6 @@ const styles = stylex.create({
   },
 });
 
-/* The `.react-renderer` wrapper takes the `data-active` decoration, so it is
- * also the marker its faces key off. */
 const inlineClass = stylex.props(content.mathInline, math).className;
 const blockClass = stylex.props(content.block, math).className;
 
@@ -125,7 +111,6 @@ function Preview({
   );
 }
 
-/** caret to the end of the node's source text, entering edit mode */
 function focusSource({ editor, getPos, node }: NodeViewProps) {
   const pos = getPos();
   if (typeof pos !== "number") return;
@@ -186,11 +171,6 @@ function MathBlockView(props: NodeViewProps) {
   );
 }
 
-/**
- * Marks the math node holding the caret with `data-active` (on its outer
- * `.react-renderer`, like the component tint) so CSS can show the TeX source
- * only while it is being edited.
- */
 const mathActive = Extension.create({
   name: "fdeMathActive",
   addProseMirrorPlugins() {
@@ -231,7 +211,6 @@ const mathActive = Extension.create({
  * has text between it and either boundary, so placement sticks.
  */
 
-/** caret adjacent to an inline math node: step into its source */
 function enterInline(editor: Editor, dir: 1 | -1): boolean {
   const { $from, empty } = editor.state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
@@ -241,7 +220,6 @@ function enterInline(editor: Editor, dir: 1 | -1): boolean {
   return editor.commands.setTextSelection(end);
 }
 
-/** caret at a textblock edge with a math block as the next sibling: enter it */
 function enterBlock(editor: Editor, dir: 1 | -1, axis: "h" | "v"): boolean {
   const { $from, empty } = editor.state.selection;
   if (!empty || !$from.parent.isTextblock) return false;
@@ -279,7 +257,6 @@ export function mathExtensions(enabled: boolean): Extensions {
       addInputRules() {
         if (!enabled) return [];
         return [
-          // typing `$x$` becomes inline math (the closing `$` completes it)
           new InputRule({
             find: /(?<!\$)\$([^$\s](?:[^$]*[^$\s])?)\$$/,
             handler: ({ state, range, match }) => {
@@ -293,13 +270,11 @@ export function mathExtensions(enabled: boolean): Extensions {
         return {
           ArrowRight: () => enterInline(this.editor, 1),
           ArrowLeft: () => enterInline(this.editor, -1),
-          // Enter finishes the formula instead of splitting the paragraph
           Enter: () => {
             const { $from } = this.editor.state.selection;
             if ($from.parent.type.name !== MATH_INLINE_NODE) return false;
             return this.editor.commands.setTextSelection($from.after());
           },
-          // Backspace in an emptied formula removes the node itself
           Backspace: () => {
             const { $from, empty } = this.editor.state.selection;
             if (

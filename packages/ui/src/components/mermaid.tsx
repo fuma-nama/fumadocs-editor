@@ -5,13 +5,6 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useEditorTheme } from "../theme";
 import { chrome } from "../styles/shared";
 
-/*
- * Diagram preview for `mermaid` code fences: a code-block renderer variant,
- * not a syntax. The fence stays an ordinary editable code block; the
- * diagram renders beneath it, matching fumadocs' remarkMdxMermaid. Mermaid
- * loads in its own chunk only when a mermaid fence actually renders.
- */
-
 type Mermaid = typeof import("mermaid").default;
 
 let mermaidPromise: Promise<Mermaid> | undefined;
@@ -56,8 +49,6 @@ export function MermaidDiagram({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState(false);
-  // provider toggles re-render us (context) and this snapshot re-reads; the
-  // subscription covers next-themes class flips and OS scheme changes
   const { resolvedTheme } = useEditorTheme();
   const scope = useSyncExternalStore(
     subscribeThemeScope,
@@ -85,11 +76,9 @@ export function MermaidDiagram({ code }: { code: string }) {
         setSvg(svg);
         setError(false);
       } catch {
-        // mid-edit sources are transient garbage: keep the last good diagram
         if (live) setError(true);
       }
     };
-    // typing in the fence re-renders per keystroke; the diagram can lag a beat
     const timer = window.setTimeout(() => void render(), svg ? 300 : 0);
     return () => {
       live = false;

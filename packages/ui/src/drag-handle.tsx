@@ -10,16 +10,11 @@ import { consts } from "./styles/consts.stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { chrome } from "./styles/shared";
 
-/** pointer travel, in px, that tilts the stick all the way */
 const REACH = 28;
 
-/* A joystick seen from above: a shaded socket, and a red ball on a stick
- * that leans toward the pointer while it is held, then springs back. The
- * lean is written straight to the DOM on every move, never through React. */
 const spring = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 
 const styles = stylex.create({
-  /** the ball answers the hover, not the button's wash */
   button: {
     touchAction: "none",
     cursor: { default: "grab", ":active": "grabbing" },
@@ -31,7 +26,6 @@ const styles = stylex.create({
     width: "var(--fde-joy)",
     height: "var(--fde-joy)",
     borderRadius: 9999,
-    // the theme's own greys: a dimple that reads on both light and dark
     backgroundImage: `radial-gradient(circle at 50% 40%, ${tokens.accent}, ${tokens.muted} 72%)`,
     boxShadow: `inset 0 1px 3px rgb(0 0 0 / 0.3), 0 1px 0 color-mix(in oklab, ${tokens.foreground} 14%, transparent)`,
   },
@@ -79,10 +73,6 @@ const styles = stylex.create({
   },
 });
 
-/**
- * Hold to drag: press the joystick and move to lift the block at `pos`,
- * release to drop it at the line. One control for a mouse and a finger.
- */
 export function DragHandle({
   editor,
   pos,
@@ -93,9 +83,7 @@ export function DragHandle({
   editor: Editor;
   pos: number;
   specs: Map<string, UiComponentSpec>;
-  /** the surface's button look, composed under the joystick's own */
   look: stylex.StyleXStyles;
-  /** socket diameter in px */
   size: number;
 }) {
   const button = useRef<HTMLButtonElement>(null);
@@ -122,14 +110,12 @@ export function DragHandle({
 
   const tilt = (dx: number, dy: number) => {
     const dist = Math.hypot(dx, dy);
-    // held: lit whatever the pointer's boundary events say under capture
     if (dist > 0) setLifted(editor, pos);
     const lean = Math.min(1, dist / REACH);
     const ux = dist && (dx / dist) * lean * radius;
     const uy = dist && (dy / dist) * lean * radius;
     const b = ball.current!;
     b.style.transform = `translate(${ux}px, ${uy}px)`;
-    // the ball's shadow falls away from the lean, as if lit from above
     b.style.filter = `drop-shadow(${-ux * 0.5}px ${1 - uy * 0.5}px 1.5px rgb(0 0 0 / 0.55))`;
     stick.current!.style.transform = `rotate(${Math.atan2(-dx, dy)}rad) scaleY(${lean})`;
     button.current!.toggleAttribute("data-dragging", dist > 0);

@@ -53,12 +53,6 @@ const muted = tokens.mutedForeground;
 const border = tokens.border;
 
 const styles = stylex.create({
-  /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls and stays under the popovers it opens. A grid of max-content
-   * columns, not a flex row: a flex item shrinks to its content, and on a
-   * phone the row scrolls sideways instead. It glides to a new position
-   * (the plugin writes `top`/`left`), e.g. after a block is dragged; while
-   * hidden and re-shown the inline override lands it. */
   bubble: {
     zIndex: 40,
     minWidth: 0,
@@ -82,7 +76,6 @@ const styles = stylex.create({
     gap: "0.5rem",
     padding: "0.5rem",
   },
-  /** the path suggestions track the input's width */
   linkList: { maxHeight: "16rem", width: "var(--anchor-width)", overflowY: "auto" },
   mono: { fontFamily: consts.mono },
   muted: { color: muted },
@@ -131,7 +124,6 @@ const styles = stylex.create({
     color: tokens.foreground,
     outline: "none",
   },
-  /** the active component's chip: reads as a label until hovered */
   chip: {
     display: "inline-flex",
     height: "1.75rem",
@@ -156,7 +148,6 @@ const ghostSelectClass = stylex.props(chrome.button, chrome.ghostSelect).classNa
 const chipClass = stylex.props(chrome.button, styles.chip).className!;
 const iconClass = stylex.props(chrome.button, chrome.iconButton).className!;
 
-/** The turn-into list: every block a text selection can become. */
 export const TURN_INTO = [
   { value: "p", label: "Paragraph", icon: Pilcrow, run: (c: Chain) => c.setParagraph() },
   {
@@ -209,10 +200,6 @@ export function activeBlock(editor: Editor): string {
   return "p";
 }
 
-/**
- * The element type menu: every block a selection can become, with the
- * heading's anchor and TOC options under it.
- */
 export function BlockTypePicker({
   editor,
   block,
@@ -284,24 +271,11 @@ export function BlockTypePicker({
   );
 }
 
-/**
- * The one floating surface, under a selection. What it holds follows the
- * selection: text gets the formatting controls, a node-selected atom its
- * editor, and the block around the selection (the innermost component,
- * else the innermost plain block) its joystick and menu: never two
- * competing menus. With a pointer a resting caret has no chrome: the marks
- * it types with come from the shortcuts, and ArrowRight at the line's end
- * drops them. On touch the bubble stays up under the caret instead.
- */
 export interface BubbleState {
   format: boolean;
-  /** the caret sits inside a table: row/column controls apply */
   table: boolean;
-  /** a node-selected atom the bubble edits directly */
   atom: { kind: "image" | "frontmatter"; pos: number } | null;
-  /** the innermost registered component around the caret */
   active: ActiveComponent | null;
-  /** the plain block the joystick and ⋯ serve when no component is */
   block: { pos: number } | null;
 }
 
@@ -333,7 +307,6 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
   };
 }
 
-/** what summons the bubble: selected text, or a node-selected component or atom */
 function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
   const selection = state.selection;
   if (selection instanceof NodeSelection) {
@@ -342,10 +315,13 @@ function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): bool
     return node.type.name === "image" || node.type.name === "frontmatter";
   }
   // a selection of structural tokens only (a double-click at a region's
-  // end can produce one) renders nothing: it must not summon the bubble
+  // end can produce one) renders nothing: it must not summon the bubble.
+  // Neither does selected code: the block's header holds its menu, and its
+  // joystick sits in the gutter beside it
   return (
     selection instanceof TextSelection &&
     !selection.empty &&
+    !selection.$from.parent.type.spec.code &&
     state.doc.textBetween(selection.from, selection.to).length > 0
   );
 }
@@ -378,11 +354,6 @@ function MarkButton({
   );
 }
 
-/**
- * URL editor for the link mark; portalled into the bubble's parent. With a
- * FileProvider the input autocompletes workspace pages (how docs link to
- * each other) while staying free-form for external URLs.
- */
 function LinkControl({
   editor,
   href,
@@ -552,7 +523,6 @@ function TableControl({
   );
 }
 
-/** src / alt editor for a node-selected image, with provider upload. */
 function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }) {
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -609,7 +579,6 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   );
 }
 
-/** raw YAML editor for the node-selected frontmatter block */
 function FrontmatterPanel({ editor }: { editor: Editor }) {
   const value = (editor.getAttributes("frontmatter").value as string) ?? "";
   return (
@@ -633,11 +602,6 @@ export function EditorBubble({
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
-  /**
-   * A touch screen: the bubble stays up while the editor has focus, sits
-   * below the caret or selection, clear of the system's copy menu above it,
-   * and leaves the joystick to the gutter.
-   */
   touch: boolean;
 }) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
@@ -672,8 +636,6 @@ export function EditorBubble({
         // caret on every keystroke
         atomAttrs: bubble.atom ? (current.state.doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
-        // touch only: two can() trial runs per transaction, for buttons a
-        // keyboard's shortcuts replace
         canUndo: touch && current.can().undo(),
         canRedo: touch && current.can().redo(),
       };
@@ -687,8 +649,6 @@ export function EditorBubble({
   const target = state?.active?.pos ?? state?.block?.pos;
   const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
 
-  // Mod-. opens the block's menu from a resting caret: the bubble is
-  // summoned first, and the popover's focus then keeps it up
   useEffect(() => {
     const dom = editor.view.dom;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -725,7 +685,6 @@ export function EditorBubble({
       // past the selection and caret handles, which hang below the line
       offset: touch ? 20 : 6,
       onHide: () => setPanelOpen(false),
-      // re-shown, it lands in place: the glide is for moves while visible
       onShow: () => {
         menuRef.current!.style.transition = "none";
       },
@@ -741,16 +700,11 @@ export function EditorBubble({
   );
   const shouldShow = useCallback(
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
-      // focus in one of its popovers (portalled into the wrapper) keeps it
       if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-      // touch has no shortcuts: the bubble stays up while the caret rests,
-      // so the marks it types with are a tap away
       return touch ? view.hasFocus() : summoned(editorState, specs);
     },
     [wrapper, specs, touch],
   );
-  // a resting caret anchors the bubble on its whole line: centred under
-  // the line, moving only when the caret leaves it, not with every keystroke
   const getReferencedVirtualElement = useCallback(() => {
     const { selection } = editor.state;
     if (!touch || !selection.empty) return null;

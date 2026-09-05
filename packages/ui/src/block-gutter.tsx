@@ -8,12 +8,9 @@ import type { UiComponentSpec } from "./components/spec";
 import { bubbleState } from "./bubble-menu";
 import { DragHandle } from "./drag-handle";
 
-/** the joystick's side, in px */
 const GUTTER_BUTTON = 28;
 
 const styles = stylex.create({
-  /* in the gutter left of the block's first line, or in the spot the
-   * component reserves for it */
   gutter: {
     position: "absolute",
     top: 0,
@@ -34,7 +31,16 @@ const styles = stylex.create({
   },
 });
 
-/** the spot a component reserves for the joystick inside its own chrome */
+function gutterRow(dom: HTMLElement): DOMRect {
+  const row = dom.querySelector("[data-fde-row]");
+  if (row instanceof HTMLElement && row.closest(".react-renderer") === dom) {
+    return row.getBoundingClientRect();
+  }
+  const rect = dom.getBoundingClientRect();
+  const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
+  return new DOMRect(rect.left, rect.top, rect.width, Math.min(line, rect.height));
+}
+
 function controlsSlot(dom: HTMLElement): HTMLElement | null {
   const slot = dom.querySelector("[data-fde-controls]");
   const own = dom.querySelector("[data-component]");
@@ -47,19 +53,14 @@ function controlsSlot(dom: HTMLElement): HTMLElement | null {
     : null;
 }
 
-/**
- * The joystick of the caret's block on touch: in the spot the block
- * reserves for it, else in the gutter left of its first line (a nested
- * block's gutter would be its parent's chrome). An empty line has nothing
- * to drag and gets none. It lives here, not in the bubble: from a toolbar a
- * drag lifted the ghost far from the finger while the line sat under it.
- */
 export function BlockGutter({
   editor,
   specs,
+  touch,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
+  touch: boolean;
 }) {
   const target = useEditorState({
     editor,
@@ -69,13 +70,13 @@ export function BlockGutter({
       const pos = active?.pos ?? block?.pos;
       if (pos == null) return null;
       const node = current.state.doc.nodeAt(pos)!;
-      return node.isTextblock && node.content.size === 0 ? null : pos;
+      if (node.type.spec.code) return pos;
+      if (!touch || (node.isTextblock && node.content.size === 0)) return null;
+      return pos;
     },
   });
   const ref = useRef<HTMLDivElement>(null);
 
-  // re-placed whenever the document's layout changes under it (an edit
-  // above, a resize, an image loading); a transform, so nothing lays out
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || target == null) return;
@@ -90,11 +91,10 @@ export function BlockGutter({
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
         return;
       }
-      const rect = dom.getBoundingClientRect();
-      const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
-      // centred on the block's first line, in the 24px gutter of the content's padding
-      const x = rect.left - base.left - (24 + GUTTER_BUTTON) / 2;
-      const y = rect.top - base.top + (Math.min(line, rect.height) - GUTTER_BUTTON) / 2;
+      const row = gutterRow(dom);
+      // centred on the row, in the 24px gutter of the content's padding
+      const x = row.left - base.left - (24 + GUTTER_BUTTON) / 2;
+      const y = row.top - base.top + (row.height - GUTTER_BUTTON) / 2;
       el.style.transform = `translate(${x}px, ${y}px)`;
     };
     place();

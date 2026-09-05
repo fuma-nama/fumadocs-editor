@@ -4,12 +4,6 @@ import { ADMONITION_TYPES, admonitionSpec as base } from "@fumadocs-editor/core"
 import { CalloutBox, calloutRegions, type CalloutTypeItem } from "./fumadocs-ui";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
-/*
- * UI slice of the `:::` directive-admonition syntax (core/src/syntax/
- * directives): the dialect's Callout, mirrored through the shared CalloutBox.
- */
-
-/** the directive names, each shown with the look it renders as */
 const ADMONITION_ITEMS: CalloutTypeItem[] = Object.entries(ADMONITION_TYPES).map(
   ([value, visual]) => ({ value, label: value[0].toUpperCase() + value.slice(1), visual }),
 );

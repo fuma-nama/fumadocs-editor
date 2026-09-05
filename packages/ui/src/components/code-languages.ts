@@ -12,12 +12,6 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 
-/**
- * The grammar set, its own chunk: fetched only once a code block actually
- * renders. A curated list (rather than lowlight's ~40-language `common`
- * bundle) keeps even that chunk small; fences in an unregistered language
- * render unhighlighted and still round-trip.
- */
 export function registerLanguages(lowlight: ReturnType<typeof createLowlight>): void {
   lowlight.register({
     bash,
@@ -33,7 +27,6 @@ export function registerLanguages(lowlight: ReturnType<typeof createLowlight>): 
     xml,
     yaml,
   });
-  // map the editor's info-string tokens onto their nearest registered grammar
   lowlight.registerAlias({
     javascript: ["jsx", "mjs", "cjs"],
     typescript: ["tsx"],

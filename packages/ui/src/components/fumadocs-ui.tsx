@@ -39,20 +39,9 @@ import { useEditorPortal } from "../utils/portal";
 import type { ComponentRenderProps, UiComponentSpec } from "./spec";
 
 /*
- * Node renderers for the fumadocs-ui MDX components. Each mirrors the real
- * component's chrome on the editor's own `--fde-*` tokens, so a host that
- * maps them to its palette matches the site. The editor never renders
- * through fumadocs-ui: those components own
- * state and interactivity (tabs, collapse, navigation) that conflict with
- * always-editable regions, and we stay free of the dependency. Custom
- * components work the same way: a lightweight editor renderer, with
- * editable regions as `children` in document order.
- *
- * A component's content hole dissolves (`display: contents`), so the
- * regions and child components are the renderer root's own layout
- * children: containers space them with `gap` and zero the document rhythm
- * (`--fde-gap`). A region renders outside this tree, so its styles travel
- * through the spec's `regions` map.
+ * The editor never renders through fumadocs-ui: those components own state
+ * and interactivity (tabs, collapse, navigation) that conflict with
+ * always-editable regions. These are mirrors, deliberately.
  */
 
 const muted = tokens.mutedForeground;
@@ -109,9 +98,6 @@ const styles = stylex.create({
   calloutBody: { marginTop: 6, color: muted },
   body: { minWidth: 0, flex: 1 },
 
-  /* Touch: the block's joystick docks in a spot the component reserves
-   * inside its own chrome (`data-fde-controls`), never over its parent's;
-   * the region beside it keeps clear. */
   slot: {
     position: "absolute",
     display: { default: "none", [COARSE]: "block" },
@@ -161,7 +147,6 @@ const styles = stylex.create({
     "--fde-gap": "0px",
   },
 
-  /** the rail the step markers hang off; the gutter is its own width */
   steps: {
     position: "relative",
     display: "flex",
@@ -206,8 +191,6 @@ const styles = stylex.create({
     backgroundColor: card,
     "--fde-gap": "0px",
   },
-  /** the divider is a shadow, so the container's overflow clips the first.
-   * The gutter holding the chevron is the item's own chrome. */
   accordion: {
     position: "relative",
     paddingInlineStart: "2.25rem",
@@ -285,7 +268,6 @@ const styles = stylex.create({
     "--fde-ph-y": "0.3rem",
   },
 
-  /** the frame around the tabs is the container's own chrome */
   tabs: {
     display: "flex",
     flexDirection: "column",
@@ -365,7 +347,6 @@ const styles = stylex.create({
   },
   includePath: { fontFamily: consts.mono, fontSize: "0.875em" },
 
-  /** the summary chrome shared by the dynamic TypeTable and GithubInfo */
   infoCard: {
     display: "flex",
     alignItems: "center",
@@ -406,7 +387,6 @@ const styles = stylex.create({
     color: muted,
   },
   narrow: { width: 0 },
-  // the focus wash paints the whole cell, not the input's text box
   cell: {
     boxSizing: "border-box",
     borderTopWidth: 1,
@@ -419,7 +399,6 @@ const styles = stylex.create({
       ":has(:focus)": `color-mix(in oklab, ${tokens.accent} 40%, transparent)`,
     },
   },
-  /** the input is the whole cell: a tap anywhere in it edits */
   cellInput: { paddingInline: 0, paddingBlock: 0 },
   cellName: { width: "18%", minWidth: "7rem" },
   cellType: { width: "22%", minWidth: "8rem" },
@@ -484,7 +463,6 @@ const styles = stylex.create({
   },
 });
 
-/** a region renders outside the renderer's tree: it takes a class, not props */
 const regionClass = (style: stylex.StyleXStyles) => stylex.props(style).className!;
 
 const CALLOUT_ICONS: Record<string, LucideIcon> = {
@@ -498,7 +476,6 @@ const CALLOUT_ICONS: Record<string, LucideIcon> = {
 export interface CalloutTypeItem {
   value: string;
   label: string;
-  /** the Callout type it renders as: keys the icon and the colour token */
   visual: string;
 }
 
@@ -510,10 +487,8 @@ const CALLOUT_TYPES: CalloutTypeItem[] = [
   { value: "idea", label: "Idea", visual: "idea" },
 ];
 
-/** map the JSX alias to the token/icon key */
 const colorKey = (type: string) => (type === "warn" ? "warning" : type);
 
-/** The callout icon doubles as an in-place picker for the callout `type`. */
 function CalloutTypeSelect({
   value,
   visual,
@@ -573,7 +548,6 @@ function CalloutTypeSelect({
   );
 }
 
-/** shared chrome of the JSX Callout and its `:::` directive mirror */
 export function CalloutBox({
   value,
   visual,
@@ -620,7 +594,6 @@ function Callout({ props, children, setProp }: ComponentRenderProps) {
   );
 }
 
-/** the spot the touch controls dock into; the component reserves it in its chrome */
 function ControlsSlot({ at }: { at: stylex.StyleXStyles }) {
   return (
     <span
@@ -778,7 +751,6 @@ function typeTableRows(value: unknown): TypeTableRows | null {
   return value as TypeTableRows;
 }
 
-/** one editable cell of the type table */
 function TypeCell({
   value,
   placeholder,
@@ -802,12 +774,6 @@ function TypeCell({
   );
 }
 
-/**
- * The `type` object edited in place as the table it renders as: one row per
- * property, cells for the fields fumadocs' TypeTable reads. Unknown fields
- * stay on the property. A dynamic (non-literal) expression keeps the
- * summary card and stays source-editable from its menu.
- */
 function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
   const rows =
     typeTableRows(literals.type) ?? (props.type === undefined ? ({} as TypeTableRows) : null);
@@ -827,7 +793,6 @@ function TypeTable({ props, literals, setLiteral }: ComponentRenderProps) {
   }
 
   const entries = Object.entries(rows);
-  // rebuild preserving order; rename swaps the key in place
   const write = (mutate: (next: [string, Record<string, unknown>][]) => void) => {
     const next = entries.map(([key, def]) => [key, def] as [string, Record<string, unknown>]);
     mutate(next);
@@ -944,7 +909,6 @@ function GithubInfoBox({ props }: ComponentRenderProps) {
   );
 }
 
-/** shared with the `:::` directive mirror, which draws the same box */
 export const calloutRegions = {
   title: regionClass(styles.calloutTitle),
   body: regionClass(styles.calloutBody),
@@ -964,7 +928,6 @@ export const calloutSpec: UiComponentSpec = {
       type: "enum",
       options: ["info", "warn", "error", "success", "idea"],
       default: "info",
-      // edited in place by clicking the callout icon
       inline: true,
     },
   ],
@@ -1083,10 +1046,7 @@ export const accordionSpec: UiComponentSpec = {
   attributeRegions: [{ attribute: "title", region: "title", placeholder: "Question…" }],
   childrenRegion: { region: "body", placeholder: "Answer…" },
   regions: { title: regionClass(styles.accordionTitle), body: regionClass(styles.accordionBody) },
-  props: [
-    // the `id` attribute is the accordion's anchor (deep-link target)
-    { name: "id", label: "Anchor (id)", type: "string", placeholder: "section-id" },
-  ],
+  props: [{ name: "id", label: "Anchor (id)", type: "string", placeholder: "section-id" }],
   render: Accordion,
   insert: accordionInsert,
 };
@@ -1135,7 +1095,6 @@ export const folderSpec: UiComponentSpec = {
   icon: <FolderIcon size={13} />,
   attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
   regions: { "folder-name": regionClass(styles.entryName) },
-  // a folder holds files and further folders: needs the array child form
   childComponent: ["File", "Folder"],
   listLike: true,
   render: Folder,

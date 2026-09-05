@@ -72,10 +72,6 @@ export interface ActiveComponent {
   attributes: MdxAttribute[];
 }
 
-/**
- * The menu's open state: closed once its block is gone, opened by a click
- * on a leaf component (nothing in it to type into).
- */
 export function useBlockMenuOpen(
   editor: Editor,
   pos: number | undefined,
@@ -96,10 +92,6 @@ export function useBlockMenuOpen(
   return [open, setOpen];
 }
 
-/**
- * The block's menu behind one trigger: a component's chip (icon and name)
- * opens its panel, a plain block's ⋯ opens move and delete.
- */
 export function BlockMenu({
   editor,
   specs,
@@ -124,12 +116,10 @@ export function BlockMenu({
   container: HTMLElement | undefined;
   side?: "top" | "bottom";
   align: "start" | "end";
-  /** the surface's chip and icon-button looks; each includes `chrome.button` */
   chipCls: string;
   iconCls: string;
   /** a touch surface: the popup must not raise the keyboard */
   touch?: boolean;
-  /** icon-only trigger, for a spot too small for the chip */
   compact?: boolean;
 }) {
   const spec = active ? specs.get(active.name) : undefined;
@@ -180,7 +170,6 @@ export function BlockMenu({
   );
 }
 
-/** Attributes and actions for one component. */
 function BlockPanel({
   editor,
   specs,
@@ -198,8 +187,6 @@ function BlockPanel({
   const attributes = active.attributes;
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
-  // row actions of a list entry (File ↔ Folder, out of its folder): Tab and
-  // Shift-Tab on a keyboard, labelled here for touch and discovery
   const { $from } = editor.state.selection;
   const toggle = entryToggleTarget($from, specs);
   const folder = entryParentFolder($from, specs);
@@ -282,16 +269,18 @@ function BlockPanel({
   );
 }
 
-/** move and delete: the tail of a component's panel, and all of a block's */
-function BlockActions({
+export function BlockActions({
   editor,
-  pos,
+  pos: at,
   onDone,
+  itemLook,
 }: {
   editor: Editor;
-  pos: number;
+  pos: number | (() => number | undefined);
   onDone: () => void;
+  itemLook?: stylex.StyleXStyles;
 }) {
+  const pos = () => (typeof at === "function" ? at() : at);
   return (
     <>
       {(
@@ -303,9 +292,10 @@ function BlockActions({
         <button
           key={label}
           type="button"
-          {...stylex.props(chrome.button, chrome.item)}
+          {...stylex.props(chrome.button, chrome.item, itemLook)}
           onClick={() => {
-            if (moveBlockAt(editor, pos, dir)) onDone();
+            const from = pos();
+            if (from != null && moveBlockAt(editor, from, dir)) onDone();
             editor.view.focus();
           }}
         >
@@ -315,11 +305,12 @@ function BlockActions({
       ))}
       <button
         type="button"
-        {...stylex.props(chrome.button, chrome.item, styles.danger)}
+        {...stylex.props(chrome.button, chrome.item, styles.danger, itemLook)}
         onClick={() => {
-          const current = editor.state.doc.nodeAt(pos);
-          if (!current) return;
-          editor.commands.deleteRange({ from: pos, to: pos + current.nodeSize });
+          const from = pos();
+          const current = from != null ? editor.state.doc.nodeAt(from) : null;
+          if (from == null || !current) return;
+          editor.commands.deleteRange({ from, to: from + current.nodeSize });
           onDone();
           editor.view.focus();
         }}

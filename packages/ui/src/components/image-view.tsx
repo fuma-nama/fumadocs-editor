@@ -13,7 +13,6 @@ import { nodeViewOptions } from "./node-view-options";
 
 const styles = stylex.create({
   wrapper: { display: "inline-block", maxWidth: "100%" },
-  /** empty-source chip: the node stays visible until a src is set */
   placeholder: {
     display: "inline-flex",
     maxWidth: "100%",
@@ -30,11 +29,9 @@ const styles = stylex.create({
     color: tokens.mutedForeground,
   },
   note: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  /** `content.atom`'s ring, driven by the node view's `selected` prop */
   selected: { outline: `2px solid ${tokens.ring}`, outlineOffset: 2 },
 });
 
-/** insert the files' images at `pos` after uploading them */
 export async function insertImages(
   editor: Editor,
   media: MediaProvider,
@@ -57,8 +54,6 @@ export async function insertImages(
 function makeImageView(media: MediaProvider | undefined) {
   return function ImageView({ node, selected }: NodeViewProps) {
     const src = (node.attrs.src as string) ?? "";
-    // the src that failed to load: the chip keeps the node visible and
-    // selectable, and a new src retries
     const [broken, setBroken] = useState("");
     const failed = src !== "" && broken === src;
     return (
@@ -87,11 +82,6 @@ function makeImageView(media: MediaProvider | undefined) {
   };
 }
 
-/**
- * The image node with a live view (resolved src, empty-source placeholder)
- * plus paste/drop upload when a provider is available. Pasted or dropped
- * image files upload through the provider and land where they were dropped.
- */
 export function imageExtension(media: MediaProvider | undefined): Extension {
   return Image.extend({
     addNodeView() {
