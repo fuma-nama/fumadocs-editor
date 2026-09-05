@@ -6,13 +6,13 @@ import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
 import type { DocSnapshot, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
 import { mathExtensions } from "./components/math";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
-import { MobileBar } from "./mobile-bar";
+import { BlockGutter } from "./block-gutter";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
@@ -25,6 +25,21 @@ import { settled as settledMarker } from "./styles/markers.stylex";
 const styles = stylex.create({ frame: { position: "relative" } });
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
+
+function useMediaQuery(query: string): boolean {
+  const [subscribe, getSnapshot] = useMemo(() => {
+    let list: MediaQueryList | undefined;
+    const resolve = () => (list ??= window.matchMedia(query));
+    return [
+      (onChange: () => void) => {
+        resolve().addEventListener("change", onChange);
+        return () => resolve().removeEventListener("change", onChange);
+      },
+      () => resolve().matches,
+    ] as const;
+  }, [query]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
 
 export interface LiveEditorProps {
   doc: JSONContent;
@@ -150,6 +165,10 @@ export function LiveEditor({
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
+  // touch: the joystick sits beside the block, and the bubble drops below
+  // the caret
+  const touch = useMediaQuery("(pointer: coarse)");
+
   // insert animations arm one painted frame after the editor shows: the
   // hydration swap must not move; only real insertions animate
   const [settled, setSettled] = useState(false);
@@ -171,17 +190,13 @@ export function LiveEditor({
       hidden={hidden}
       data-fde-settled={settled || undefined}
     >
-      {editor && editable && (
-        <MobileBar
-          editor={editor}
-          components={components}
-          specs={specs}
-          media={media}
-          math={syntax?.math}
-        />
-      )}
       <EditorContent editor={editor} />
-      {editor && editable && <EditorBubble editor={editor} specs={specs} media={media} />}
+      {editor && editable && (
+        <>
+          {touch && <BlockGutter editor={editor} specs={specs} />}
+          <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
+        </>
+      )}
     </div>
   );
 }

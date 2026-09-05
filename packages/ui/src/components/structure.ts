@@ -454,6 +454,9 @@ export function startPointerDrag(
   let scrolling = 0;
 
   const follow = () => {
+    // the block's extent as it stands: a composition committing mid-drag
+    // rewrites it in place, so its identity is no guide, its position is
+    source.to = pos + (view.state.doc.nodeAt(pos)?.nodeSize ?? node.nodeSize);
     target = hover(view, node, source, x, y, specs, childOnly);
     ghost!.move(x, y);
   };
@@ -474,6 +477,10 @@ export function startPointerDrag(
     if (!ghost) {
       if (Math.abs(x - startX) < SLOP && Math.abs(y - startY) < SLOP) return;
       ghost = lift(overlay(view), dom, x, y);
+      // a finger's drag leaves the keyboard: the page shows under the
+      // block, and the IME commits the word it was composing in it (the
+      // browser fights a block moving under an open composition)
+      if (e.pointerType !== "mouse") view.dom.blur();
     }
     follow();
     if (!scrolling) scrolling = requestAnimationFrame(scroll);
@@ -489,8 +496,9 @@ export function startPointerDrag(
     tilt(0, 0);
     if (!ghost) return;
     ghost.remove();
-    if (e.type === "pointerup" && target != null && view.state.doc.nodeAt(pos) === node) {
-      placeDrop(view, node, target, source);
+    const current = view.state.doc.nodeAt(pos);
+    if (e.type === "pointerup" && target != null && current?.type === node.type) {
+      placeDrop(view, current, target, { from: pos, to: pos + current.nodeSize });
       // a finger's drop must not raise the keyboard
       if (e.pointerType === "mouse") view.focus();
     }

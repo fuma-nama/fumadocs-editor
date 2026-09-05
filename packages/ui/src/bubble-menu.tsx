@@ -5,11 +5,13 @@ import { consts } from "./styles/consts.stylex";
 // side-effect imports: register starter-kit + table command typings
 import "@tiptap/starter-kit";
 import "@tiptap/extension-table";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { posToDOMRect } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
@@ -26,11 +28,13 @@ import {
   ListOrdered,
   ListTodo,
   Pilcrow,
+  Redo2,
   SquareCode,
   Strikethrough,
   Table2,
   TextQuote,
   Trash2,
+  Undo2,
   Upload,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
@@ -50,15 +54,23 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, and stays under the popovers it opens. It glides to a new
-   * position (the plugin writes `top`/`left`), e.g. after a block is
-   * dragged; while hidden and re-shown the inline override lands it. */
+   * controls and stays under the popovers it opens. A grid of max-content
+   * columns, not a flex row: a flex item shrinks to its content, and on a
+   * phone the row scrolls sideways instead. It glides to a new position
+   * (the plugin writes `top`/`left`), e.g. after a block is dragged; while
+   * hidden and re-shown the inline override lands it. */
   bubble: {
     zIndex: 40,
     minWidth: 0,
-    display: "flex",
+    maxWidth: "calc(100vw - 1rem)",
+    display: "grid",
+    gridAutoFlow: "column",
+    gridAutoColumns: "max-content",
     alignItems: "center",
     gap: "0.125rem",
+    overflowX: "auto",
+    overscrollBehaviorX: "contain",
+    scrollbarWidth: "none",
     transitionProperty: "top, left",
     transitionDuration: { default: "200ms", [consts.reduceMotion]: "0ms" },
     transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
@@ -199,8 +211,7 @@ export function activeBlock(editor: Editor): string {
 
 /**
  * The element type menu: every block a selection can become, with the
- * heading's anchor and TOC options under it. The bubble and the touch bar
- * share it; each supplies its own trigger styling and portal container.
+ * heading's anchor and TOC options under it.
  */
 export function BlockTypePicker({
   editor,
@@ -278,8 +289,9 @@ export function BlockTypePicker({
  * selection: text gets the formatting controls, a node-selected atom its
  * editor, and the block around the selection (the innermost component,
  * else the innermost plain block) its joystick and menu: never two
- * competing menus. A resting caret has no chrome: the marks it types with
- * come from the shortcuts, and ArrowRight at the line's end drops them.
+ * competing menus. With a pointer a resting caret has no chrome: the marks
+ * it types with come from the shortcuts, and ArrowRight at the line's end
+ * drops them. On touch the bubble stays up under the caret instead.
  */
 export interface BubbleState {
   format: boolean;
@@ -341,11 +353,13 @@ function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): bool
 function MarkButton({
   label,
   active,
+  disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -355,6 +369,7 @@ function MarkButton({
       aria-label={label}
       {...stylex.props(chrome.button, chrome.iconButton)}
       data-active={active || undefined}
+      disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
@@ -613,10 +628,17 @@ export function EditorBubble({
   editor,
   specs,
   media,
+  touch,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   media?: MediaProvider;
+  /**
+   * A touch screen: the bubble stays up while the editor has focus, sits
+   * below the caret or selection, clear of the system's copy menu above it,
+   * and leaves the joystick to the gutter.
+   */
+  touch: boolean;
 }) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
   // Portal target has three constraints: the menu hides on editor blur
@@ -650,6 +672,10 @@ export function EditorBubble({
         // caret on every keystroke
         atomAttrs: bubble.atom ? (current.state.doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
+        // touch only: two can() trial runs per transaction, for buttons a
+        // keyboard's shortcuts replace
+        canUndo: touch && current.can().undo(),
+        canRedo: touch && current.can().redo(),
       };
     },
   });
@@ -692,34 +718,56 @@ export function EditorBubble({
     fn(editor.chain().focus()).run();
   };
 
+  // stable: the plugin re-reads its options in a transaction whenever they change
+  const options = useMemo(
+    () => ({
+      placement: touch ? ("bottom" as const) : ("bottom-start" as const),
+      // past the selection and caret handles, which hang below the line
+      offset: touch ? 20 : 6,
+      onHide: () => setPanelOpen(false),
+      // re-shown, it lands in place: the glide is for moves while visible
+      onShow: () => {
+        menuRef.current!.style.transition = "none";
+      },
+      onUpdate: () => {
+        const el = menuRef.current!;
+        if (!el.style.transition) return;
+        // flush the landing position before transitions come back
+        void el.offsetTop;
+        el.style.transition = "";
+      },
+    }),
+    [touch, setPanelOpen],
+  );
+  const shouldShow = useCallback(
+    ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
+      // focus in one of its popovers (portalled into the wrapper) keeps it
+      if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
+      // touch has no shortcuts: the bubble stays up while the caret rests,
+      // so the marks it types with are a tap away
+      return touch ? view.hasFocus() : summoned(editorState, specs);
+    },
+    [wrapper, specs, touch],
+  );
+  // a resting caret anchors the bubble on its whole line: centred under
+  // the line, moving only when the caret leaves it, not with every keystroke
+  const getReferencedVirtualElement = useCallback(() => {
+    const { selection } = editor.state;
+    if (!touch || !selection.empty) return null;
+    const caret = posToDOMRect(editor.view, selection.from, selection.to);
+    const { left, width } = editor.view.dom.getBoundingClientRect();
+    const rect = new DOMRect(left, caret.top, width, caret.height);
+    return { getBoundingClientRect: () => rect };
+  }, [editor, touch]);
+
   return (
     <BubbleMenu
       ref={menuRef}
       editor={editor}
       updateDelay={150}
-      options={{
-        placement: "bottom-start",
-        offset: 6,
-        onHide: () => setPanelOpen(false),
-        // re-shown, it lands in place: the glide is for moves while visible
-        onShow: () => {
-          menuRef.current!.style.transition = "none";
-        },
-        onUpdate: () => {
-          const el = menuRef.current!;
-          if (!el.style.transition) return;
-          // flush the landing position before transitions come back
-          void el.offsetTop;
-          el.style.transition = "";
-        },
-      }}
-      shouldShow={({ state: editorState, view }) => {
-        // touch has the mobile bar; one surface per input mode
-        if (window.matchMedia("(pointer: coarse)").matches) return false;
-        // focus in one of its popovers (portalled into the wrapper) keeps it
-        if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-        return summoned(editorState, specs);
-      }}
+      options={options}
+      shouldShow={shouldShow}
+      getReferencedVirtualElement={getReferencedVirtualElement}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
       {state?.format && (
@@ -766,13 +814,15 @@ export function EditorBubble({
       {state && target != null && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
-          <DragHandle
-            editor={editor}
-            pos={target}
-            specs={specs}
-            look={chrome.iconButton}
-            size={20}
-          />
+          {!touch && (
+            <DragHandle
+              editor={editor}
+              pos={target}
+              specs={specs}
+              look={chrome.iconButton}
+              size={20}
+            />
+          )}
           <BlockMenu
             editor={editor}
             specs={specs}
@@ -784,7 +834,19 @@ export function EditorBubble({
             align="end"
             chipCls={chipClass}
             iconCls={iconClass}
+            touch={touch}
           />
+        </>
+      )}
+      {state && touch && (
+        <>
+          <span {...stylex.props(chrome.divider)} />
+          <MarkButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
+            <Undo2 size={15} />
+          </MarkButton>
+          <MarkButton label="Redo" disabled={!state.canRedo} onClick={() => run((c) => c.redo())}>
+            <Redo2 size={15} />
+          </MarkButton>
         </>
       )}
     </BubbleMenu>

@@ -24,11 +24,6 @@
   --fde-ring: var(--color-fd-ring);
 }
 
-/* the touch toolbar sticks below the site header */
-[data-fde-root] {
-  --fde-sticky-top: var(--fd-header-height, 0px);
-}
-
 @media (pointer: coarse) {
   :root {
     --fde-font-size: 16px;

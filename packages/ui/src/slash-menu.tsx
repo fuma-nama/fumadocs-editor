@@ -36,8 +36,9 @@ import type { MediaProvider } from "./components/media";
 const muted = tokens.mutedForeground;
 
 const styles = stylex.create({
-  /** placed by hand against the caret rect, so fixed and never in flow */
-  popup: { position: "fixed", maxHeight: "18rem", width: "13rem", overflowY: "auto" },
+  /** placed by hand under the caret, in the editor frame so it scrolls with
+   * the text */
+  popup: { position: "absolute", maxHeight: "18rem", width: "13rem", overflowY: "auto" },
   empty: {
     margin: 0,
     paddingInline: "0.5rem",
@@ -183,15 +184,17 @@ export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !rect) return;
+    const base = el?.offsetParent?.getBoundingClientRect();
+    if (!el || !base || !rect) return;
+    // kept inside the viewport as placed, then anchored to the frame
     const { width, height } = el.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     const top =
       rect.bottom + 4 + height > window.innerHeight - 8
         ? Math.max(8, rect.top - height - 4)
         : rect.bottom + 4;
-    el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
+    el.style.left = `${left - base.left}px`;
+    el.style.top = `${top - base.top}px`;
   }, [rect, items.length]);
   useLayoutEffect(() => {
     ref.current?.querySelector(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });
@@ -253,8 +256,8 @@ export function suggestionRender(): {
         editor: props.editor,
         props: popupProps(),
       });
-      const host = props.editor.view.dom.closest("[data-fde-root]") ?? document.body;
-      host.appendChild(renderer.element);
+      // the frame around the editor: positioned, and in the theme scope
+      props.editor.view.dom.parentElement!.appendChild(renderer.element);
     },
     onUpdate(props) {
       current = props;

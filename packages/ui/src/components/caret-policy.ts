@@ -1,3 +1,5 @@
+// side-effect import: registers the history command typings
+import "@tiptap/starter-kit";
 import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
@@ -60,6 +62,19 @@ export const caretPolicy = Extension.create({
     return [
       new Plugin({
         props: {
+          handleDOMEvents: {
+            // the platform's undo (a shake or three-finger swipe on iOS, the
+            // iPad keyboard's arrows) drives the editor's history: left to
+            // the browser it replays its own stale DOM edits
+            beforeinput(_view, event) {
+              const type = (event as InputEvent).inputType;
+              if (type !== "historyUndo" && type !== "historyRedo") return false;
+              event.preventDefault();
+              if (type === "historyUndo") editor.commands.undo();
+              else editor.commands.redo();
+              return true;
+            },
+          },
           // typing never replaces a selected component or atom; deleting or
           // Enter-to-drill-in stay explicit gestures
           handleTextInput(view, _from, _to, text) {

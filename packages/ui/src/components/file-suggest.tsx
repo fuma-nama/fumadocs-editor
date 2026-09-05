@@ -125,8 +125,7 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
                 editor,
                 props: popupProps(view),
               });
-              const host = view.dom.closest("[data-fde-root]") ?? document.body;
-              host.appendChild(renderer.element);
+              view.dom.parentElement!.appendChild(renderer.element);
             },
             destroy: hide,
           }),
