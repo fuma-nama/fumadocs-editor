@@ -531,6 +531,19 @@ describe("adding rows and folders", () => {
   });
 });
 
+describe("slash menu context", () => {
+  test("inside a Tab body the menu offers the blocks, not the row swaps", async () => {
+    const { entryItems } = await import("../src/slash-menu");
+    const { specs } = await import("./helpers");
+    const { editor } = makeEditor(`<Tabs items={["One"]}>
+  <Tab>Body.</Tab>
+</Tabs>
+`);
+    caret(editor, "Body");
+    expect(entryItems(editor, specs)).toBeNull();
+  });
+});
+
 describe("word and line deletes", () => {
   test("Alt-Backspace in an empty file name deletes the row, not its region", () => {
     const { editor, serialize } = makeEditor(FILES);

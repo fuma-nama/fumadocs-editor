@@ -2,6 +2,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { useLayoutEffect, useRef } from "react";
+import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { bubbleState } from "./bubble-menu";
@@ -31,16 +32,14 @@ const styles = stylex.create({
   },
 });
 
-function gutterRow(dom: HTMLElement, inList: boolean): DOMRect {
+function gutterRow(dom: HTMLElement): DOMRect {
   const row = dom.querySelector("[data-fde-row]");
   if (row instanceof HTMLElement && row.closest(".react-renderer") === dom) {
     return row.getBoundingClientRect();
   }
   const rect = dom.getBoundingClientRect();
   const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
-  // an item's marker or checkbox renders in the list's padding, outside the item's box
-  const pad = inList ? parseFloat(getComputedStyle(dom.parentElement!).paddingInlineStart) || 0 : 0;
-  return new DOMRect(rect.left - pad, rect.top, rect.width + pad, Math.min(line, rect.height));
+  return new DOMRect(rect.left, rect.top, rect.width, Math.min(line, rect.height));
 }
 
 function controlsSlot(dom: HTMLElement): HTMLElement | null {
@@ -60,12 +59,20 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
+      const { selection, doc } = current.state;
       const { range } = bubbleState(current.state);
       if (!range) return null;
-      const node = current.state.doc.nodeAt(range.from)!;
-      if (node.type.spec.code) return range;
-      if (!touch || (node.isTextblock && node.content.size === 0)) return null;
-      return range;
+      const node = doc.nodeAt(range.from)!;
+      if (!node.type.spec.code && (!touch || (node.isTextblock && node.content.size === 0))) {
+        return null;
+      }
+      // the row the finger last touched: a long selection's joystick stays on
+      // screen, and clear of the system's copy bar above the selection's start
+      const head =
+        selection instanceof TextSelection
+          ? Math.min(Math.max(selection.head, range.from), range.to)
+          : range.from;
+      return { from: range.from, to: range.to, head };
     },
   });
   const ref = useRef<HTMLDivElement>(null);
@@ -74,22 +81,36 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
     const el = ref.current;
     if (!el || !target) return;
     const place = () => {
-      // an inline run sits beside its textblock
-      const $from = editor.state.doc.resolve(target.from);
-      const dom = editor.view.nodeDOM($from.parent.inlineContent ? $from.before() : target.from);
       const frame = el.offsetParent;
-      if (!(dom instanceof HTMLElement) || !frame) return;
+      if (!frame) return;
+      const { doc } = editor.state;
       const base = frame.getBoundingClientRect();
-      const slot = controlsSlot(dom);
+      const dom = editor.view.nodeDOM(target.from);
+      const slot = dom instanceof HTMLElement ? controlsSlot(dom) : null;
       if (slot) {
         const at = slot.getBoundingClientRect();
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
         return;
       }
-      const row = gutterRow(dom, isList($from.parent.type));
+      const $head = doc.resolve(target.head);
+      let row = dom instanceof HTMLElement ? dom : null;
+      for (let depth = $head.depth; depth > 0; depth--) {
+        if (!$head.node(depth).isTextblock) continue;
+        const block = editor.view.nodeDOM($head.before(depth));
+        if (block instanceof HTMLElement) row = block;
+        break;
+      }
+      if (!row) return;
+      const rect = gutterRow(row);
+      // beside the dragged block's own edge; an item's marker or checkbox
+      // renders in the list's padding, outside the item's box
+      let left = dom instanceof HTMLElement ? dom.getBoundingClientRect().left : rect.left;
+      if (dom instanceof HTMLElement && isList(doc.resolve(target.from).parent.type)) {
+        left -= parseFloat(getComputedStyle(dom.parentElement!).paddingInlineStart) || 0;
+      }
       // centred on the row, in the 24px gutter of the content's padding
-      const x = row.left - base.left - (24 + GUTTER_BUTTON) / 2;
-      const y = row.top - base.top + (row.height - GUTTER_BUTTON) / 2;
+      const x = left - base.left - (24 + GUTTER_BUTTON) / 2;
+      const y = rect.top - base.top + (rect.height - GUTTER_BUTTON) / 2;
       el.style.transform = `translate(${x}px, ${y}px)`;
     };
     place();

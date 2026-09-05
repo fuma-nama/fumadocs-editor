@@ -301,6 +301,7 @@ export function entryItems(
   specs: Map<string, UiComponentSpec>,
 ): SlashItem[] | null {
   const { $from } = editor.state.selection;
+  if ($from.parent.type.name !== INLINE_REGION_NODE) return null;
   const depth = listEntryDepth($from, specs);
   if (depth === -1) return null;
   const containerSpec = specs.get($from.node(depth - 1).type.name)!;
