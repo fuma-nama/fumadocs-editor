@@ -54,17 +54,20 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, wraps on a phone, and stays under the popovers it opens. It
-   * glides to a new position (the plugin writes `top`/`left`), e.g. after a
-   * block is dragged; while hidden and re-shown the inline override lands it. */
+   * controls, scrolls sideways on a phone, and stays under the popovers it
+   * opens. It glides to a new position (the plugin writes `top`/`left`),
+   * e.g. after a block is dragged; while hidden and re-shown the inline
+   * override lands it. */
   bubble: {
     zIndex: 40,
     minWidth: 0,
     maxWidth: "calc(100vw - 1rem)",
     display: "flex",
-    flexWrap: "wrap",
     alignItems: "center",
     gap: "0.125rem",
+    overflowX: "auto",
+    overscrollBehaviorX: "contain",
+    scrollbarWidth: "none",
     transitionProperty: "top, left",
     transitionDuration: { default: "200ms", [consts.reduceMotion]: "0ms" },
     transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
@@ -81,7 +84,7 @@ const styles = stylex.create({
   mono: { fontFamily: consts.mono },
   muted: { color: muted },
   tablePopup: { display: "flex", width: "11rem", flexDirection: "column" },
-  imageRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.375rem" },
+  imageRow: { display: "flex", alignItems: "center", gap: "0.375rem" },
   imageSrc: { width: "13rem" },
   imageAlt: { width: "9rem" },
   yaml: {
