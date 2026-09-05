@@ -1,4 +1,5 @@
 import type { ComponentSpec } from "../../components/spec";
+import { emptyComponent } from "../../components/structure";
 
 /*
  * fumadocs `remarkMdxFiles` fence: ```files tree listing. Split by pipeline:
@@ -21,17 +22,11 @@ export const FENCE_FILES = "```files";
 export const FENCE_FOLDER = "```folder";
 export const FENCE_FILE = "```file";
 
-const entryInsert = (name: string, region: string) => () => ({
-  type: "mdxComponent",
-  attrs: { name, attributes: [{ type: "mdxJsxAttribute", name: "name", value: "" }] },
-  content: [{ type: "mdxInlineRegion", attrs: { region } }],
-});
-
 const fenceFileSpec: ComponentSpec = {
   name: FENCE_FILE,
   label: "File",
   attributeRegions: [{ attribute: "name", region: "file-name", placeholder: "file name…" }],
-  insert: entryInsert(FENCE_FILE, "file-name"),
+  insert: (specs) => emptyComponent(fenceFileSpec, specs),
 };
 
 const fenceFolderSpec: ComponentSpec = {
@@ -40,7 +35,7 @@ const fenceFolderSpec: ComponentSpec = {
   attributeRegions: [{ attribute: "name", region: "folder-name", placeholder: "folder name…" }],
   childComponent: [FENCE_FILE, FENCE_FOLDER],
   listLike: true,
-  insert: entryInsert(FENCE_FOLDER, "folder-name"),
+  insert: (specs) => emptyComponent(fenceFolderSpec, specs),
 };
 
 /**

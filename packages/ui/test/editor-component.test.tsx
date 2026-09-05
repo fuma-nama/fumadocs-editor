@@ -260,7 +260,7 @@ test("the boundary retries on the next node update: an attr fix heals the compon
 
     let pos = -1;
     editor.state.doc.descendants((node, at) => {
-      if (node.type.name === "mdxComponent") pos = at;
+      if (node.type.name === "Boom") pos = at;
       return pos === -1;
     });
     await act(async () => {

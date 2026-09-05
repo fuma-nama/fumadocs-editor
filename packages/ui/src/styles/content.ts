@@ -22,14 +22,6 @@ export const content = stylex.create({
     marginBottom: 0,
     marginInline: 0,
   },
-  /** a node-selected block shows a ring; node views draw theirs from `isRinged` */
-  ring: {
-    outline: {
-      default: null,
-      ":is(.ProseMirror-selectednode)": `2px solid ${tokens.ring}`,
-    },
-    outlineOffset: 2,
-  },
   paragraph: {
     "::before": {
       content: { default: null, ":is([data-placeholder])": "attr(data-placeholder)" },
@@ -393,35 +385,35 @@ export const content = stylex.create({
 const cls = (...styles: stylex.CompiledStyles[]) => stylex.props(...styles).className!;
 
 const HEADING = [
-  cls(content.block, content.heading, content.ring, content.h1),
-  cls(content.block, content.heading, content.ring, content.h2),
-  cls(content.block, content.heading, content.ring, content.h3),
-  cls(content.block, content.heading, content.ring, content.h4),
+  cls(content.block, content.heading, content.h1),
+  cls(content.block, content.heading, content.h2),
+  cls(content.block, content.heading, content.h3),
+  cls(content.block, content.heading, content.h4),
 ];
 
 export const nodeClass = {
-  paragraph: cls(content.block, content.ring, content.paragraph),
-  bulletList: cls(content.block, content.ring, content.list, content.ul),
-  orderedList: cls(content.block, content.ring, content.list, content.ol),
-  listItem: cls(content.ring, content.li),
-  taskList: cls(content.block, content.ring, content.taskList),
-  taskItem: cls(content.ring, content.li, content.taskItem),
-  blockquote: cls(content.block, content.ring, content.blockquote),
-  horizontalRule: cls(content.hr, content.ring),
-  image: cls(content.img, content.ring),
+  paragraph: cls(content.block, content.paragraph),
+  bulletList: cls(content.block, content.list, content.ul),
+  orderedList: cls(content.block, content.list, content.ol),
+  listItem: cls(content.li),
+  taskList: cls(content.block, content.taskList),
+  taskItem: cls(content.li, content.taskItem),
+  blockquote: cls(content.block, content.blockquote),
+  horizontalRule: cls(content.hr),
+  image: cls(content.img),
   table: cls(content.table),
   tableHeader: cls(content.cell, content.th),
   tableCell: cls(content.cell),
   code: cls(content.code),
   link: cls(content.link),
-  mdxJsxFlowElement: cls(content.block, content.mdxFlow, content.ring),
+  mdxJsxFlowElement: cls(content.block, content.mdxFlow),
   mdxJsxTextElement: cls(content.mdxInline),
   mdxTextExpression: cls(content.code, content.mdxCode),
   verbatimInline: cls(content.code, content.mdxCode),
-  mdxFlowExpression: cls(content.block, content.pre, content.ring),
-  mdxjsEsm: cls(content.block, content.pre, content.ring),
-  verbatim: cls(content.block, content.pre, content.ring),
-  frontmatter: cls(content.block, content.pre, content.frontmatter, content.ring),
+  mdxFlowExpression: cls(content.block, content.pre),
+  mdxjsEsm: cls(content.block, content.pre),
+  verbatim: cls(content.block, content.pre),
+  frontmatter: cls(content.block, content.pre, content.frontmatter),
 };
 
 export const contentClass = {

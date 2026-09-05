@@ -50,6 +50,8 @@ interface DocState<C> {
   fragment: Y.XmlFragment;
   awareness: Awareness;
   syntax: Syntax;
+  /** node types follow the registered components, so the schema is per document */
+  schema: Schema;
   /** base of the last disk ⇄ Y sync; merges and byte-preservation key off it */
   snapshot: DocSnapshot;
   /** version of the disk text the snapshot corresponds to */
@@ -80,11 +82,6 @@ export interface DocAuthority<C> {
   /** flush pending writes and drop every document */
   close(): Promise<void>;
 }
-
-// the PM schema is spec-independent (specs drive parse/serialize, not node
-// types), so one schema serves every document
-let schema: Schema | undefined;
-const getDocSchema = () => (schema ??= getSchema(editorExtensions()));
 
 /**
  * One Y.Doc per open file. Clients speak y-protocols; this process is the
@@ -129,7 +126,7 @@ export function createDocAuthority<C>({
   };
 
   const docNode = (doc: DocState<C>): PMNode =>
-    yXmlFragmentToProseMirrorRootNode(doc.fragment, getDocSchema());
+    yXmlFragmentToProseMirrorRootNode(doc.fragment, doc.schema);
 
   const saveTask = async (doc: DocState<C>) => {
     // fold in a disk change chokidar hasn't delivered yet before overwriting
@@ -165,7 +162,7 @@ export function createDocAuthority<C>({
     }
     if (result.ops.length > 0) {
       const target = applyOps(children, result.ops);
-      const next = getDocSchema().nodeFromJSON({ type: "doc", content: target });
+      const next = doc.schema.nodeFromJSON({ type: "doc", content: target });
       doc.ydoc.transact(
         () =>
           updateYFragment(doc.ydoc, doc.fragment, next, { mapping: new Map(), isOMark: new Map() }),
@@ -184,12 +181,13 @@ export function createDocAuthority<C>({
     const state = await read(path);
     // the first opener's syntax wins; every client of one app sends the same
     const syntax = createSyntax(components, options);
+    const schema = getSchema(editorExtensions({ components }));
     const parsed = parseMdxToDoc(state.text, syntax);
     const ydoc = new Y.Doc();
     const fragment = ydoc.getXmlFragment("default");
     ydoc.transact(
       () =>
-        updateYFragment(ydoc, fragment, getDocSchema().nodeFromJSON(parsed.doc), {
+        updateYFragment(ydoc, fragment, schema.nodeFromJSON(parsed.doc), {
           mapping: new Map(),
           isOMark: new Map(),
         }),
@@ -205,6 +203,7 @@ export function createDocAuthority<C>({
       fragment,
       awareness,
       syntax,
+      schema,
       snapshot: parsed.snapshot,
       diskVersion: state.version,
       conns: new Map(),

@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { COMPONENT_NODE } from "@fumadocs-editor/core";
+import { isComponent } from "@fumadocs-editor/core";
 import type { UiComponentSpec } from "./components/spec";
 import {
   childInsertContext,
@@ -75,7 +75,8 @@ const styles = stylex.create({
 
 export interface ActiveComponent {
   pos: number;
-  name: string;
+  /** node type name: the key into the specs map */
+  type: string;
   attributes: MdxAttribute[];
 }
 
@@ -107,12 +108,10 @@ export function BlockMenu({
   open,
   onOpenChange,
   container,
-  side,
   align,
   chipCls,
   iconCls,
   touch,
-  compact,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
@@ -121,15 +120,13 @@ export function BlockMenu({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: HTMLElement | undefined;
-  side?: "top" | "bottom";
   align: "start" | "end";
   chipCls: string;
   iconCls: string;
   /** a touch surface: the popup must not raise the keyboard */
   touch?: boolean;
-  compact?: boolean;
 }) {
-  const spec = active ? specs.get(active.name) : undefined;
+  const spec = active ? specs.get(active.type) : undefined;
   const pos = active ? active.pos : range?.from;
   if (pos == null) return null;
   const label = spec ? (spec.label ?? spec.name) : null;
@@ -139,9 +136,9 @@ export function BlockMenu({
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger
         aria-label={label ? `${label} options` : "Block options"}
-        className={label && !compact ? chipCls : iconCls}
+        className={label ? chipCls : iconCls}
       >
-        {label && !compact ? (
+        {label ? (
           <>
             <span {...stylex.props(styles.chipIcon)}>{spec!.icon}</span>
             {label}
@@ -154,7 +151,6 @@ export function BlockMenu({
       <Popover.Portal container={container}>
         <Popover.Positioner
           positionMethod="fixed"
-          side={side}
           sideOffset={6}
           align={align}
           {...stylex.props(chrome.layer)}
@@ -188,9 +184,7 @@ function BlockPanel({
   active: ActiveComponent;
   onDone: () => void;
 }) {
-  const spec = specs.get(active.name);
-  if (!spec) return null;
-
+  const spec = specs.get(active.type)!;
   const attributes = active.attributes;
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
@@ -232,9 +226,7 @@ function BlockPanel({
           type="button"
           {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
-            const content = child.insert?.();
-            if (!content) return;
-            editor.chain().insertContentAt(inserts.insertAt, content).run();
+            editor.chain().insertContentAt(inserts.insertAt, child.insert!(specs)).run();
             onDone();
             focusAt(editor, inserts.insertAt + 1);
           }}
@@ -283,9 +275,9 @@ function BlockPanel({
   );
 }
 
-/** "bulletList" reads as "bullet list"; a component goes by its name */
+/** "bulletList" reads as "bullet list"; a component goes by its type name */
 function blockLabel(node: PMNode): string {
-  if (node.type.name === COMPONENT_NODE) return node.attrs.name as string;
+  if (isComponent(node.type)) return node.type.name;
   return node.type.name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
 }
 

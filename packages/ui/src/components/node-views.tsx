@@ -1,50 +1,40 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
-import { Extension as ExtensionBase, type Editor, type Extension, type Node } from "@tiptap/core";
+import { Extension, type Extensions, type Node } from "@tiptap/core";
 import {
   MdxBlockRegion,
-  MdxComponent,
   MdxInlineRegion,
+  componentNodeTypes,
   type MdxAttribute,
 } from "@fumadocs-editor/core/extensions";
+import { componentRegions, isComponent, type ComponentRegion } from "@fumadocs-editor/core";
 import {
   NodeViewContent,
   NodeViewWrapper,
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from "@tiptap/react";
-import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { UiComponentSpec } from "./spec";
 import { FallbackCard, RenderBoundary } from "../static-mdx";
 import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
 import { caretPolicy } from "./caret-policy";
-import { componentKeymap, type BlockRange } from "./keymap";
+import { componentKeymap } from "./keymap";
 import { isRinged, nodeViewOptions } from "./node-view-options";
 import { structureGuard } from "./structure";
 import { content, contentClass } from "../styles/content";
 
 type SpecMap = Map<string, UiComponentSpec>;
 
-const COMPONENT = "mdxComponent";
-
 const hole = <NodeViewContent {...stylex.props(content.hole)} data-fde-hole="" />;
 
 function makeComponentView(specs: SpecMap) {
   return function ComponentNodeView(props: NodeViewProps) {
     const { node, updateAttributes, selected } = props;
-    const name = node.attrs.name as string | null;
-    const spec = name ? specs.get(name) : undefined;
+    const spec = specs.get(node.type.name)!;
     const attributes = (node.attrs.attributes ?? []) as MdxAttribute[];
     const ringed = isRinged(props);
-
-    if (!spec) {
-      return (
-        <NodeViewWrapper {...stylex.props(content.nodeWrapper)} data-component={name ?? ""}>
-          <FallbackCard name={name ?? ""}>{hole}</FallbackCard>
-        </NodeViewWrapper>
-      );
-    }
 
     const Render = spec.render;
     const setProp = (propName: string, value: string) =>
@@ -55,7 +45,7 @@ function makeComponentView(specs: SpecMap) {
     return (
       <NodeViewWrapper
         {...stylex.props(content.nodeWrapper)}
-        data-component={name}
+        data-component={spec.name}
         data-selected={ringed || undefined}
       >
         <RenderBoundary
@@ -77,29 +67,18 @@ function makeComponentView(specs: SpecMap) {
   };
 }
 
-function makeRegionView(
-  kind: "inline" | "block",
-  specs: SpecMap,
-  placeholders: Map<string, string>,
-) {
+function makeRegionView(kind: "inline" | "block", specs: SpecMap) {
   return function RegionView({ node, editor, getPos }: NodeViewProps) {
-    const region = (node.attrs.region as string | null) ?? "";
     const empty = node.textContent.length === 0;
-    let placeholder: string | undefined;
+    let region: ComponentRegion | undefined;
     let className: string | undefined;
     try {
-      const pos = typeof getPos === "function" ? getPos() : null;
-      if (typeof pos === "number") {
+      const pos = getPos();
+      if (pos != null) {
         const $pos = editor.state.doc.resolve(pos);
-        for (let depth = $pos.depth; depth >= 0; depth--) {
-          const ancestor = $pos.node(depth);
-          if (ancestor.type.name === COMPONENT) {
-            const name = ancestor.attrs.name as string;
-            placeholder = placeholders.get(`${name}:${region}`);
-            className = specs.get(name)?.regions?.[region];
-            break;
-          }
-        }
+        const spec = specs.get($pos.parent.type.name)!;
+        region = componentRegions(spec, specs)[$pos.index()];
+        className = spec.regions?.[region.region];
       }
     } catch {
       /* getPos can throw mid-transaction; fall back to no placeholder */
@@ -109,38 +88,14 @@ function makeRegionView(
       <NodeViewWrapper
         as="div"
         className={className ? `${sx.className} ${className}` : sx.className}
-        data-region={region}
+        data-region={region?.region ?? ""}
         data-empty={empty || undefined}
-        data-placeholder={empty && placeholder ? placeholder : undefined}
+        data-placeholder={empty && region?.placeholder ? region.placeholder : undefined}
       >
         <NodeViewContent as="div" />
       </NodeViewWrapper>
     );
   };
-}
-
-function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const spec of specs) {
-    for (const region of spec.attributeRegions ?? []) {
-      if (region.placeholder) map.set(`${spec.name}:${region.region}`, region.placeholder);
-    }
-    if (spec.childrenRegion?.placeholder) {
-      map.set(`${spec.name}:${spec.childrenRegion.region}`, spec.childrenRegion.placeholder);
-    }
-    if (spec.contentRegion?.placeholder) {
-      map.set(`${spec.name}:${spec.contentRegion.region}`, spec.contentRegion.placeholder);
-    }
-    if (spec.itemsAttribute?.placeholder && spec.childComponent) {
-      const names = Array.isArray(spec.childComponent)
-        ? spec.childComponent
-        : [spec.childComponent];
-      for (const name of names) {
-        map.set(`${name}:${spec.itemsAttribute.childRegion}`, spec.itemsAttribute.placeholder);
-      }
-    }
-  }
-  return map;
 }
 
 /**
@@ -149,7 +104,7 @@ function collectPlaceholders(specs: UiComponentSpec[]): Map<string, string> {
  * contenteditable: putting the caret in a region focuses the PM root, not
  * the region, so `:focus-within` never reaches these wrappers.
  */
-const activeComponent = ExtensionBase.create({
+const activeComponent = Extension.create({
   name: "fdeActiveComponent",
   addProseMirrorPlugins() {
     return [
@@ -158,14 +113,14 @@ const activeComponent = ExtensionBase.create({
           decorations(state) {
             if (
               state.selection instanceof NodeSelection &&
-              state.selection.node.type.name === COMPONENT
+              isComponent(state.selection.node.type)
             ) {
               return DecorationSet.empty;
             }
             const { $from } = state.selection;
             for (let depth = $from.depth; depth > 0; depth--) {
               const node = $from.node(depth);
-              if (node.type.name === COMPONENT) {
+              if (isComponent(node.type)) {
                 const pos = $from.before(depth);
                 return DecorationSet.create(state.doc, [
                   Decoration.node(pos, pos + node.nodeSize, { "data-active": "" }),
@@ -180,87 +135,38 @@ const activeComponent = ExtensionBase.create({
   },
 });
 
-const liftKey = new PluginKey<BlockRange | null>("fdeLift");
+export function componentExtensions(specs: SpecMap): Extensions {
+  const ComponentView = makeComponentView(specs);
+  const InlineRegionView = makeRegionView("inline", specs);
+  const BlockRegionView = makeRegionView("block", specs);
 
-export function setLifted(editor: Editor, range: BlockRange | null): void {
-  const lit = liftKey.getState(editor.state);
-  if (lit?.from === range?.from && lit?.to === range?.to) return;
-  editor.view.dispatch(editor.state.tr.setMeta(liftKey, range));
-}
-
-/**
- * The block a joystick would drag, lit while its handle is hovered or held.
- * A decoration, not a class on the node's DOM: ProseMirror owns that DOM
- * and redraws it. Any edit clears it; the handle lights again on its own.
- */
-const liftedBlock = ExtensionBase.create({
-  name: "fdeLiftedBlock",
-  addProseMirrorPlugins() {
-    return [
-      new Plugin<BlockRange | null>({
-        key: liftKey,
-        state: {
-          init: () => null,
-          apply(tr, range) {
-            const meta = tr.getMeta(liftKey) as BlockRange | null | undefined;
-            if (meta !== undefined) return meta;
-            return tr.docChanged ? null : range;
-          },
-        },
-        props: {
-          decorations(state) {
-            const range = liftKey.getState(state);
-            if (!range || range.to > state.doc.content.size) return DecorationSet.empty;
-            if (state.doc.resolve(range.from).parent.inlineContent) {
-              return DecorationSet.create(state.doc, [
-                Decoration.inline(range.from, range.to, { class: contentClass.lifted }),
-              ]);
-            }
-            const decorations: Decoration[] = [];
-            state.doc.nodesBetween(range.from, range.to, (node, pos) => {
-              if (pos < range.from) return true;
-              decorations.push(
-                Decoration.node(pos, pos + node.nodeSize, { class: contentClass.lifted }),
-              );
-              return false;
-            });
-            return DecorationSet.create(state.doc, decorations);
-          },
-        },
+  const extensions: Extensions = [];
+  for (const type of componentNodeTypes(specs.values())) {
+    extensions.push(
+      type.extend({
+        // the wrapper is what ProseMirror marks draggable on mousedown; its
+        // styles (own paint layer, insert motion) are `content.component`
+        addNodeView: () =>
+          ReactNodeViewRenderer(ComponentView, {
+            ...nodeViewOptions,
+            className: contentClass.component,
+          }),
       }),
-    ];
-  },
-});
-
-export function componentExtensions(specs: UiComponentSpec[]): Extension[] {
-  const map: SpecMap = new Map(specs.map((spec) => [spec.name, spec]));
-  const ComponentView = makeComponentView(map);
-  const placeholders = collectPlaceholders(specs);
-  const InlineRegionView = makeRegionView("inline", map, placeholders);
-  const BlockRegionView = makeRegionView("block", map, placeholders);
-
-  return [
-    MdxComponent.extend({
-      // the wrapper is what ProseMirror marks draggable on mousedown; its
-      // styles (own paint layer, insert motion) are `content.component`
-      addNodeView: () =>
-        ReactNodeViewRenderer(ComponentView, {
-          ...nodeViewOptions,
-          className: contentClass.component,
-        }),
-    }),
+    );
+  }
+  extensions.push(
     MdxInlineRegion.extend({
       addNodeView: () => ReactNodeViewRenderer(InlineRegionView, nodeViewOptions),
     }),
     MdxBlockRegion.extend({
       addNodeView: () => ReactNodeViewRenderer(BlockRegionView, nodeViewOptions),
     }),
-    ...componentKeymap(map),
-    structureGuard(map),
+    ...componentKeymap(specs),
+    structureGuard(specs),
     caretPolicy,
     activeComponent,
-    liftedBlock,
-  ] as unknown as Extension[];
+  );
+  return extensions;
 }
 
 export type { Node };

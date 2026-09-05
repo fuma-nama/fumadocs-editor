@@ -5,12 +5,18 @@ export { createIncrementalSerializer } from "./incremental";
 export { editorExtensions } from "./extensions/kit";
 export type { EditorExtensionsOptions } from "./extensions/kit";
 export type { MdxAttribute } from "./extensions/mdx-nodes";
+export { componentNodeTypes } from "./components/nodes";
+export { createSyntax } from "./components/spec";
 export {
-  createSyntax,
-  COMPONENT_NODE,
+  COMPONENT_GROUP,
   INLINE_REGION_NODE,
   BLOCK_REGION_NODE,
-} from "./components/spec";
+  isComponent,
+  componentTypeName,
+  componentRegions,
+  emptyComponent,
+} from "./components/structure";
+export type { ComponentRegion } from "./components/structure";
 export type {
   ComponentSpec,
   Syntax,

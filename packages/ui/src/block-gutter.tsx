@@ -4,7 +4,6 @@ import { tokens } from "./styles/tokens.stylex";
 import { useLayoutEffect, useRef } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import type { UiComponentSpec } from "./components/spec";
 import { bubbleState } from "./bubble-menu";
 import { isList } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
@@ -56,20 +55,12 @@ function controlsSlot(dom: HTMLElement): HTMLElement | null {
     : null;
 }
 
-export function BlockGutter({
-  editor,
-  specs,
-  touch,
-}: {
-  editor: Editor;
-  specs: Map<string, UiComponentSpec>;
-  touch: boolean;
-}) {
+export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean }) {
   const target = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const { range } = bubbleState(current.state, specs);
+      const { range } = bubbleState(current.state);
       if (!range) return null;
       const node = current.state.doc.nodeAt(range.from)!;
       if (node.type.spec.code) return range;
@@ -110,7 +101,7 @@ export function BlockGutter({
   if (!target) return null;
   return (
     <div ref={ref} {...stylex.props(styles.gutter)}>
-      <DragHandle editor={editor} range={target} specs={specs} look={styles.button} size={18} />
+      <DragHandle editor={editor} range={target} look={styles.button} size={18} />
     </div>
   );
 }

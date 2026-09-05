@@ -20,10 +20,10 @@ const cardsSpec: ComponentSpec = { name: "Cards", childComponent: "Card" };
 
 const syntax = createSyntax([calloutSpec, cardSpec, cardsSpec]);
 
-function find(node: JSONContent, type: string, region?: string): JSONContent | undefined {
-  if (node.type === type && (region == null || node.attrs?.region === region)) return node;
+function find(node: JSONContent, type: string): JSONContent | undefined {
+  if (node.type === type) return node;
   for (const child of node.content ?? []) {
-    const found = find(child, type, region);
+    const found = find(child, type);
     if (found) return found;
   }
   return undefined;
@@ -34,10 +34,10 @@ describe("component regions", () => {
     const source = '<Callout type="info" title="Heads up">\n  Body **text**.\n</Callout>\n';
     const { doc } = parseMdxToDoc(source, syntax);
 
-    const component = find(doc, "mdxComponent")!;
-    expect(component.attrs?.name).toBe("Callout");
-    expect(find(component, "mdxInlineRegion", "title")?.content?.[0].text).toBe("Heads up");
-    expect(find(component, "mdxBlockRegion", "body")).toBeTruthy();
+    const [title, body] = find(doc, "Callout")!.content!;
+    expect(title.type).toBe("mdxInlineRegion");
+    expect(title.content?.[0].text).toBe("Heads up");
+    expect(body.type).toBe("mdxBlockRegion");
   });
 
   test("unedited Callout round-trips byte-for-byte", () => {
@@ -52,8 +52,7 @@ describe("component regions", () => {
 
     // edit a clone: editor edits produce fresh JSON, never mutate the parsed doc
     const edited = structuredClone(doc);
-    const title = find(edited, "mdxInlineRegion", "title")!;
-    title.content = [{ type: "text", text: "New title" }];
+    find(edited, "Callout")!.content![0].content = [{ type: "text", text: "New title" }];
 
     const out = serializeDocToMdx(edited, snapshot, syntax);
     expect(out).toContain('title="New title"');
@@ -66,21 +65,27 @@ describe("component regions", () => {
       '<Cards>\n  <Card title="A" href="/a">First</Card>\n  <Card title="B">Second</Card>\n</Cards>\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
 
-    const cards = find(doc, "mdxComponent")!;
-    const cardNodes = (cards.content ?? []).filter((c) => c.type === "mdxComponent");
-    expect(cardNodes).toHaveLength(2);
-    expect(find(cardNodes[0], "mdxInlineRegion", "title")?.content?.[0].text).toBe("A");
+    const cards = find(doc, "Cards")!.content!;
+    expect(cards.map((card) => card.type)).toEqual(["Card", "Card"]);
+    expect(cards[0].content![0].content?.[0].text).toBe("A");
 
     expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
   });
 
+  test("a child-only component outside its parent stays generic JSX", () => {
+    const { doc } = parseMdxToDoc('<Card title="Loose" />\n', syntax);
+    expect(doc.content![0].type).toBe("mdxJsxFlowElement");
+  });
+
   test("Card description folds into the editable body region", () => {
-    const source = '<Card title="Themes" description="Add themes to your site" />\n';
+    const source =
+      '<Cards>\n<Card title="Themes" description="Add themes to your site" />\n</Cards>\n';
     const { doc } = parseMdxToDoc(source, syntax);
 
-    const card = find(doc, "mdxComponent")!;
+    const card = find(doc, "Card")!;
     // description is edited as body text, not kept as a separate attribute
-    const body = find(card, "mdxBlockRegion", "body")!;
+    const body = card.content![1];
+    expect(body.type).toBe("mdxBlockRegion");
     expect(find(body, "paragraph")?.content?.[0].text).toBe("Add themes to your site");
     const attrNames = (card.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(attrNames).not.toContain("description");
@@ -88,18 +93,20 @@ describe("component regions", () => {
   });
 
   test("unedited description Card round-trips byte-for-byte", () => {
-    const source = '<Card title="Themes" description="Add themes to your site" />\n';
+    const source =
+      '<Cards>\n<Card title="Themes" description="Add themes to your site" />\n</Cards>\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
     expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
   });
 
   test("editing a folded-description body re-emits it as children", () => {
-    const source = '<Card title="Themes" description="Old copy" />\n';
+    const source = '<Cards>\n<Card title="Themes" description="Old copy" />\n</Cards>\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
 
     const edited = structuredClone(doc);
-    const body = find(edited, "mdxBlockRegion", "body")!;
-    body.content = [{ type: "paragraph", content: [{ type: "text", text: "New copy" }] }];
+    find(edited, "Card")!.content![1].content = [
+      { type: "paragraph", content: [{ type: "text", text: "New copy" }] },
+    ];
 
     const out = serializeDocToMdx(edited, snapshot, syntax);
     expect(out).toContain("New copy");

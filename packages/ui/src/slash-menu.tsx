@@ -25,7 +25,7 @@ import {
   Table2,
 } from "lucide-react";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
@@ -146,17 +146,22 @@ function imageItem(media: MediaProvider | undefined): SlashItem {
   });
 }
 
-function componentItems(specs: UiComponentSpec[]): SlashItem[] {
-  const childOnly = childOnlyNames(specs);
+function componentItems(specs: Map<string, UiComponentSpec>): SlashItem[] {
+  const childOnly = childOnlyNames(specs.values());
   const items: SlashItem[] = [];
-  for (const spec of specs) {
-    if (!spec.insert || childOnly.has(spec.name)) continue;
+  for (const spec of specs.values()) {
+    if (!spec.insert || childOnly.has(componentTypeName(spec))) continue;
     items.push({
       title: spec.label ?? spec.name,
       group: "Components",
       icon: spec.icon,
       run: (editor, range) => {
-        editor.chain().focus().deleteRange(range).insertContentAt(range.from, spec.insert!()).run();
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContentAt(range.from, spec.insert!(specs))
+          .run();
         focusAt(editor, range.from + 1);
       },
     });
@@ -284,7 +289,7 @@ export function suggestionRender(): {
 }
 
 export function insertItems(
-  specs: UiComponentSpec[],
+  specs: Map<string, UiComponentSpec>,
   media?: MediaProvider,
   math?: boolean,
 ): SlashItem[] {
@@ -298,13 +303,12 @@ export function entryItems(
   const { $from } = editor.state.selection;
   const depth = listEntryDepth($from, specs);
   if (depth === -1) return null;
-  const container = $from.node(depth - 1);
-  const containerSpec = specs.get(container.attrs.name as string);
+  const containerSpec = specs.get($from.node(depth - 1).type.name)!;
   const children = insertableChildren(containerSpec, specs);
   if (children.length === 0) return null;
   return children.map((spec) => ({
     title: spec.label ?? spec.name,
-    group: containerSpec?.label ?? containerSpec?.name ?? "Rows",
+    group: containerSpec.label ?? containerSpec.name,
     icon: spec.icon,
     run: (current) => {
       const { $from: $at } = current.state.selection;
@@ -312,19 +316,18 @@ export function entryItems(
       if (at === -1) return;
       const start = $at.before(at);
       const end = start + $at.node(at).nodeSize;
-      current.chain().focus().insertContentAt({ from: start, to: end }, spec.insert!()).run();
+      current.chain().focus().insertContentAt({ from: start, to: end }, spec.insert!(specs)).run();
       focusAt(current, start + 1);
     },
   }));
 }
 
 export function slashMenu(
-  components: UiComponentSpec[],
   specMap: Map<string, UiComponentSpec>,
   media?: MediaProvider,
   math?: boolean,
 ): Extension {
-  const all = insertItems(components, media, math);
+  const all = insertItems(specMap, media, math);
 
   return Extension.create({
     name: "fdeSlashMenu",

@@ -2,9 +2,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, type CSSProperties } from "react";
 import type { Editor } from "@tiptap/react";
-import type { UiComponentSpec } from "./components/spec";
-import { setLifted } from "./components/node-views";
-import { startPointerDrag } from "./components/structure";
+import { setLifted, startPointerDrag } from "./components/structure";
 import type { BlockRange } from "./components/keymap";
 import { joystick as marker } from "./styles/markers.stylex";
 import { consts } from "./styles/consts.stylex";
@@ -77,13 +75,11 @@ const styles = stylex.create({
 export function DragHandle({
   editor,
   range,
-  specs,
   look,
   size,
 }: {
   editor: Editor;
   range: BlockRange;
-  specs: Map<string, UiComponentSpec>;
   look: stylex.StyleXStyles;
   size: number;
 }) {
@@ -98,20 +94,19 @@ export function DragHandle({
   // enter/leave never reaches it there.
   useEffect(() => {
     const el = button.current!;
-    const enter = () => setLifted(editor, range);
-    const leave = () => setLifted(editor, null);
+    const enter = () => setLifted(editor.view, range);
+    const leave = () => setLifted(editor.view, null);
     el.addEventListener("pointerenter", enter);
     el.addEventListener("pointerleave", leave);
     return () => {
       el.removeEventListener("pointerenter", enter);
       el.removeEventListener("pointerleave", leave);
-      if (!editor.isDestroyed) setLifted(editor, null);
+      if (!editor.isDestroyed) setLifted(editor.view, null);
     };
   }, [editor, range]);
 
   const tilt = (dx: number, dy: number) => {
     const dist = Math.hypot(dx, dy);
-    if (dist > 0) setLifted(editor, range);
     const lean = Math.min(1, dist / REACH);
     const ux = dist && (dx / dist) * lean * radius;
     const uy = dist && (dy / dist) * lean * radius;
@@ -136,7 +131,7 @@ export function DragHandle({
         event.preventDefault();
         // React's currentTarget is this button; the native event's is the
         // node React listens on (a root container, or the document)
-        startPointerDrag(editor.view, range, event.currentTarget, event.nativeEvent, specs, tilt);
+        startPointerDrag(editor.view, range, event.currentTarget, event.nativeEvent, tilt);
       }}
     >
       <span {...stylex.props(styles.socket)} aria-hidden>

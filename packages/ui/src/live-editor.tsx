@@ -82,13 +82,13 @@ export function LiveEditor({
       contentStyles,
       codeBlockExtension(),
       imageExtension(media),
-      ...componentExtensions(components),
+      ...componentExtensions(specs),
       ...mathExtensions(syntax?.math === true),
-      slashMenu(components, specs, media, syntax?.math),
+      slashMenu(specs, media, syntax?.math),
       ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
       ...(collab ? collab.extensions : []),
     ],
-    [components, media, files, specs, syntax, collab],
+    [media, files, specs, syntax, collab],
   );
   const serialize = useMemo(
     () => createIncrementalSerializer(createSyntax(components, syntax)),
@@ -171,7 +171,7 @@ export function LiveEditor({
       <EditorContent editor={editor} />
       {editor && editable && (
         <>
-          <BlockGutter editor={editor} specs={specs} touch={touch} />
+          <BlockGutter editor={editor} touch={touch} />
           <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
         </>
       )}

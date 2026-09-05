@@ -12,7 +12,7 @@ import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { COMPONENT_NODE, INLINE_REGION_NODE, type MdxAttribute } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, isComponent, type MdxAttribute } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
@@ -280,7 +280,7 @@ export interface BubbleState {
   range: BlockRange | null;
 }
 
-export function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
+export function bubbleState(state: EditorState): BubbleState {
   const selection = state.selection;
   const { $from } = selection;
   let format = selection instanceof TextSelection && !$from.parent.type.spec.code;
@@ -300,11 +300,7 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
   const range = handleBlock(selection);
   const node = range && state.doc.nodeAt(range.from);
   const component =
-    range &&
-    node &&
-    node.type.name === COMPONENT_NODE &&
-    node.nodeSize === range.to - range.from &&
-    specs.has(node.attrs.name as string);
+    range && node && isComponent(node.type) && node.nodeSize === range.to - range.from;
   return {
     format,
     table: format && table,
@@ -312,7 +308,7 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
     active: component
       ? {
           pos: range.from,
-          name: node.attrs.name as string,
+          type: node.type.name,
           attributes: node.attrs.attributes as MdxAttribute[],
         }
       : null,
@@ -320,11 +316,11 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
   };
 }
 
-function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
+function summoned(state: EditorState): boolean {
   const selection = state.selection;
   if (selection instanceof NodeSelection) {
     const { node } = selection;
-    if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
+    if (isComponent(node.type)) return true;
     // a code block's header holds its menu, the gutter its joystick
     if (node.type.spec.code) return false;
     return node.type.name === "frontmatter" || movableIn(node, selection.$from.parent);
@@ -637,7 +633,7 @@ export function EditorBubble({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const bubble = bubbleState(current.state, specs);
+      const bubble = bubbleState(current.state);
       return {
         ...bubble,
         bold: current.isActive("bold"),
@@ -716,9 +712,9 @@ export function EditorBubble({
   const shouldShow = useCallback(
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
       if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-      return touch ? view.hasFocus() : summoned(editorState, specs);
+      return touch ? view.hasFocus() : summoned(editorState);
     },
-    [wrapper, specs, touch],
+    [wrapper, touch],
   );
   const getReferencedVirtualElement = useCallback(() => {
     const { selection } = editor.state;
@@ -784,13 +780,7 @@ export function EditorBubble({
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
           {!touch && (
-            <DragHandle
-              editor={editor}
-              range={target}
-              specs={specs}
-              look={chrome.iconButton}
-              size={20}
-            />
+            <DragHandle editor={editor} range={target} look={chrome.iconButton} size={20} />
           )}
           <BlockMenu
             editor={editor}

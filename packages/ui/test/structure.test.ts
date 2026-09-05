@@ -23,8 +23,8 @@ function findNode(editor: Editor, match: (node: PMNode) => boolean) {
   return found as { node: PMNode; pos: number };
 }
 
-describe("structure guard", () => {
-  test("a deleted file-name region grows back empty", () => {
+describe("schema refills", () => {
+  test("a deleted file-name region comes back empty", () => {
     const { editor, serialize } = makeEditor(FILES);
     const region = findNode(
       editor,
@@ -32,32 +32,14 @@ describe("structure guard", () => {
     );
     editor.view.dispatch(editor.state.tr.delete(region.pos, region.pos + region.node.nodeSize));
 
-    const file = findNode(
-      editor,
-      (node) => node.type.name === "mdxComponent" && node.attrs.name === "File",
-    );
+    const file = findNode(editor, (node) => node.type.name === "File");
     expect(file.node.childCount).toBe(1);
     expect(file.node.firstChild!.type.name).toBe("mdxInlineRegion");
-    expect(file.node.firstChild!.attrs.region).toBe("file-name");
     expect(file.node.firstChild!.textContent).toBe("");
     expect(serialize()).toContain('<File name="" />');
   });
 
-  test("a region with a lost name is retagged from the spec", () => {
-    const { editor } = makeEditor(FILES);
-    const region = findNode(
-      editor,
-      (node) => node.type.name === "mdxInlineRegion" && node.textContent === "page.tsx",
-    );
-    editor.view.dispatch(editor.state.tr.setNodeMarkup(region.pos, undefined, { region: null }));
-    const healed = findNode(
-      editor,
-      (node) => node.type.name === "mdxInlineRegion" && node.textContent === "page.tsx",
-    );
-    expect(healed.node.attrs.region).toBe("file-name");
-  });
-
-  test("a deleted Callout body grows back with an editable paragraph", () => {
+  test("a deleted Callout body comes back with an editable paragraph", () => {
     const { editor } = makeEditor(`<Callout type="info" title="Heads up">
   Body text.
 </Callout>
@@ -65,85 +47,15 @@ describe("structure guard", () => {
     const body = findNode(editor, (node) => node.type.name === "mdxBlockRegion");
     editor.view.dispatch(editor.state.tr.delete(body.pos, body.pos + body.node.nodeSize));
 
-    const healed = findNode(editor, (node) => node.type.name === "mdxBlockRegion");
-    expect(healed.node.attrs.region).toBe("body");
-    expect(healed.node.childCount).toBe(1);
-    expect(healed.node.firstChild!.type.name).toBe("paragraph");
-    // the callout keeps its region order: title first, body second
-    const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
-    expect(callout.node.child(0).attrs.region).toBe("title");
-    expect(callout.node.child(1).attrs.region).toBe("body");
-  });
-
-  test("a surplus body region from a paste dissolves into the real one", () => {
-    const { editor, serialize } = makeEditor(`<Callout type="info" title="Heads up">
-  Body text.
-</Callout>
-`);
-    // a multi-block paste into the title can arrive wrapped in a fresh
-    // region sitting between the title and the real body
-    const body = findNode(editor, (node) => node.type.name === "mdxBlockRegion");
-    const { schema } = editor.state;
-    const extra = schema.nodes.mdxBlockRegion.create({ region: null }, [
-      schema.nodes.paragraph.create(null, schema.text("Pasted lead")),
-    ]);
-    editor.view.dispatch(editor.state.tr.insert(body.pos, extra));
-
-    const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
+    const callout = findNode(editor, (node) => node.type.name === "Callout");
     expect(callout.node.childCount).toBe(2);
-    expect(callout.node.child(0).attrs.region).toBe("title");
-    expect(callout.node.child(1).attrs.region).toBe("body");
-    expect(callout.node.child(1).textContent).toContain("Pasted lead");
-    expect(callout.node.child(1).textContent).toContain("Body text.");
-    expect(serialize()).toContain("Pasted lead");
+    expect(callout.node.child(0).type.name).toBe("mdxInlineRegion");
+    expect(callout.node.child(1).type.name).toBe("mdxBlockRegion");
+    expect(callout.node.child(1).childCount).toBe(1);
+    expect(callout.node.child(1).firstChild!.type.name).toBe("paragraph");
   });
 
-  test("a split title region merges back into one", () => {
-    const { editor } = makeEditor(`<Callout type="info" title="Heads up">
-  Body text.
-</Callout>
-`);
-    const title = findNode(editor, (node) => node.type.name === "mdxInlineRegion");
-    const { schema } = editor.state;
-    const extra = schema.nodes.mdxInlineRegion.create({ region: "title" }, [
-      schema.text("and more"),
-    ]);
-    editor.view.dispatch(editor.state.tr.insert(title.pos + title.node.nodeSize, extra));
-
-    const callout = findNode(editor, (node) => node.type.name === "mdxComponent");
-    expect(callout.node.childCount).toBe(2);
-    expect(callout.node.child(0).attrs.region).toBe("title");
-    expect(callout.node.child(0).textContent).toBe("Heads upand more");
-    expect(callout.node.child(1).attrs.region).toBe("body");
-  });
-
-  test("a stray inline region in a Tab dissolves into its label", () => {
-    const { editor, serialize } = makeEditor(`<Tabs items={["One", "Two"]}>
-  <Tab value="One">First.</Tab>
-  <Tab value="Two">Second.</Tab>
-</Tabs>
-`);
-    // a DOM edit beside the label parses as a fresh, unnamed region
-    const label = findNode(
-      editor,
-      (node) => node.type.name === "mdxInlineRegion" && node.textContent === "One",
-    );
-    const { schema } = editor.state;
-    const stray = schema.nodes.mdxInlineRegion.create({ region: null }, [schema.text("x")]);
-    editor.view.dispatch(editor.state.tr.insert(label.pos + label.node.nodeSize, stray));
-
-    const tab = findNode(
-      editor,
-      (node) => node.type.name === "mdxComponent" && node.attrs.name === "Tab",
-    );
-    expect(tab.node.childCount).toBe(2);
-    expect(tab.node.child(0).attrs.region).toBe("label");
-    expect(tab.node.child(0).textContent).toBe("Onex");
-    expect(tab.node.child(1).attrs.region).toBe("body");
-    expect(serialize()).toContain('items={["Onex", "Two"]}');
-  });
-
-  test("healing is undone together with the damage", () => {
+  test("the refill is undone together with the deletion", () => {
     const { editor, serialize } = makeEditor(FILES);
     const region = findNode(
       editor,
@@ -180,10 +92,7 @@ After.
 
 After.
 `);
-    const card = findNode(
-      editor,
-      (node) => node.type.name === "mdxComponent" && node.attrs.name === "Card",
-    );
+    const card = findNode(editor, (node) => node.type.name === "Card");
     editor.view.dispatch(editor.state.tr.delete(card.pos, card.pos + card.node.nodeSize));
     const out = serialize();
     expect(out).not.toContain("<Cards");
@@ -195,10 +104,7 @@ After.
   <File name="" />
 </Files>
 `);
-    const file = findNode(
-      editor,
-      (node) => node.type.name === "mdxComponent" && node.attrs.name === "File",
-    );
+    const file = findNode(editor, (node) => node.type.name === "File");
     editor.view.dispatch(editor.state.tr.delete(file.pos, file.pos + file.node.nodeSize));
     expect(editor.state.doc.childCount).toBe(1);
     expect(editor.state.doc.firstChild!.type.name).toBe("paragraph");
@@ -228,11 +134,9 @@ Between.
 
   async function rig(mdx = LISTS) {
     const { dropSlot, placeDrop } = await import("../src/components/structure");
-    const { childOnlyNames, handleBlock } = await import("../src/components/keymap");
+    const { handleBlock } = await import("../src/components/keymap");
     const { caret } = await import("./helpers");
-    const { specs } = await import("./helpers");
     const { editor, serialize } = makeEditor(mdx);
-    const childOnly = childOnlyNames(specs.values());
     /** the blocks the selection targets, as a drag source */
     const selected = () => {
       const source = handleBlock(editor.state.selection)!;
@@ -260,7 +164,7 @@ Between.
       source = null as null | { from: number; to: number },
     ) => {
       const $pos = editor.state.doc.resolve(caret(editor, text));
-      const at = dropSlot(editor.state, $pos, dragged, source, specs, childOnly, () => before);
+      const at = dropSlot(editor.state, $pos, dragged, source, () => before);
       if (at == null) return null;
       const $at = editor.state.doc.resolve(at);
       return {
@@ -464,6 +368,24 @@ After![pic](/a.png).
     expect(editor.state.doc.child(2).textContent).toBe("BetweenIntro.");
   });
 
+  test("a component nests into a list item when dropped on the item's text", async () => {
+    const { editor, block, slot, placeDrop } = await rig(`- one
+- two
+
+<Callout type="info" title="Heads up">
+  Body.
+</Callout>
+`);
+    const callout = block("Heads up");
+    expect(callout.content.firstChild!.type.name).toBe("Callout");
+    const into = slot(callout.content, "two", false, callout.source);
+    expect(into).toMatchObject({ parent: "listItem", after: "two" });
+    placeDrop(editor.view, callout.content, into!.at, callout.source);
+    const item = editor.state.doc.child(0).child(1);
+    expect(item.childCount).toBe(2);
+    expect(item.child(1).type.name).toBe("Callout");
+  });
+
   test("moving the last item out removes the emptied list", async () => {
     const { editor, serialize, block, slot, placeDrop } = await rig(`- [ ] only
 
@@ -485,6 +407,32 @@ Para.
 - [ ] t2
 - [ ] only
 `);
+  });
+
+  test("the lit run follows edits around it and goes with its blocks", async () => {
+    const { setLifted } = await import("../src/components/structure");
+    const { parentBlock } = await import("../src/components/keymap");
+    const { contentClass } = await import("../src/styles/content");
+    const { caret } = await import("./helpers");
+    const { editor } = makeEditor(`Intro.
+
+Body.
+`);
+    const lit = () => {
+      const texts: string[] = [];
+      for (const el of editor.view.dom.getElementsByClassName(contentClass.lifted)) {
+        texts.push(el.textContent!);
+      }
+      return texts;
+    };
+    const body = parentBlock(editor.state.doc, caret(editor, "Body."))!;
+    setLifted(editor.view, { from: body.from, to: body.to });
+    expect(lit()).toEqual(["Body."]);
+    editor.view.dispatch(editor.state.tr.insertText("Long ", 1));
+    expect(lit()).toEqual(["Body."]);
+    const moved = parentBlock(editor.state.doc, caret(editor, "Body."))!;
+    editor.view.dispatch(editor.state.tr.delete(moved.from, moved.to));
+    expect(lit()).toEqual([]);
   });
 
   test("a nested list emptied by a move goes, its item keeps its paragraph", async () => {

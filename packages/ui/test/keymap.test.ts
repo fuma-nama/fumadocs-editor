@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { deleteBlocks, handleBlock } from "../src/components/keymap";
-import { caret, caretPath, makeEditor, press } from "./helpers";
+import { caret, caretPath, makeEditor, press, specs } from "./helpers";
 
 const FILES = `<Files>
   <Folder name="app">
@@ -212,7 +212,7 @@ after
     // place the caret inside the empty callout title
     let calloutPos = -1;
     editor.state.doc.descendants((node, pos) => {
-      if (node.attrs?.name === "Callout") calloutPos = pos;
+      if (node.type.name === "Callout") calloutPos = pos;
     });
     editor.commands.setTextSelection(calloutPos + 2);
     press(editor, "Backspace");
@@ -364,7 +364,7 @@ describe("Escape", () => {
     for (let i = 0; i < 3; i++) {
       press(editor, "Escape");
       const sel = editor.state.selection;
-      if (sel instanceof NodeSelection) names.push(sel.node.attrs.name as string);
+      if (sel instanceof NodeSelection) names.push(sel.node.type.name);
     }
     expect(names).toEqual(["File", "Folder", "Files"]);
   });
@@ -381,7 +381,7 @@ describe("Mod-A", () => {
     press(editor, "a", { ctrlKey: true });
     const second = editor.state.selection;
     expect(second).toBeInstanceOf(NodeSelection);
-    expect((second as NodeSelection).node.attrs.name).toBe("Callout");
+    expect((second as NodeSelection).node.type.name).toBe("Callout");
   });
 });
 
@@ -498,34 +498,30 @@ Text.
 describe("adding rows and folders", () => {
   test("a File row offers its container rows as sibling inserts", async () => {
     const { childInsertContext } = await import("../src/components/keymap");
-    const { fumadocsUiComponents } = await import("../src/components/fumadocs-ui");
     const { editor, serialize } = makeEditor(FILES);
     const pos = caret(editor, "page.tsx");
     const $pos = editor.state.doc.resolve(pos);
     let filePos = -1;
     for (let d = $pos.depth; d > 0; d--) {
-      if ($pos.node(d).attrs?.name === "File") {
+      if ($pos.node(d).type.name === "File") {
         filePos = $pos.before(d);
         break;
       }
     }
-    const specs = new Map(fumadocsUiComponents.map((s) => [s.name, s]));
     const context = childInsertContext(editor.state, filePos, specs);
     expect(context).not.toBeNull();
     expect(context!.children.map((c) => c.name)).toEqual(["File", "Folder"]);
     const folder = context!.children[1];
-    editor.chain().insertContentAt(context!.insertAt, folder.insert!()).run();
+    editor.chain().insertContentAt(context!.insertAt, folder.insert!(specs)).run();
     expect(serialize()).toContain(`<File name="page.tsx" />
     <Folder name="" />`);
   });
 
   test("slash in an empty row swaps it for the chosen type", async () => {
     const { entryItems } = await import("../src/slash-menu");
-    const { fumadocsUiComponents } = await import("../src/components/fumadocs-ui");
     const { editor, serialize } = makeEditor(FILES);
     caret(editor, "layout.tsx");
     press(editor, "Enter"); // fresh empty File row
-    const specs = new Map(fumadocsUiComponents.map((s) => [s.name, s]));
     const items = entryItems(editor, specs);
     expect(items!.map((i) => i.title)).toEqual(["File", "Folder"]);
     items![1].run(editor, { from: 0, to: 0 });
@@ -610,7 +606,7 @@ describe("leaf component click", () => {
     let pos = -1;
     let leaf: import("@tiptap/pm/model").Node | null = null;
     editor.state.doc.descendants((node, at) => {
-      if (node.type.name === "mdxComponent") {
+      if (node.type.name === "GithubInfo") {
         pos = at;
         leaf = node;
       }
@@ -621,7 +617,7 @@ describe("leaf component click", () => {
     expect(handled).toBe(true);
     const selection = editor.state.selection;
     expect(selection).toBeInstanceOf(NodeSelection);
-    expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
+    expect((selection as NodeSelection).node.type.name).toBe("GithubInfo");
   });
 });
 
@@ -631,7 +627,7 @@ describe("panel attribute edits", () => {
     const { editor } = makeEditor('<GithubInfo owner="a" repo="b" />\n');
     let pos = -1;
     editor.state.doc.descendants((node, at) => {
-      if (node.attrs?.name === "GithubInfo") pos = at;
+      if (node.type.name === "GithubInfo") pos = at;
     });
     editor.commands.setNodeSelection(pos);
     setComponentAttributes(editor, pos, [
@@ -640,7 +636,7 @@ describe("panel attribute edits", () => {
     ]);
     const selection = editor.state.selection;
     expect(selection).toBeInstanceOf(NodeSelection);
-    expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
+    expect((selection as NodeSelection).node.type.name).toBe("GithubInfo");
   });
 });
 
@@ -684,7 +680,7 @@ code
       const sel = editor.state.selection;
       if (!(sel instanceof NodeSelection) || sel.from === last) break;
       last = sel.from;
-      names.push((sel.node.attrs.name as string | null) ?? sel.node.type.name);
+      names.push(sel.node.type.name);
     }
     return names;
   };
@@ -833,8 +829,7 @@ Text  more.
     const from = caret(editor, "layout.tsx", "start");
     editor.commands.setTextSelection({ from, to: caret(editor, "layout.tsx") });
     const node = nodeOf(editor);
-    expect(node.type.name).toBe("mdxComponent");
-    expect(node.attrs.name).toBe("File");
+    expect(node.type.name).toBe("File");
   });
 
   test("a body paragraph is its own target; its component is one step up", async () => {

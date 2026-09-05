@@ -40,7 +40,7 @@ describe("caret policy", () => {
     let filesPos = -1;
     let files = editor.state.doc.firstChild!;
     editor.state.doc.descendants((node, pos) => {
-      if (node.attrs?.name === "Files") {
+      if (node.type.name === "Files") {
         filesPos = pos;
         files = node;
       }

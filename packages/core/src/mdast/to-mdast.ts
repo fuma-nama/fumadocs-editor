@@ -14,10 +14,11 @@ import type {
 import type { MdxAttribute } from "../extensions/mdx-nodes";
 import type { Syntax, ComponentSpec } from "../components/spec";
 import { createSyntax } from "../components/spec";
+import { componentRegions, componentTypeName } from "../components/structure";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionToMdast } from "../syntax/directives/serialize";
 import { inlineMathToMdast, mathToMdast } from "../syntax/math/serialize";
-import { FENCE_FILE, FENCE_FILES, FENCE_FOLDER } from "../syntax/files";
+import { FENCE_FILES } from "../syntax/files";
 import { filesFenceToMdast } from "../syntax/files/serialize";
 import { appendHeadingSuffixes } from "../syntax/heading-suffixes";
 import type { RawNode } from "./stringify";
@@ -263,8 +264,6 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
           (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
         ),
       };
-    case "mdxComponent":
-      return componentToMdast(node, syntax);
     case "mdxFlowExpression":
       return { type: "mdxFlowExpression", value: String(node.attrs?.value ?? "") };
     case "mdxjsEsm":
@@ -274,6 +273,9 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
     case "verbatim":
       return { type: "raw", value: String(node.attrs?.value ?? "") } as unknown as RootContent;
     default:
+      for (const spec of syntax.components.values()) {
+        if (componentTypeName(spec) === node.type) return componentToMdast(node, spec, syntax);
+      }
       throw new Error(`Cannot serialize block node: ${node.type}`);
   }
 }
@@ -295,33 +297,35 @@ function jsxAttrSource(attr: MdastJsxAttribute | MdastJsxExpressionAttribute): s
   return `${attr.name}={${attr.value.value}}`;
 }
 
-function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
-  const name = (node.attrs?.name as string | null) ?? null;
-  // fence trees serialize straight from the node (the generic path would
-  // recurse each row into its own code block), registered or not
-  if (name === FENCE_FILES || name === FENCE_FOLDER || name === FENCE_FILE) {
-    return filesFenceToMdast(node);
-  }
-  const spec = name ? syntax.components.get(name) : undefined;
+function componentToMdast(node: JSONContent, spec: ComponentSpec, syntax: Syntax): RootContent {
+  // fence trees serialize straight from the node: the generic path would
+  // recurse each row into its own code block
+  if (spec.name === FENCE_FILES) return filesFenceToMdast(node);
+  const { name } = spec;
   const attributes = attributesToMdast(node.attrs?.attributes as MdxAttribute[]);
-  const children = (node.content ?? []) as JSONContent[];
+  const content = (node.content ?? []) as JSONContent[];
+  const regions = componentRegions(spec, syntax.components);
+  let mdChildren: (BlockContent | DefinitionContent)[] = [];
 
-  if (!spec) {
-    return {
-      type: "mdxJsxFlowElement",
-      name,
-      attributes,
-      children: children.map(
-        (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
-      ),
-    };
-  }
-
-  // write inline-region text back into its backing attribute
-  for (const { attribute, region } of spec.attributeRegions ?? []) {
-    const value = regionText(
-      children.find((c) => c.type === "mdxInlineRegion" && c.attrs?.region === region),
-    );
+  for (let i = 0; i < regions.length; i++) {
+    const { kind, attribute, derived } = regions[i];
+    if (derived) continue;
+    if (kind === "block") {
+      mdChildren = (content[i]?.content ?? []).map(
+        (c) => nodeToMdastBlock(c, syntax) as BlockContent | DefinitionContent,
+      );
+      continue;
+    }
+    const value = regionText(content[i]);
+    // an element whose payload is its text content serializes back to the
+    // tight inline form authors write. Raw, so a path like `./page.mdx`
+    // never grows markdown escapes.
+    if (!attribute) {
+      const attrText = attributes.map(jsxAttrSource).join(" ");
+      const open = attrText ? `<${name} ${attrText}>` : `<${name}>`;
+      return { type: "raw", value: `${open}${value}</${name}>` } as unknown as RootContent;
+    }
+    // write inline-region text back into its backing attribute
     const existing = attributes.find(
       (attr): attr is MdastJsxAttribute =>
         attr.type === "mdxJsxAttribute" && attr.name === attribute,
@@ -330,37 +334,16 @@ function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
     else if (value) attributes.push({ type: "mdxJsxAttribute", name: attribute, value });
   }
 
-  // an element whose payload is its text content serializes back to the
-  // tight inline form authors write. Raw, so a path like `./page.mdx`
-  // never grows markdown escapes.
-  if (spec.contentRegion) {
-    const value = regionText(
-      children.find(
-        (c) => c.type === "mdxInlineRegion" && c.attrs?.region === spec.contentRegion!.region,
-      ),
-    );
-    const attrText = attributes.map(jsxAttrSource).join(" ");
-    const open = attrText ? `<${name} ${attrText}>` : `<${name}>`;
-    return { type: "raw", value: `${open}${value}</${name}>` } as unknown as RootContent;
-  }
-
-  let mdChildren: (BlockContent | DefinitionContent)[] = [];
   if (spec.childComponent) {
-    const components = children.filter((c) => c.type === "mdxComponent");
-    mdChildren = components.map((c) => componentToMdast(c, syntax) as BlockContent);
+    const children = content.slice(regions.length);
+    mdChildren = children.map((child) => nodeToMdastBlock(child, syntax) as BlockContent);
     // the derived items attribute mirrors each child's label region
     if (spec.itemsAttribute) {
-      const { attribute, childRegion } = spec.itemsAttribute;
-      const labels = components.map((c) =>
-        regionText(
-          ((c.content ?? []) as JSONContent[]).find(
-            (r) => r.type === "mdxInlineRegion" && r.attrs?.region === childRegion,
-          ),
-        ),
-      );
+      const { attribute } = spec.itemsAttribute;
+      const labels = children.map((child) => JSON.stringify(regionText(child.content?.[0])));
       const value = {
         type: "mdxJsxAttributeValueExpression" as const,
-        value: `[${labels.map((label) => JSON.stringify(label)).join(", ")}]`,
+        value: `[${labels.join(", ")}]`,
       };
       const existing = attributes.find(
         (attr): attr is MdastJsxAttribute =>
@@ -369,13 +352,6 @@ function componentToMdast(node: JSONContent, syntax: Syntax): RootContent {
       if (existing) existing.value = value;
       else attributes.unshift({ type: "mdxJsxAttribute", name: attribute, value });
     }
-  } else if (spec.childrenRegion) {
-    const body = children.find(
-      (c) => c.type === "mdxBlockRegion" && c.attrs?.region === spec.childrenRegion!.region,
-    );
-    mdChildren = (body?.content ?? []).map(
-      (c) => nodeToMdastBlock(c, syntax) as BlockContent | DefinitionContent,
-    );
   }
 
   if (name === DIRECTIVE_ADMONITION) return admonitionToMdast(attributes, mdChildren);

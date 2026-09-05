@@ -2,240 +2,39 @@ import { Extension } from "@tiptap/core";
 import {
   NodeSelection,
   Plugin,
+  PluginKey,
   Selection,
   TextSelection,
   type EditorState,
   type Transaction,
 } from "@tiptap/pm/state";
 import { Fragment, type Node as PMNode, type ResolvedPos, type Slice } from "@tiptap/pm/model";
-import type { EditorView } from "@tiptap/pm/view";
-import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
-import {
-  FRONTMATTER_NODE,
-  childNames,
-  childOnlyNames,
-  deleteBlocks,
-  movableIn,
-  type BlockRange,
-  type SpecMap,
-} from "./keymap";
+import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
+import { BLOCK_REGION_NODE, INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core";
+import { FRONTMATTER_NODE, deleteBlocks, movableIn, type BlockRange, type SpecMap } from "./keymap";
 import { contentClass } from "../styles/content";
 
-type Fix =
-  | { kind: "retag"; pos: number; attrs: Record<string, unknown> }
-  | { kind: "insert"; pos: number; node: PMNode }
-  | { kind: "remove"; pos: number; size: number }
-  | { kind: "fold"; pos: number; target: number }
-  | { kind: "merge"; pos: number; target: number };
-
-function reconcile(state: EditorState, node: PMNode, pos: number, specs: SpecMap, fixes: Fix[]) {
-  const spec = specs.get(node.attrs.name as string);
-  if (!spec) return;
-  const inline: { region: string }[] = [];
-  const parent = state.doc.resolve(pos).parent;
-  const items =
-    parent.type.name === COMPONENT_NODE
-      ? specs.get(parent.attrs.name as string)?.itemsAttribute
-      : undefined;
-  if (items) inline.push({ region: items.childRegion });
-  for (const region of spec.attributeRegions ?? []) inline.push(region);
-  if (spec.contentRegion) inline.push(spec.contentRegion);
-  const block = spec.childrenRegion;
-
-  if (spec.childComponent && inline.length === 0 && !block && node.childCount === 0) {
-    fixes.push({ kind: "remove", pos, size: node.nodeSize });
-    return;
-  }
-
-  const inlinePresent: { pos: number; node: PMNode }[] = [];
-  const blockPresent: { pos: number; node: PMNode }[] = [];
-  let firstComponent = -1;
-  node.forEach((child, offset) => {
-    const at = pos + 1 + offset;
-    if (child.type.name === INLINE_REGION_NODE) inlinePresent.push({ pos: at, node: child });
-    else if (child.type.name === BLOCK_REGION_NODE) blockPresent.push({ pos: at, node: child });
-    else if (firstComponent === -1) firstComponent = at;
-  });
-
-  for (let i = 0; i < inline.length; i++) {
-    const present = inlinePresent[i];
-    if (present) {
-      if (present.node.attrs.region !== inline[i].region) {
-        fixes.push({ kind: "retag", pos: present.pos, attrs: { region: inline[i].region } });
-      }
-      continue;
-    }
-    const last = inlinePresent[inlinePresent.length - 1];
-    fixes.push({
-      kind: "insert",
-      pos: last ? last.pos + last.node.nodeSize : pos + 1,
-      node: state.schema.nodes[INLINE_REGION_NODE].create({ region: inline[i].region }),
-    });
-  }
-  if (inline.length > 0) {
-    for (let i = inline.length; i < inlinePresent.length; i++) {
-      const into = inlinePresent[inline.length - 1];
-      fixes.push({
-        kind: "merge",
-        pos: inlinePresent[i].pos,
-        target: into.pos + into.node.nodeSize - 1,
-      });
-    }
-  }
-
-  if (!block) return;
-  const present = blockPresent[0];
-  if (present) {
-    if (present.node.attrs.region !== block.region) {
-      fixes.push({ kind: "retag", pos: present.pos, attrs: { region: block.region } });
-    }
-    for (let i = 1; i < blockPresent.length; i++) {
-      fixes.push({
-        kind: "merge",
-        pos: blockPresent[i].pos,
-        target: present.pos + present.node.nodeSize - 1,
-      });
-    }
-    node.forEach((child, offset) => {
-      const at = pos + 1 + offset;
-      if (
-        child.type.name === INLINE_REGION_NODE ||
-        child.type.name === BLOCK_REGION_NODE ||
-        at === present.pos
-      )
-        return;
-      fixes.push({ kind: "fold", pos: at, target: present.pos + present.node.nodeSize - 1 });
-    });
-    return;
-  }
-  const last = inlinePresent[inlinePresent.length - 1];
-  fixes.push({
-    kind: "insert",
-    pos: firstComponent !== -1 ? firstComponent : last ? last.pos + last.node.nodeSize : pos + 1,
-    node: state.schema.nodes[BLOCK_REGION_NODE].create(
-      { region: block.region },
-      state.schema.nodes.paragraph.create(),
-    ),
-  });
-}
-
-function applyFixes(state: EditorState, fixes: Fix[]): Transaction | null {
-  if (fixes.length === 0) return null;
-  const tr = state.tr;
-  for (const fix of fixes) {
-    if (fix.kind === "retag") {
-      tr.setNodeMarkup(tr.mapping.map(fix.pos), undefined, fix.attrs);
-    } else if (fix.kind === "insert") {
-      tr.insert(tr.mapping.map(fix.pos), fix.node);
-    } else if (fix.kind === "fold") {
-      const from = tr.mapping.map(fix.pos);
-      const stray = tr.doc.nodeAt(from);
-      if (!stray) continue;
-      tr.delete(from, from + stray.nodeSize);
-      tr.insert(tr.mapping.map(fix.target), stray);
-    } else if (fix.kind === "merge") {
-      const from = tr.mapping.map(fix.pos);
-      const region = tr.doc.nodeAt(from);
-      if (!region) continue;
-      tr.delete(from, from + region.nodeSize);
-      tr.insert(tr.mapping.map(fix.target), region.content);
-    } else {
-      const from = tr.mapping.map(fix.pos);
-      const to = tr.mapping.map(fix.pos + fix.size);
-      const $from = tr.doc.resolve(from);
-      // a plain delete of the document's only block would be invalid
-      if (
-        $from.parent.childCount === 1 &&
-        !$from.parent.canReplace($from.index(), $from.index() + 1)
-      ) {
-        tr.replaceWith(from, to, state.schema.nodes.paragraph.create());
-      } else {
-        tr.delete(from, to);
-      }
-    }
-  }
-  return tr;
-}
-
-function touchedComponents(
-  state: EditorState,
-  transactions: readonly Transaction[],
-  specs: SpecMap,
-): Fix[] {
-  const fixes: Fix[] = [];
-  const seen = new Set<number>();
-  for (let i = 0; i < transactions.length; i++) {
-    const steps = transactions[i].steps;
-    for (let j = 0; j < steps.length; j++) {
-      steps[j].getMap().forEach((_oldStart, _oldEnd, newStart, newEnd) => {
-        let from = newStart;
-        let to = newEnd;
-        for (let k = j + 1; k < steps.length; k++) {
-          const map = steps[k].getMap();
-          from = map.map(from, -1);
-          to = map.map(to, 1);
-        }
-        for (let k = i + 1; k < transactions.length; k++) {
-          from = transactions[k].mapping.map(from, -1);
-          to = transactions[k].mapping.map(to, 1);
-        }
-        state.doc.nodesBetween(from, to, (node, pos) => {
-          if (node.isTextblock) return false;
-          if (node.type.name !== COMPONENT_NODE || seen.has(pos)) return true;
-          seen.add(pos);
-          reconcile(state, node, pos, specs, fixes);
-          return true;
-        });
-      });
-    }
-  }
-  return fixes;
-}
-
-function draggedBlock(slice: Slice | undefined, specs: SpecMap): PMNode | null {
+function draggedBlock(slice: Slice | undefined): PMNode | null {
   if (!slice || slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount !== 1) {
     return null;
   }
   const node = slice.content.firstChild!;
-  const type = node.type.name;
-  if (!node.isBlock || type === FRONTMATTER_NODE) return null;
-  if (type === COMPONENT_NODE && !specs.has(node.attrs.name as string)) return null;
-  return node;
+  return node.isBlock && node.type.name !== FRONTMATTER_NODE ? node : null;
 }
 
 /**
  * Where a dragged block would land. ProseMirror's dropPoint picks the
- * deepest schema-valid spot, and this schema legally nests any component in
- * any component, so a drop over a row's text would land inside that row.
- * Walk up to the nearest container that takes it instead (for a component,
- * one its spec allows), before or after the hovered child by pointer
- * height. The lifted node itself (`source`, on a move) is opaque, and its
- * own slot is no target: over itself, nothing happens. Null when no valid
- * spot exists.
+ * deepest schema-valid spot, so a drop over a nested block's text would
+ * land inside it. Walk up to the nearest container that takes it instead,
+ * before or after the hovered child by pointer height. The lifted node
+ * itself (`source`, on a move) is opaque, and its own slot is no target:
+ * over itself, nothing happens. Null when no valid spot exists.
  */
-/** the specs' say on components: a component takes only the children it names, other containers no child-only row */
-function fits(content: Fragment, parent: PMNode, specs: SpecMap, childOnly: Set<string>): boolean {
-  const names =
-    parent.type.name === COMPONENT_NODE ? childNames(specs.get(parent.attrs.name as string)) : null;
-  let ok = true;
-  content.forEach((child) => {
-    if (child.type.name !== COMPONENT_NODE) {
-      if (names) ok = false;
-      return;
-    }
-    const name = child.attrs.name as string;
-    if (names ? !names.includes(name) : childOnly.has(name)) ok = false;
-  });
-  return ok;
-}
-
 export function dropSlot(
   state: EditorState,
   $pos: ResolvedPos,
   dragged: Fragment,
   source: BlockRange | null,
-  specs: SpecMap,
-  childOnly: Set<string>,
   before: (pos: number) => boolean,
 ): number | null {
   const first = dragged.firstChild;
@@ -255,7 +54,7 @@ export function dropSlot(
 
   for (let depth = top; depth >= 0; depth--) {
     const parent = $pos.node(depth);
-    if (!movableIn(first, parent) || !fits(dragged, parent, specs, childOnly)) continue;
+    if (!movableIn(first, parent)) continue;
 
     let insert: number;
     if (depth === $pos.depth) {
@@ -284,13 +83,11 @@ function dropTarget(
   y: number,
   dragged: Fragment,
   source: BlockRange | null,
-  specs: SpecMap,
-  childOnly: Set<string>,
 ): number | null {
   const coords = view.posAtCoords({ left: x, top: y });
   if (!coords) return null;
   const { doc } = view.state;
-  return dropSlot(view.state, doc.resolve(coords.pos), dragged, source, specs, childOnly, (pos) => {
+  return dropSlot(view.state, doc.resolve(coords.pos), dragged, source, (pos) => {
     const dom = view.nodeDOM(pos);
     if (dom instanceof HTMLElement) {
       const rect = dom.getBoundingClientRect();
@@ -366,61 +163,32 @@ function hover(
   source: BlockRange | null,
   x: number,
   y: number,
-  specs: SpecMap,
-  childOnly: Set<string>,
 ): number | null {
-  const target = dropTarget(view, x, y, dragged, source, specs, childOnly);
+  const target = dropTarget(view, x, y, dragged, source);
   if (target == null) hideIndicator();
   else showIndicator(view, target);
   return target;
 }
 
-/** a copy of the run for the ghost: the text of an inline run, the blocks' clones stacked */
-function ghostOf(
-  view: EditorView,
-  from: number,
-  to: number,
-): { el: HTMLElement; rect: DOMRect } | null {
-  const $from = view.state.doc.resolve(from);
-  if ($from.parent.inlineContent) {
-    const start = view.domAtPos(from);
-    const end = view.domAtPos(to);
-    const range = document.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    const el = document.createElement("span");
-    el.appendChild(range.cloneContents());
-    const block = view.nodeDOM($from.before());
-    if (block instanceof HTMLElement) el.style.font = getComputedStyle(block).font;
-    return { el, rect: range.getBoundingClientRect() };
-  }
-  const doms: HTMLElement[] = [];
-  const rects: DOMRect[] = [];
-  for (let pos = from; pos < to; pos += view.state.doc.nodeAt(pos)!.nodeSize) {
-    const dom = view.nodeDOM(pos);
-    if (!(dom instanceof HTMLElement)) return null;
-    doms.push(dom);
-    rects.push(dom.getBoundingClientRect());
-  }
-  const left = Math.min(...rects.map((r) => r.left));
-  const right = Math.max(...rects.map((r) => r.right));
-  const rect = new DOMRect(
-    left,
-    rects[0].top,
-    right - left,
-    rects[rects.length - 1].bottom - rects[0].top,
-  );
-  if (doms.length === 1) return { el: doms[0].cloneNode(true) as HTMLElement, rect };
+/** a copy of the run for the ghost, and the box it occupies */
+function ghostOf(view: EditorView, from: number, to: number): { el: HTMLElement; rect: DOMRect } {
+  const start = view.domAtPos(from);
+  const end = view.domAtPos(to);
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
   const el = document.createElement("div");
-  el.style.display = "flex";
-  el.style.flexDirection = "column";
-  el.style.gap = `${rects[1].top - rects[0].bottom}px`;
-  for (const dom of doms) {
-    const copy = dom.cloneNode(true) as HTMLElement;
-    copy.style.margin = "0";
-    el.appendChild(copy);
-  }
-  return { el, rect };
+  el.appendChild(range.cloneContents());
+  // the clone leaves the content root: its font and the blocks' gap
+  // (`--fde-gap` on `view.dom`) are inherited there, not in the overlay
+  const host = range.commonAncestorContainer;
+  const style = getComputedStyle(host instanceof Element ? host : host.parentElement!);
+  el.style.font = style.font;
+  el.style.setProperty("--fde-gap", style.getPropertyValue("--fde-gap"));
+  // the block clones' outer margins would offset them inside the ghost's box
+  (el.firstElementChild as HTMLElement | null)?.style.setProperty("margin-top", "0");
+  (el.lastElementChild as HTMLElement | null)?.style.setProperty("margin-bottom", "0");
+  return { el, rect: range.getBoundingClientRect() };
 }
 
 function lift(root: HTMLElement, ghost: HTMLElement, rect: DOMRect, x: number, y: number) {
@@ -445,7 +213,7 @@ export function placeDrop(
   source: BlockRange | null,
 ) {
   const { selection } = view.state;
-  const tr = view.state.tr;
+  const tr = view.state.tr.setMeta(liftKey, null);
   if (source) deleteBlocks(tr, source);
   // an insert point inside the deleted source maps to the deletion
   // boundary, so dropping into itself is a no-op
@@ -466,6 +234,53 @@ export function placeDrop(
   view.dispatch(tr.scrollIntoView());
 }
 
+const liftKey = new PluginKey<BlockRange | null>("fdeLift");
+
+/**
+ * Light `range` as the run a joystick would drag (null clears). The range
+ * follows edits by position mapping, so a drag reads it back as its source.
+ * A decoration, not a class on the nodes' DOM: ProseMirror owns that DOM
+ * and redraws it.
+ */
+export function setLifted(view: EditorView, range: BlockRange | null): void {
+  const lit = liftKey.getState(view.state);
+  if (lit?.from === range?.from && lit?.to === range?.to) return;
+  view.dispatch(view.state.tr.setMeta(liftKey, range));
+}
+
+const lifted = new Plugin<BlockRange | null>({
+  key: liftKey,
+  state: {
+    init: () => null,
+    apply(tr, range) {
+      const meta = tr.getMeta(liftKey) as BlockRange | null | undefined;
+      if (meta !== undefined) return meta;
+      if (!range || !tr.docChanged) return range;
+      const from = tr.mapping.map(range.from, -1);
+      const to = tr.mapping.map(range.to, 1);
+      return to > from ? { from, to } : null;
+    },
+  },
+  props: {
+    decorations(state) {
+      const range = liftKey.getState(state);
+      if (!range || range.to > state.doc.content.size) return DecorationSet.empty;
+      if (state.doc.resolve(range.from).parent.inlineContent) {
+        return DecorationSet.create(state.doc, [
+          Decoration.inline(range.from, range.to, { class: contentClass.lifted }),
+        ]);
+      }
+      const decorations: Decoration[] = [];
+      state.doc.nodesBetween(range.from, range.to, (node, pos) => {
+        if (pos < range.from) return true;
+        decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: contentClass.lifted }));
+        return false;
+      });
+      return DecorationSet.create(state.doc, decorations);
+    },
+  },
+});
+
 const EDGE = 48;
 
 const SLOP = 3;
@@ -483,30 +298,14 @@ export function startPointerDrag(
   range: BlockRange,
   handle: HTMLElement,
   event: PointerEvent,
-  specs: SpecMap,
   tilt: (dx: number, dy: number) => void,
 ): void {
-  const { from } = range;
-  if (range.to <= from) return;
-  const $from = view.state.doc.resolve(from);
-  const inline = $from.parent.inlineContent;
-  const count = inline ? 0 : view.state.doc.resolve(range.to).index() - $from.index();
-  const shape = ghostOf(view, from, range.to);
-  if (!shape) return;
-  const content = view.state.doc.slice(from, range.to).content;
-  const childOnly = childOnlyNames(specs.values());
+  const { from, to } = range;
+  if (to <= from) return;
+  setLifted(view, range);
+  const shape = ghostOf(view, from, to);
+  const content = view.state.doc.slice(from, to).content;
   const viewport = window.visualViewport;
-  const source: BlockRange = { from, to: range.to };
-  // the run as it stands: a composition committing mid-drag rewrites a
-  // block in place, so for blocks the count is the guide, not the sizes
-  const extent = () => {
-    const { doc } = view.state;
-    if (range.to > doc.content.size) return null;
-    if (inline) return range.to;
-    const $now = doc.resolve(from);
-    const end = $now.index() + count;
-    return end <= $now.parent.childCount ? $now.posAtIndex(end) : null;
-  };
   const { pointerId, clientX: startX, clientY: startY } = event;
   let x = startX;
   let y = startY;
@@ -515,10 +314,9 @@ export function startPointerDrag(
   let scrolling = 0;
 
   const follow = () => {
-    const to = extent();
-    if (to == null) return;
-    source.to = to;
-    target = hover(view, content, source, x, y, specs, childOnly);
+    const source = liftKey.getState(view.state);
+    if (!source) return;
+    target = hover(view, content, source, x, y);
     ghost!.move(x, y);
   };
   const scroll = () => {
@@ -557,9 +355,9 @@ export function startPointerDrag(
     tilt(0, 0);
     if (!ghost) return;
     ghost.remove();
-    const to = extent();
-    if (e.type === "pointerup" && target != null && to != null) {
-      placeDrop(view, view.state.doc.slice(from, to).content, target, { from, to });
+    const source = liftKey.getState(view.state);
+    if (e.type === "pointerup" && target != null && source) {
+      placeDrop(view, view.state.doc.slice(source.from, source.to).content, target, source);
       // a finger's drop must not raise the keyboard
       if (e.pointerType === "mouse") view.focus();
     }
@@ -572,28 +370,31 @@ export function startPointerDrag(
   handle.addEventListener("lostpointercapture", end);
 }
 
-export function structureGuard(specs: SpecMap): Extension {
-  const childOnly = childOnlyNames(specs.values());
+/** a container of child components (Cards, Steps, Tabs, Files) goes with its last child */
+function dropEmptyContainers(state: EditorState, specs: SpecMap): Transaction | null {
+  let tr: Transaction | null = null;
+  state.doc.descendants((node, pos) => {
+    if (node.isTextblock) return false;
+    if (
+      isComponent(node.type) &&
+      node.childCount === 0 &&
+      specs.get(node.type.name)!.childComponent
+    ) {
+      tr ??= state.tr;
+      tr.delete(tr.mapping.map(pos), tr.mapping.map(pos + node.nodeSize));
+    }
+    return true;
+  });
+  return tr;
+}
 
+export function structureGuard(specs: SpecMap): Extension {
   return Extension.create({
     name: "fdeStructureGuard",
 
-    onBeforeCreate() {
-      this.editor.on("mount", ({ editor }) => {
-        const state = editor.state;
-        const fixes: Fix[] = [];
-        state.doc.descendants((node, pos) => {
-          if (node.isTextblock) return false;
-          if (node.type.name === COMPONENT_NODE) reconcile(state, node, pos, specs, fixes);
-          return true;
-        });
-        const tr = applyFixes(state, fixes);
-        if (tr) editor.view.dispatch(tr.setMeta("addToHistory", false));
-      });
-    },
-
     addProseMirrorPlugins() {
       return [
+        lifted,
         new Plugin({
           appendTransaction(transactions, _oldState, newState) {
             // remote Yjs transactions ('y-sync$' is the sync plugin's meta
@@ -601,7 +402,7 @@ export function structureGuard(specs: SpecMap): Extension {
             // would race the peer doing the same and duplicate the moved
             // content, so only local edits are guarded.
             if (!transactions.some((tr) => tr.docChanged && !tr.getMeta("y-sync$"))) return null;
-            return applyFixes(newState, touchedComponents(newState, transactions, specs));
+            return dropEmptyContainers(newState, specs);
           },
           view: () => ({ destroy: hideIndicator }),
           props: {
@@ -616,18 +417,10 @@ export function structureGuard(specs: SpecMap): Extension {
               },
             },
             handleDrop(view, event, slice) {
-              const dragged = draggedBlock(slice, specs);
+              const dragged = draggedBlock(slice);
               if (!dragged) return false;
               const content = Fragment.from(dragged);
-              const insert = dropTarget(
-                view,
-                event.clientX,
-                event.clientY,
-                content,
-                null,
-                specs,
-                childOnly,
-              );
+              const insert = dropTarget(view, event.clientX, event.clientY, content, null);
               if (insert == null) return true; // nowhere valid: swallow the drop
               placeDrop(view, content, insert, null);
               view.focus();

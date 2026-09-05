@@ -4,7 +4,7 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core";
 import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
 import type { FileProvider } from "./media";
@@ -21,10 +21,9 @@ function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): Ac
   for (let depth = $from.depth; depth > 1; depth--) {
     const node = $from.node(depth);
     if (node.type.name !== INLINE_REGION_NODE) continue;
-    const component = $from.node(depth - 1);
-    if (component.type.name !== COMPONENT_NODE) return null;
-    const spec = specs.get(component.attrs.name as string);
-    if (!spec || spec.filePathRegion !== node.attrs.region) return null;
+    const spec = specs.get($from.node(depth - 1).type.name)!;
+    const region = componentRegions(spec, specs)[$from.index(depth - 1)];
+    if (spec.filePathRegion !== region.region) return null;
     const from = $from.start(depth);
     return { from, to: from + node.content.size, query: node.textContent };
   }

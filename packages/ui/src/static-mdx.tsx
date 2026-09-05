@@ -2,7 +2,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import type { JSONContent } from "@tiptap/core";
-import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
+import { componentRegions, type MdxAttribute } from "@fumadocs-editor/core";
 import { SquareCode } from "lucide-react";
 import {
   Component as ReactComponent,
@@ -172,34 +172,24 @@ function ContentHole({ children }: { children: ReactNode }) {
   );
 }
 
-function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
-  const name = (node.attrs?.name as string | null) ?? null;
-  const spec = name ? specs.get(name) : undefined;
+function Component({
+  node,
+  spec,
+  specs,
+}: {
+  node: JSONContent;
+  spec: UiComponentSpec;
+  specs: SpecMap;
+}) {
   const attributes = (node.attrs?.attributes ?? []) as MdxAttribute[];
   const children = renderChildren(node.content, specs, spec);
 
-  if (!spec) {
-    return (
-      <Shell type="mdxComponent" className={contentClass.component}>
-        <div
-          data-node-view-wrapper=""
-          data-component={name ?? ""}
-          {...stylex.props(content.nodeWrapper, styles.wrapper)}
-        >
-          <FallbackCard name={name ?? ""}>
-            <ContentHole>{children}</ContentHole>
-          </FallbackCard>
-        </div>
-      </Shell>
-    );
-  }
-
   const Render = spec.render;
   return (
-    <Shell type="mdxComponent" className={contentClass.component}>
+    <Shell type={node.type!} className={contentClass.component}>
       <div
         data-node-view-wrapper=""
-        data-component={name}
+        data-component={spec.name}
         {...stylex.props(content.nodeWrapper, styles.wrapper)}
       >
         <RenderBoundary
@@ -229,17 +219,19 @@ function Region({
   specs,
   kind,
   parent,
+  index,
 }: {
   node: JSONContent;
   specs: SpecMap;
   kind: "inline" | "block";
-  parent?: UiComponentSpec;
+  parent: UiComponentSpec;
+  index: number;
 }) {
-  const region = (node.attrs?.region as string) ?? "";
+  const { region } = componentRegions(parent, specs)[index];
   const sx = stylex.props(content.region, kind === "block" && content.regionBlock, styles.wrapper);
-  const own = parent?.regions?.[region];
+  const own = parent.regions?.[region];
   return (
-    <Shell type={kind === "inline" ? "mdxInlineRegion" : "mdxBlockRegion"}>
+    <Shell type={node.type!}>
       <div
         data-node-view-wrapper=""
         className={own ? `${sx.className} ${own}` : sx.className}
@@ -284,6 +276,8 @@ function renderNode(
   parent?: UiComponentSpec,
 ): ReactNode {
   const children = () => renderChildren(node.content, specs);
+  const spec = specs.get(node.type!);
+  if (spec) return <Component key={key} node={node} spec={spec} specs={specs} />;
   switch (node.type) {
     case "text":
       return renderMarks(node, key);
@@ -414,12 +408,18 @@ function renderNode(
           </div>
         </Shell>
       );
-    case "mdxComponent":
-      return <Component key={key} node={node} specs={specs} />;
     case "mdxInlineRegion":
-      return <Region key={key} node={node} specs={specs} kind="inline" parent={parent} />;
     case "mdxBlockRegion":
-      return <Region key={key} node={node} specs={specs} kind="block" parent={parent} />;
+      return (
+        <Region
+          key={key}
+          node={node}
+          specs={specs}
+          kind={node.type === "mdxInlineRegion" ? "inline" : "block"}
+          parent={parent!}
+          index={key}
+        />
+      );
     case "mdxJsxFlowElement":
       return (
         <div

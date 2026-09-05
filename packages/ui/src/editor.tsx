@@ -30,7 +30,7 @@ import type {
 } from "@fumadocs-editor/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
-import type { UiComponentSpec } from "./components/spec";
+import { specsByType, type UiComponentSpec } from "./components/spec";
 import { fumadocsUiComponents } from "./components/fumadocs-ui";
 import { chrome } from "./styles/shared";
 import { consts } from "./styles/consts.stylex";
@@ -372,7 +372,7 @@ const EditorView = memo(function EditorView({
 }: EditorViewProps) {
   const components = useStableValue(componentsProp ?? fumadocsUiComponents, sameSpecs);
   const syntax = useStableValue(syntaxProp, sameOptions);
-  const specMap = useMemo(() => new Map(components.map((spec) => [spec.name, spec])), [components]);
+  const specMap = useMemo(() => specsByType(components), [components]);
   const ambient = useEditorTheme();
   const scoped = theme === "system" ? ambient.resolvedTheme : theme;
 

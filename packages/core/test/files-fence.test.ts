@@ -4,13 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { JSONContent } from "@tiptap/core";
 import {
+  componentTypeName,
   createSyntax,
   filesFenceSpecs,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
-import { FENCE_FILE, FENCE_FILES, FENCE_FOLDER } from "../src/syntax/files";
+
+const [FILES, FOLDER, FILE] = filesFenceSpecs.map(componentTypeName);
 
 const jsxFilesSpecs: ComponentSpec[] = [
   { name: "Files", childComponent: ["File", "Folder"], listLike: true },
@@ -42,39 +44,38 @@ project
 `;
 
 function names(node: JSONContent): unknown {
-  const children = (node.content ?? [])
-    .filter((child) => child.type === "mdxComponent")
-    .map((child) => names(child));
-  const region = (node.content ?? []).find((child) => child.type === "mdxInlineRegion");
+  const content = node.content ?? [];
+  const region = content[0]?.type === "mdxInlineRegion" ? content[0] : undefined;
+  const rows = region ? content.slice(1) : content;
   const label = (region?.content ?? []).map((inline) => inline.text).join("");
-  return { name: node.attrs?.name, label: label || undefined, children };
+  return { name: node.type, label: label || undefined, children: rows.map(names) };
 }
 
 test("a canonical tree parses into fence components", () => {
   const { doc } = parseMdxToDoc(TREE, syntax);
   const [root] = doc.content!;
   expect(names(root)).toEqual({
-    name: FENCE_FILES,
+    name: FILES,
     label: undefined,
     children: [
       {
-        name: FENCE_FOLDER,
+        name: FOLDER,
         label: "project",
         children: [
           {
-            name: FENCE_FOLDER,
+            name: FOLDER,
             label: "src",
             children: [
-              { name: FENCE_FILE, label: "index.js", children: [] },
+              { name: FILE, label: "index.js", children: [] },
               {
-                name: FENCE_FOLDER,
+                name: FOLDER,
                 label: "utils",
-                children: [{ name: FENCE_FILE, label: "helper.js", children: [] }],
+                children: [{ name: FILE, label: "helper.js", children: [] }],
               },
             ],
           },
-          { name: FENCE_FILE, label: "package.json", children: [] },
-          { name: FENCE_FOLDER, label: "assets/", children: [] },
+          { name: FILE, label: "package.json", children: [] },
+          { name: FOLDER, label: "assets/", children: [] },
         ],
       },
     ],
@@ -152,42 +153,17 @@ test("a file line with children becomes a folder", () => {
   const source = "```files\nroot\n└── src\n    └── a.ts\n```\n";
   const { doc } = parseMdxToDoc(source, syntax);
   const root = (doc.content![0].content ?? [])[0];
-  const src = (root.content ?? []).find((child) => child.type === "mdxComponent");
-  expect(src?.attrs?.name).toBe(FENCE_FOLDER);
-});
-
-test("a stray fence row serializes as a one-entry fence, not JSX", () => {
-  const doc: JSONContent = {
-    type: "doc",
-    content: [
-      {
-        type: "mdxComponent",
-        attrs: {
-          name: FENCE_FILE,
-          attributes: [{ type: "mdxJsxAttribute", name: "name", value: "loose.ts" }],
-        },
-        content: [
-          {
-            type: "mdxInlineRegion",
-            attrs: { region: "file-name" },
-            content: [{ type: "text", text: "loose.ts" }],
-          },
-        ],
-      },
-    ],
-  };
-  expect(serializeDocToMdx(doc, undefined, syntax)).toBe("```files\nloose.ts\n```\n");
+  const src = root.content![1];
+  expect(src.type).toBe(FOLDER);
 });
 
 test("a fresh row insert normalizes to its own re-parse once named", () => {
   // the listLike keymap creates rows via the child specs' inserts
-  const row = filesFenceSpecs[2].insert!();
+  const row = filesFenceSpecs[2].insert!(syntax.components);
   row.content![0].content = [{ type: "text", text: "page.mdx" }];
   const doc: JSONContent = {
     type: "doc",
-    content: [
-      { type: "mdxComponent", attrs: { name: FENCE_FILES, attributes: [] }, content: [row] },
-    ],
+    content: [{ type: FILES, attrs: { attributes: [] }, content: [row] }],
   };
   const out = serializeDocToMdx(doc, undefined, syntax);
   expect(out).toBe("```files\npage.mdx\n```\n");

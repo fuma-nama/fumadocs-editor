@@ -117,6 +117,13 @@
   background: color-mix(in oklab, var(--fde-primary) 30%, transparent);
 }
 
+/* Node-selected ring. TipTap flags every node view the selection covers
+ * with this class, so React views ring themselves from `isRinged`. */
+[data-fde-root] .ProseMirror-selectednode:not(.react-renderer) {
+  outline: 2px solid var(--fde-ring);
+  outline-offset: 2px;
+}
+
 /* prosemirror-gapcursor draws its own element */
 [data-fde-root] .ProseMirror-gapcursor:after {
   border-top: 1px solid var(--fde-foreground);
@@ -142,10 +149,6 @@
 }
 [data-fde-root] .tableWrapper:not(:first-child) {
   margin-top: var(--fde-gap);
-}
-[data-fde-root] .tableWrapper.ProseMirror-selectednode {
-  outline: 2px solid var(--fde-ring);
-  outline-offset: 2px;
 }
 
 /* TaskItem's own markup: label > checkbox, then the content div. The

@@ -6,12 +6,14 @@ import type { JSONContent } from "@tiptap/core";
 import {
   ADMONITION_TYPES,
   admonitionSpec,
+  componentTypeName,
   createSyntax,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
-import { DIRECTIVE_ADMONITION } from "../src/syntax/directives";
+
+const ADMONITION = componentTypeName(admonitionSpec);
 
 const calloutSpec: ComponentSpec = {
   name: "Callout",
@@ -28,17 +30,15 @@ const fixture = readFileSync(
 );
 
 function components(doc: JSONContent): JSONContent[] {
-  return (doc.content ?? []).filter((node) => node.type === "mdxComponent");
+  return (doc.content ?? []).filter((node) => node.type === ADMONITION || node.type === "Callout");
 }
 
-function region(node: JSONContent, type: string, name: string): JSONContent | undefined {
-  return (node.content ?? []).find((child) => child.type === type && child.attrs?.region === name);
-}
+// both specs: title region, then body region
+const title = (node: JSONContent) => node.content![0];
+const body = (node: JSONContent) => node.content![1];
 
 function editBody(node: JSONContent, text: string) {
-  region(node, "mdxBlockRegion", "body")!.content = [
-    { type: "paragraph", content: [{ type: "text", text }] },
-  ];
+  body(node).content = [{ type: "paragraph", content: [{ type: "text", text }] }];
 }
 
 test("registering the admonition spec turns the dialect on", () => {
@@ -51,7 +51,7 @@ describe("dialect off (default)", () => {
   test("directives stay plain blocks and round-trip byte-for-byte", () => {
     const off = createSyntax([calloutSpec]);
     const { doc, snapshot } = parseMdxToDoc(fixture, off);
-    expect(components(doc).map((node) => node.attrs?.name)).toEqual(["Callout"]);
+    expect(components(doc).map((node) => node.type)).toEqual(["Callout"]);
     expect(serializeDocToMdx(doc, snapshot, off)).toBe(fixture);
   });
 });
@@ -71,9 +71,9 @@ describe("dialect on", () => {
 
   test("known types become admonition components; the rest stay verbatim", () => {
     const { doc } = parseMdxToDoc(fixture, syntax);
-    const names = components(doc).map((node) => node.attrs?.name);
+    const types = components(doc).map((node) => node.type);
     // 5 directives + the JSX Callout; spoiler and the rich label fall back
-    expect(names).toEqual([":::", ":::", ":::", ":::", ":::", "Callout"]);
+    expect(types).toEqual([ADMONITION, ADMONITION, ADMONITION, ADMONITION, ADMONITION, "Callout"]);
     const verbatim = (doc.content ?? []).filter((node) => node.type === "verbatim");
     expect(verbatim.map((node) => String(node.attrs?.value).split("\n")[0])).toEqual([
       ":::spoiler",
@@ -86,7 +86,7 @@ describe("dialect on", () => {
     for (const name of Object.keys(ADMONITION_TYPES)) {
       const { doc } = parseMdxToDoc(`:::${name}\nbody\n:::\n`, syntax);
       const [node] = components(doc);
-      expect(node.attrs?.name).toBe(DIRECTIVE_ADMONITION);
+      expect(node.type).toBe(ADMONITION);
       expect((node.attrs!.attributes as { value?: unknown }[])[0].value).toBe(name);
     }
   });
@@ -94,8 +94,8 @@ describe("dialect on", () => {
   test("label and body become the title and body regions", () => {
     const { doc } = parseMdxToDoc(fixture, syntax);
     const warning = components(doc)[1];
-    expect(region(warning, "mdxInlineRegion", "title")?.content?.[0].text).toBe("Watch out");
-    expect(region(warning, "mdxBlockRegion", "body")?.content).toHaveLength(2);
+    expect(title(warning).content?.[0].text).toBe("Watch out");
+    expect(body(warning).content).toHaveLength(2);
   });
 
   test("an edited admonition re-emits ::: syntax, never JSX", () => {
@@ -110,7 +110,7 @@ describe("dialect on", () => {
   test("an edited JSX Callout re-emits JSX, never :::", () => {
     const { doc, snapshot } = parseMdxToDoc(fixture, syntax);
     const edited = structuredClone(doc);
-    const callout = components(edited).find((node) => node.attrs?.name === "Callout")!;
+    const callout = components(edited).find((node) => node.type === "Callout")!;
     editBody(callout, "edited jsx");
     const out = serializeDocToMdx(edited, snapshot, syntax);
     expect(out).toContain('<Callout type="info" title="JSX">');
@@ -122,7 +122,7 @@ describe("dialect on", () => {
     const { doc, snapshot } = parseMdxToDoc(":::warn[Old]\nbody\n:::\n", syntax);
     const edited = structuredClone(doc);
     const [node] = components(edited);
-    region(node, "mdxInlineRegion", "title")!.content = [{ type: "text", text: "New" }];
+    title(node).content = [{ type: "text", text: "New" }];
     const attrs = node.attrs!.attributes as { name: string; value: unknown }[];
     attrs.find((attr) => attr.name === "type")!.value = "danger";
     expect(serializeDocToMdx(edited, snapshot, syntax)).toBe(":::danger[New]\nbody\n:::\n");
@@ -144,10 +144,10 @@ describe("dialect on", () => {
     const { doc, snapshot } = parseMdxToDoc(fixture, syntax);
     const edited = structuredClone(doc);
     const outer = components(edited)[3];
-    const body = region(outer, "mdxBlockRegion", "body")!;
-    body.content = [
+    const outerBody = body(outer);
+    outerBody.content = [
       { type: "paragraph", content: [{ type: "text", text: "edited" }] },
-      ...body.content!.filter((node) => node.type === "mdxComponent"),
+      ...outerBody.content!.filter((node) => node.type === ADMONITION),
     ];
     const out = serializeDocToMdx(edited, snapshot, syntax);
     expect(out).toContain("::::danger[Outer]\nedited\n\n:::tip");
@@ -166,7 +166,7 @@ describe("dialect on", () => {
   });
 
   test("the insert fragment serializes to a bare :::note", () => {
-    const doc: JSONContent = { type: "doc", content: [admonitionSpec.insert!()] };
+    const doc: JSONContent = { type: "doc", content: [admonitionSpec.insert!(syntax.components)] };
     expect(serializeDocToMdx(doc, undefined, syntax)).toBe(":::note\n:::\n");
   });
 

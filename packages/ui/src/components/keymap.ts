@@ -6,19 +6,24 @@ import {
   type EditorState,
   type Transaction,
 } from "@tiptap/pm/state";
-import type { Node as PMNode, NodeType, ResolvedPos } from "@tiptap/pm/model";
+import { Fragment, type Node as PMNode, type NodeType, type ResolvedPos } from "@tiptap/pm/model";
 import {
   BLOCK_REGION_NODE,
-  COMPONENT_NODE,
   INLINE_REGION_NODE,
+  componentRegions,
+  componentTypeName,
+  isComponent,
   type ComponentSpec,
 } from "@fumadocs-editor/core";
 
+/** specs keyed by node type name (see `specsByType`) */
 export type SpecMap = ReadonlyMap<string, ComponentSpec>;
 
+/** node type names of the components `spec` accepts as children */
 export function childNames(spec: ComponentSpec | undefined): string[] {
   if (!spec?.childComponent) return [];
-  return Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+  const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
+  return names.map((name) => componentTypeName({ name }));
 }
 
 export function childOnlyNames(specs: Iterable<ComponentSpec>): Set<string> {
@@ -47,8 +52,8 @@ export function childInsertContext<S extends ComponentSpec>(
   specs: ReadonlyMap<string, S>,
 ): { children: S[]; insertAt: number } | null {
   const node = state.doc.nodeAt(pos);
-  if (!node || node.type.name !== COMPONENT_NODE) return null;
-  const own = insertableChildren(specs.get(node.attrs.name as string), specs);
+  if (!node || !isComponent(node.type)) return null;
+  const own = insertableChildren(specs.get(node.type.name), specs);
   if (own.length > 0) return { children: own, insertAt: pos + node.nodeSize - 1 };
 
   const $inside = state.doc.resolve(pos + 1);
@@ -60,8 +65,8 @@ export function childInsertContext<S extends ComponentSpec>(
     }
   }
   for (let depth = self - 1; depth > 0; depth--) {
-    if ($inside.node(depth).type.name !== COMPONENT_NODE) continue;
-    const children = insertableChildren(specs.get($inside.node(depth).attrs.name as string), specs);
+    if (!isComponent($inside.node(depth).type)) continue;
+    const children = insertableChildren(specs.get($inside.node(depth).type.name), specs);
     if (children.length > 0) return { children, insertAt: $inside.after(depth + 1) };
   }
   return null;
@@ -93,7 +98,6 @@ function ancestor($from: ResolvedPos, match: (type: NodeType) => boolean): numbe
 
 const isInlineRegion = (type: NodeType) => type.name === INLINE_REGION_NODE;
 const isRegion = (type: NodeType) => isInlineRegion(type) || type.name === BLOCK_REGION_NODE;
-const isComponent = (type: NodeType) => type.name === COMPONENT_NODE;
 /** TipTap's lists share the `list` group: their items are the blocks that move */
 export const isList = (type: NodeType): boolean => type.isInGroup("list");
 const isTable = (type: NodeType) => type.spec.tableRole === "table";
@@ -112,8 +116,8 @@ export function movableIn(node: PMNode, parent: PMNode): boolean {
     return parent.isTextblock && (node.isText || parent.type.name !== INLINE_REGION_NODE);
   }
   if (node.type.name === FRONTMATTER_NODE) return false;
+  if (isComponent(node.type)) return !parent.isTextblock;
   const container = parent.type.name;
-  if (container === COMPONENT_NODE) return node.type.name === COMPONENT_NODE;
   return container === "doc" || container === BLOCK_REGION_NODE || isList(parent.type);
 }
 
@@ -149,7 +153,7 @@ export function deleteBlocks(tr: Transaction, range: BlockRange): Transaction {
 function hasComponentChild(node: PMNode): boolean {
   let found = false;
   node.forEach((child) => {
-    if (child.type.name === COMPONENT_NODE) found = true;
+    if (isComponent(child.type)) found = true;
   });
   return found;
 }
@@ -162,7 +166,7 @@ function enclosingComponent(
   const $from = editor.state.doc.resolve(from);
   for (let depth = $from.depth; depth > 0; depth--) {
     const node = $from.node(depth);
-    if (node.type.name !== COMPONENT_NODE) continue;
+    if (!isComponent(node.type)) continue;
     const pos = $from.before(depth);
     if (to <= pos + node.nodeSize) return { node, pos };
   }
@@ -173,11 +177,10 @@ export function listEntryDepth($from: ResolvedPos, specs: SpecMap): number {
   const depth = componentDepth($from);
   if (depth < 2) return -1;
   const parent = $from.node(depth - 1);
-  if (parent.type.name !== COMPONENT_NODE) return -1;
-  const containerSpec = specs.get(parent.attrs.name as string);
+  if (!isComponent(parent.type)) return -1;
+  const containerSpec = specs.get(parent.type.name);
   if (!containerSpec?.listLike) return -1;
-  const name = $from.node(depth).attrs.name as string;
-  return childNames(containerSpec).includes(name) ? depth : -1;
+  return childNames(containerSpec).includes($from.node(depth).type.name) ? depth : -1;
 }
 
 function exitOnEmptyParagraph(editor: Editor): boolean {
@@ -190,13 +193,14 @@ function exitOnEmptyParagraph(editor: Editor): boolean {
   if (region.type.name !== BLOCK_REGION_NODE) return false;
   if ($from.index($from.depth - 1) !== region.childCount - 1) return false;
   const comp = $from.depth - 2;
-  if ($from.node(comp).type.name !== COMPONENT_NODE) return false;
+  if (!isComponent($from.node(comp).type)) return false;
 
   const paraStart = $from.before($from.depth);
   const tr = state.tr.delete(paraStart, paraStart + para.nodeSize);
 
   const afterComp = $from.after(comp);
-  if (state.doc.resolve(afterComp).nodeAfter?.type.name === COMPONENT_NODE) {
+  const next = state.doc.resolve(afterComp).nodeAfter;
+  if (next && isComponent(next.type)) {
     tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(afterComp) + 1), 1));
     editor.view.dispatch(tr.scrollIntoView());
     return true;
@@ -222,7 +226,7 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
 
   if (selection instanceof NodeSelection) {
     const node = selection.node;
-    if (node.type.name === COMPONENT_NODE) return focusNear(editor, selection.from + 1, 1);
+    if (isComponent(node.type)) return focusNear(editor, selection.from + 1, 1);
     if (node.isBlock && node.isAtom) {
       const tr = state.tr.insert(selection.to, state.schema.nodes.paragraph.create());
       tr.setSelection(TextSelection.create(tr.doc, selection.to + 1));
@@ -238,14 +242,14 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
 
   const compDepth = regionDepth - 1;
   const comp = compDepth >= 1 ? $from.node(compDepth) : null;
-  if (!comp || comp.type.name !== COMPONENT_NODE) return true;
-  const spec = specs.get(comp.attrs.name as string);
+  if (!comp || !isComponent(comp.type)) return true;
+  const spec = specs.get(comp.type.name)!;
 
-  if (spec?.listLike) {
+  if (spec.listLike) {
     const childSpec = insertableChildren(spec, specs)[0];
     if (childSpec) {
       const insertPos = $from.after(regionDepth);
-      editor.chain().insertContentAt(insertPos, childSpec.insert!()).run();
+      editor.chain().insertContentAt(insertPos, childSpec.insert!(specs)).run();
       focusAt(editor, insertPos + 1);
       return true;
     }
@@ -253,14 +257,14 @@ function handleEnter(editor: Editor, specs: SpecMap): boolean {
 
   const container = compDepth >= 1 ? $from.node(compDepth - 1) : null;
   const containerSpec =
-    container?.type.name === COMPONENT_NODE ? specs.get(container.attrs.name as string) : undefined;
+    container && isComponent(container.type) ? specs.get(container.type.name) : undefined;
   if (
     containerSpec?.listLike &&
-    spec?.insert &&
-    childNames(containerSpec).includes(comp.attrs.name as string)
+    spec.insert &&
+    childNames(containerSpec).includes(comp.type.name)
   ) {
     const insertPos = $from.after(compDepth);
-    editor.chain().insertContentAt(insertPos, spec.insert()).run();
+    editor.chain().insertContentAt(insertPos, spec.insert(specs)).run();
     focusAt(editor, insertPos + 1);
     return true;
   }
@@ -275,15 +279,13 @@ export function handleModEnter(editor: Editor, specs: SpecMap): boolean {
   const { $from } = state.selection;
 
   for (let depth = $from.depth; depth > 1; depth--) {
-    if ($from.node(depth).type.name !== COMPONENT_NODE) continue;
+    const { type } = $from.node(depth);
     const parent = $from.node(depth - 1);
-    if (parent.type.name !== COMPONENT_NODE) continue;
-    const name = $from.node(depth).attrs.name as string;
-    const spec = specs.get(name);
-    if (!spec?.insert || !childNames(specs.get(parent.attrs.name as string)).includes(name))
-      continue;
+    if (!isComponent(type) || !isComponent(parent.type)) continue;
+    const spec = specs.get(type.name)!;
+    if (!spec.insert || !childNames(specs.get(parent.type.name)).includes(type.name)) continue;
     const insertPos = $from.after(depth);
-    editor.chain().insertContentAt(insertPos, spec.insert()).run();
+    editor.chain().insertContentAt(insertPos, spec.insert(specs)).run();
     focusAt(editor, insertPos + 1);
     return true;
   }
@@ -299,7 +301,7 @@ export function handleModEnter(editor: Editor, specs: SpecMap): boolean {
 
 function outermostComponentDepth($from: ResolvedPos): number {
   for (let depth = 1; depth <= $from.depth; depth++) {
-    if ($from.node(depth).type.name === COMPONENT_NODE) return depth;
+    if (isComponent($from.node(depth).type)) return depth;
   }
   return -1;
 }
@@ -312,12 +314,14 @@ export function entryToggleTarget<S extends ComponentSpec>(
   if (depth === -1) return null;
   const entry = $from.node(depth);
   if (hasComponentChild(entry)) return null;
-  const entryName = entry.attrs.name as string;
-  const containerSpec = specs.get($from.node(depth - 1).attrs.name as string);
-  const plain = childNames(specs.get(entryName)).length === 0;
-  for (const name of childNames(containerSpec)) {
-    const spec = specs.get(name);
-    if (!spec || spec.childrenRegion) continue;
+  const entryName = entry.type.name;
+  const entrySpec = specs.get(entryName)!;
+  const plain = childNames(entrySpec).length === 0;
+  for (const name of childNames(specs.get($from.node(depth - 1).type.name))) {
+    const spec = specs.get(name)!;
+    if (spec.childrenRegion) continue;
+    if (componentRegions(spec, specs).length !== componentRegions(entrySpec, specs).length)
+      continue;
     if (
       plain
         ? childNames(spec).includes(entryName)
@@ -336,24 +340,15 @@ export function toggleEntryType(editor: Editor, specs: SpecMap): boolean {
   if (!toggle) return false;
   const { depth, entry, target } = toggle;
 
-  const regions = target.attributeRegions ?? [];
-  const sources: number[] = [];
-  entry.forEach((child, off) => {
-    if (child.type.name === INLINE_REGION_NODE) sources.push(off);
-  });
-  if (sources.length !== regions.length) return false;
-
-  const entryStart = $from.before(depth);
   const pos = $from.pos;
-  const tr = state.tr.setNodeMarkup(entryStart, undefined, {
-    name: target.name,
-    attributes: entry.attrs.attributes,
-  });
-  regions.forEach((region, i) => {
-    tr.setNodeMarkup(entryStart + 1 + sources[i], undefined, { region: region.region });
-  });
-  editor.view.dispatch(tr);
-  // The name change swaps the spec renderer; React remounts the row's content
+  editor.view.dispatch(
+    state.tr.setNodeMarkup(
+      $from.before(depth),
+      state.schema.nodes[componentTypeName(target)],
+      entry.attrs,
+    ),
+  );
+  // The type change swaps the node view; React remounts the row's content
   // a microtask later, which throws the DOM caret out of the region: and
   // ProseMirror would then adopt that stray selection. Re-assert the caret
   // after the commit and force the DOM selection back in sync.
@@ -378,10 +373,9 @@ export function entryParentFolder<S extends ComponentSpec>(
   const depth = listEntryDepth($from, specs);
   if (depth < 3) return null;
   const grand = $from.node(depth - 2);
-  if (grand.type.name !== COMPONENT_NODE) return null;
-  const name = $from.node(depth).attrs.name as string;
-  if (!childNames(specs.get(grand.attrs.name as string)).includes(name)) return null;
-  return specs.get($from.node(depth - 1).attrs.name as string) ?? null;
+  if (!isComponent(grand.type)) return null;
+  if (!childNames(specs.get(grand.type.name)).includes($from.node(depth).type.name)) return null;
+  return specs.get($from.node(depth - 1).type.name) ?? null;
 }
 
 export function outdentEntry(editor: Editor, specs: SpecMap): boolean {
@@ -406,23 +400,21 @@ function navigateRegion(editor: Editor, dir: 1 | -1): boolean {
   const depth = regionDepth($from);
   if (depth === -1) return false;
   const comp = depth - 1;
-  if (comp < 1 || $from.node(comp).type.name !== COMPONENT_NODE) return false;
+  if (comp < 1 || !isComponent($from.node(comp).type)) return false;
 
   if (dir === 1) {
     const next = $from.after(depth);
     if (next < $from.end(comp)) return focusNear(editor, next + 1, 1);
     const afterComp = $from.after(comp);
-    if (editor.state.doc.resolve(afterComp).nodeAfter?.type.name === COMPONENT_NODE) {
-      return focusNear(editor, afterComp + 1, 1);
-    }
+    const sibling = editor.state.doc.resolve(afterComp).nodeAfter;
+    if (sibling && isComponent(sibling.type)) return focusNear(editor, afterComp + 1, 1);
     return true; // end of the component: stay put, never let focus escape
   }
   const prev = $from.before(depth);
   if (prev > $from.start(comp)) return focusNear(editor, prev - 1, -1);
   const beforeComp = $from.before(comp);
-  if (editor.state.doc.resolve(beforeComp).nodeBefore?.type.name === COMPONENT_NODE) {
-    return focusNear(editor, beforeComp - 1, -1);
-  }
+  const sibling = editor.state.doc.resolve(beforeComp).nodeBefore;
+  if (sibling && isComponent(sibling.type)) return focusNear(editor, beforeComp - 1, -1);
   return true;
 }
 
@@ -452,7 +444,7 @@ export function moveBlocks(editor: Editor, range: BlockRange, dir: 1 | -1): bool
   const siblingIndex = dir === -1 ? $from.index() - 1 : state.doc.resolve(range.to).index();
   if (siblingIndex < 0 || siblingIndex >= parent.childCount) return false;
   const sibling = parent.child(siblingIndex);
-  if (isRegion(sibling.type) || sibling.type.name === FRONTMATTER_NODE) return false;
+  if (!movableIn(sibling, parent)) return false;
 
   const shift = dir === -1 ? -sibling.nodeSize : sibling.nodeSize;
   const { selection } = state;
@@ -468,22 +460,19 @@ export function moveBlocks(editor: Editor, range: BlockRange, dir: 1 | -1): bool
   return true;
 }
 
-/** a block that moves as a unit: a component, or an item of its container */
-const isUnit = (node: PMNode, parent: PMNode) => isComponent(node.type) || movableIn(node, parent);
-
 /**
  * What the joystick, ⋯ and Alt-Arrow serve. A caret: the innermost unit
  * around it. A selection: what it covers at the deepest node holding all of
  * it (a text range, or the whole children touched), widened to each parent
  * whose entire content it covers, and settled on the last of those that is
- * a unit (every item: the list; a component's whole body: still its blocks,
+ * a movable unit (every item: the list; a component's whole body: its blocks,
  * since a region is no unit). No unit at all: the covered run itself.
  */
 export function handleBlock(selection: Selection): BlockRange | null {
   const { $from, $to, from, to } = selection;
   if (selection.empty) {
     for (let depth = $from.depth; depth > 0; depth--) {
-      if (isUnit($from.node(depth), $from.node(depth - 1))) {
+      if (movableIn($from.node(depth), $from.node(depth - 1))) {
         return { from: $from.before(depth), to: $from.after(depth) };
       }
     }
@@ -501,7 +490,7 @@ export function handleBlock(selection: Selection): BlockRange | null {
     const node = $from.node(depth);
     run = { from: $from.before(depth), to: $from.after(depth) };
     depth--;
-    if (isUnit(node, $from.node(depth))) result = run;
+    if (movableIn(node, $from.node(depth))) result = run;
   }
   return result;
 }
@@ -517,9 +506,7 @@ function handleClearingDelete(editor: Editor, specs: SpecMap): boolean {
   if (selection.empty) return false;
 
   const comp = enclosingComponent(editor, selection.from, selection.to);
-  if (!comp) return false;
-  const spec = specs.get(comp.node.attrs.name as string);
-  if (!spec || spec.childComponent) return false;
+  if (!comp || specs.get(comp.node.type.name)!.childComponent) return false;
   if (comp.node.textContent.length === 0) return false;
 
   const start = comp.pos;
@@ -587,7 +574,7 @@ function deleteEmptyComponent(editor: Editor, dir: 1 | -1): boolean {
   return true;
 }
 
-function unwrapEmptyEntry(editor: Editor, specs: SpecMap): boolean {
+function unwrapEmptyEntry(editor: Editor): boolean {
   const { state } = editor;
   const { $from, empty } = state.selection;
   if (!empty || $from.parentOffset > 0 || $from.parent.content.size > 0) return false;
@@ -596,17 +583,16 @@ function unwrapEmptyEntry(editor: Editor, specs: SpecMap): boolean {
   const depth = region - 1;
   const entry = $from.node(depth);
   const parent = $from.node(depth - 1);
-  if (entry.type.name !== COMPONENT_NODE || parent.type.name !== COMPONENT_NODE) return false;
+  if (!isComponent(entry.type) || !isComponent(parent.type)) return false;
 
-  const allowed = childNames(specs.get(parent.attrs.name as string));
   const children: PMNode[] = [];
-  let fits = true;
   entry.forEach((child) => {
-    if (child.type.name !== COMPONENT_NODE) return;
-    if (!allowed.includes(child.attrs.name as string)) fits = false;
-    children.push(child);
+    if (isComponent(child.type)) children.push(child);
   });
-  if (!fits || children.length === 0) return false;
+  const index = $from.index(depth - 1);
+  if (children.length === 0 || !parent.canReplace(index, index + 1, Fragment.from(children))) {
+    return false;
+  }
 
   const start = $from.before(depth);
   const tr = state.tr.replaceWith(start, start + entry.nodeSize, children);
@@ -641,7 +627,7 @@ function handleUnitDelete(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean 
   if (!atEdge) return false;
   return (
     deleteEmptyComponent(editor, dir) ||
-    unwrapEmptyEntry(editor, specs) ||
+    unwrapEmptyEntry(editor) ||
     guardRegionBoundary(editor, dir) ||
     (dir === -1
       ? editor.commands.joinBackward() || editor.commands.selectNodeBackward()
@@ -692,7 +678,7 @@ function handleSelectScope(editor: Editor): boolean {
     candidates.push({ from: $from.start($from.depth), to: $from.end($from.depth) });
   }
   for (let depth = $from.depth; depth > 0; depth--) {
-    if ($from.node(depth).type.name === COMPONENT_NODE) {
+    if (isComponent($from.node(depth).type)) {
       const pos = $from.before(depth);
       candidates.push({ from: pos, to: pos + $from.node(depth).nodeSize, node: pos });
     }
@@ -768,9 +754,9 @@ function handleBoundaryArrow(editor: Editor, dir: 1 | -1, axis: "v" | "h"): bool
       selectNode(editor, dir === -1 ? $from.before(depth) - sibling.nodeSize : $from.after(depth));
       return true;
     }
-    let structural = sibling.type.name === COMPONENT_NODE;
+    let structural = isComponent(sibling.type);
     for (let d = depth; !structural && d <= $from.depth; d++) {
-      structural = $from.node(d).type.name === COMPONENT_NODE;
+      structural = isComponent($from.node(d).type);
     }
     if (!structural) return false;
     const boundary = dir === -1 ? $from.before(depth) : $from.after(depth);
@@ -817,13 +803,13 @@ export function componentKeymap(specs: SpecMap): Extension[] {
             handleClearingDelete(editor, specs) ||
             deleteAcrossRegions(editor) ||
             deleteEmptyComponent(editor, -1) ||
-            unwrapEmptyEntry(editor, specs) ||
+            unwrapEmptyEntry(editor) ||
             guardRegionBoundary(editor, -1),
           Delete: ({ editor }) =>
             handleClearingDelete(editor, specs) ||
             deleteAcrossRegions(editor) ||
             deleteEmptyComponent(editor, 1) ||
-            unwrapEmptyEntry(editor, specs) ||
+            unwrapEmptyEntry(editor) ||
             guardRegionBoundary(editor, 1),
           Escape: ({ editor }) => handleEscape(editor),
           "Mod-a": ({ editor }) => handleSelectScope(editor),

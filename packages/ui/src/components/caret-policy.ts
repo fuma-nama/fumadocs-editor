@@ -4,7 +4,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
 export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";
@@ -30,7 +30,7 @@ function componentAt(
   // posAtDOM of the wrapper resolves just inside the node
   const pos = inside - 1;
   const node = view.state.doc.nodeAt(pos);
-  return node?.type.name === COMPONENT_NODE ? { node, pos } : null;
+  return node && isComponent(node.type) ? { node, pos } : null;
 }
 
 export const caretPolicy = Extension.create({
@@ -72,7 +72,7 @@ export const caretPolicy = Extension.create({
             const selection = view.state.selection;
             if (
               selection instanceof NodeSelection &&
-              (selection.node.type.name === COMPONENT_NODE || selection.node.isAtom)
+              (isComponent(selection.node.type) || selection.node.isAtom)
             ) {
               return true;
             }
@@ -118,7 +118,7 @@ export const caretPolicy = Extension.create({
             return true;
           },
           handleClickOn(view, pos, node, nodePos, _event, direct) {
-            if (!direct || node.type.name !== COMPONENT_NODE) return false;
+            if (!direct || !isComponent(node.type)) return false;
             if (node.childCount === 0) {
               view.dispatch(
                 view.state.tr

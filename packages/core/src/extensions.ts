@@ -1,7 +1,7 @@
 export { editorExtensions } from "./extensions/kit";
 export type { EditorExtensionsOptions } from "./extensions/kit";
 export type { MdxAttribute } from "./extensions/mdx-nodes";
-export { MdxComponent, MdxInlineRegion, MdxBlockRegion } from "./components/nodes";
+export { MdxInlineRegion, MdxBlockRegion, componentNodeTypes } from "./components/nodes";
 export { MathInline, MathBlock } from "./syntax/math/nodes";
 export { MATH_INLINE_NODE, MATH_BLOCK_NODE } from "./syntax/math";
 export { createSyntax } from "./components/spec";
