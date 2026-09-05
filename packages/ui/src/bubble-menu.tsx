@@ -54,15 +54,18 @@ const border = tokens.border;
 
 const styles = stylex.create({
   /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls, scrolls sideways on a phone, and stays under the popovers it
-   * opens. It glides to a new position (the plugin writes `top`/`left`),
-   * e.g. after a block is dragged; while hidden and re-shown the inline
-   * override lands it. */
+   * controls and stays under the popovers it opens. A grid of max-content
+   * columns, not a flex row: a flex item shrinks to its content, and on a
+   * phone the row scrolls sideways instead. It glides to a new position
+   * (the plugin writes `top`/`left`), e.g. after a block is dragged; while
+   * hidden and re-shown the inline override lands it. */
   bubble: {
     zIndex: 40,
     minWidth: 0,
     maxWidth: "calc(100vw - 1rem)",
-    display: "flex",
+    display: "grid",
+    gridAutoFlow: "column",
+    gridAutoColumns: "max-content",
     alignItems: "center",
     gap: "0.125rem",
     overflowX: "auto",
