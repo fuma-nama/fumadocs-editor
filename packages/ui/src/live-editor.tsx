@@ -165,8 +165,8 @@ export function LiveEditor({
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
-  // touch: the joystick and insert button sit beside the block, and the
-  // bubble drops below the selection
+  // touch: the joystick sits beside the block, and the bubble drops below
+  // the caret
   const touch = useMediaQuery("(pointer: coarse)");
 
   // insert animations arm one painted frame after the editor shows: the

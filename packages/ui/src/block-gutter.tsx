@@ -83,11 +83,12 @@ function controlsSlot(dom: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Touch chrome beside the caret's block: its joystick and an insert button,
- * in the spot the block reserves for them, else in the gutter left of its
- * first line (a nested block's gutter would be its parent's chrome). The
- * joystick lives here, not in the bubble: from a toolbar a drag lifted the
- * ghost far from the finger while the line sat under it.
+ * Touch chrome beside the caret's block: its joystick, and on an empty line
+ * an insert button that fills it as `/` would. In the spot the block
+ * reserves for them, else in the gutter left of its first line (a nested
+ * block's gutter would be its parent's chrome). The joystick lives here,
+ * not in the bubble: from a toolbar a drag lifted the ghost far from the
+ * finger while the line sat under it.
  */
 export function BlockGutter({
   editor,
@@ -102,14 +103,18 @@ export function BlockGutter({
   media?: MediaProvider;
   math?: boolean;
 }) {
-  const target = useEditorState({
+  const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
       const { active, block } = bubbleState(current.state, specs);
-      return active?.pos ?? block?.pos ?? null;
+      const target = active?.pos ?? block?.pos;
+      if (target == null) return null;
+      const node = current.state.doc.nodeAt(target)!;
+      return { target, empty: node.isTextblock && !node.type.spec.code && node.content.size === 0 };
     },
   });
+  const target = state?.target;
   const [insertOpen, setInsertOpen] = useState(false);
   const { anchorRef, container } = useEditorPortal();
   const ref = useRef<HTMLDivElement>(null);
@@ -144,7 +149,7 @@ export function BlockGutter({
     return () => observer.disconnect();
   }, [editor, target]);
 
-  if (target == null) return null;
+  if (state == null) return null;
 
   const items = insertItems(components, media, math);
   let group = "";
@@ -157,48 +162,56 @@ export function BlockGutter({
       }}
       {...stylex.props(styles.gutter)}
     >
-      <DragHandle editor={editor} pos={target} specs={specs} look={styles.gutterButton} size={18} />
-      <Popover.Root open={insertOpen} onOpenChange={setInsertOpen}>
-        <Popover.Trigger aria-label="Insert" className={gutterIconClass}>
-          <Plus size={18} />
-        </Popover.Trigger>
-        <Popover.Portal container={container}>
-          <Popover.Positioner
-            positionMethod="fixed"
-            side="bottom"
-            sideOffset={4}
-            align="start"
-            {...stylex.props(chrome.layer)}
-          >
-            <Popover.Popup
-              data-fde-popup=""
-              initialFocus={false}
-              finalFocus={false}
-              {...stylex.props(chrome.popup, styles.insertPopup)}
+      <DragHandle
+        editor={editor}
+        pos={state.target}
+        specs={specs}
+        look={styles.gutterButton}
+        size={18}
+      />
+      {state.empty && (
+        <Popover.Root open={insertOpen} onOpenChange={setInsertOpen}>
+          <Popover.Trigger aria-label="Insert" className={gutterIconClass}>
+            <Plus size={18} />
+          </Popover.Trigger>
+          <Popover.Portal container={container}>
+            <Popover.Positioner
+              positionMethod="fixed"
+              side="bottom"
+              sideOffset={4}
+              align="start"
+              {...stylex.props(chrome.layer)}
             >
-              {items.map((item) => {
-                const heading = item.group !== group;
-                group = item.group;
-                return (
-                  <Fragment key={item.title}>
-                    {heading && <p {...stylex.props(styles.group)}>{group}</p>}
-                    <Popover.Close
-                      {...stylex.props(chrome.button, chrome.item, styles.item)}
-                      onClick={() => {
-                        const { from } = editor.state.selection;
-                        item.run(editor, { from, to: from });
-                      }}
-                    >
-                      <span {...stylex.props(chrome.itemIcon)}>{item.icon}</span>
-                      <span>{item.title}</span>
-                    </Popover.Close>
-                  </Fragment>
-                );
-              })}
-            </Popover.Popup>
-          </Popover.Positioner>
-        </Popover.Portal>
-      </Popover.Root>
+              <Popover.Popup
+                data-fde-popup=""
+                initialFocus={false}
+                finalFocus={false}
+                {...stylex.props(chrome.popup, styles.insertPopup)}
+              >
+                {items.map((item) => {
+                  const heading = item.group !== group;
+                  group = item.group;
+                  return (
+                    <Fragment key={item.title}>
+                      {heading && <p {...stylex.props(styles.group)}>{group}</p>}
+                      <Popover.Close
+                        {...stylex.props(chrome.button, chrome.item, styles.item)}
+                        onClick={() => {
+                          const from = state.target + 1;
+                          item.run(editor, { from, to: from });
+                        }}
+                      >
+                        <span {...stylex.props(chrome.itemIcon)}>{item.icon}</span>
+                        <span>{item.title}</span>
+                      </Popover.Close>
+                    </Fragment>
+                  );
+                })}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
+      )}
     </div>
   );
 }
