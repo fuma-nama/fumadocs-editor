@@ -28,11 +28,13 @@ import {
   ListOrdered,
   ListTodo,
   Pilcrow,
+  Redo2,
   SquareCode,
   Strikethrough,
   Table2,
   TextQuote,
   Trash2,
+  Undo2,
   Upload,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
@@ -203,8 +205,7 @@ export function activeBlock(editor: Editor): string {
 
 /**
  * The element type menu: every block a selection can become, with the
- * heading's anchor and TOC options under it. The bubble and the touch bar
- * share it; each supplies its own trigger styling and portal container.
+ * heading's anchor and TOC options under it.
  */
 export function BlockTypePicker({
   editor,
@@ -346,11 +347,13 @@ function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): bool
 function MarkButton({
   label,
   active,
+  disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -360,6 +363,7 @@ function MarkButton({
       aria-label={label}
       {...stylex.props(chrome.button, chrome.iconButton)}
       data-active={active || undefined}
+      disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
@@ -662,6 +666,10 @@ export function EditorBubble({
         // caret on every keystroke
         atomAttrs: bubble.atom ? (current.state.doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
+        // touch only: two can() trial runs per transaction, for buttons a
+        // keyboard's shortcuts replace
+        canUndo: touch && current.can().undo(),
+        canRedo: touch && current.can().redo(),
       };
     },
   });
@@ -822,6 +830,17 @@ export function EditorBubble({
             iconCls={iconClass}
             touch={touch}
           />
+        </>
+      )}
+      {state && touch && (
+        <>
+          <span {...stylex.props(chrome.divider)} />
+          <MarkButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>
+            <Undo2 size={15} />
+          </MarkButton>
+          <MarkButton label="Redo" disabled={!state.canRedo} onClick={() => run((c) => c.redo())}>
+            <Redo2 size={15} />
+          </MarkButton>
         </>
       )}
     </BubbleMenu>
