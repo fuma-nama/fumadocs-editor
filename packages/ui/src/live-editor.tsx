@@ -193,15 +193,7 @@ export function LiveEditor({
       <EditorContent editor={editor} />
       {editor && editable && (
         <>
-          {touch && (
-            <BlockGutter
-              editor={editor}
-              components={components}
-              specs={specs}
-              media={media}
-              math={syntax?.math}
-            />
-          )}
+          {touch && <BlockGutter editor={editor} specs={specs} />}
           <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
         </>
       )}
