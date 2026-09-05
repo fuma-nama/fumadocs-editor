@@ -7,10 +7,18 @@ import {
   type EditorState,
   type Transaction,
 } from "@tiptap/pm/state";
-import type { Node as PMNode, Slice } from "@tiptap/pm/model";
+import { Fragment, type Node as PMNode, type ResolvedPos, type Slice } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import { BLOCK_REGION_NODE, COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
-import { FRONTMATTER_NODE, childNames, childOnlyNames, type SpecMap } from "./keymap";
+import {
+  FRONTMATTER_NODE,
+  childNames,
+  childOnlyNames,
+  deleteBlocks,
+  movableIn,
+  type BlockRange,
+  type SpecMap,
+} from "./keymap";
 import { contentClass } from "../styles/content";
 
 type Fix =
@@ -205,32 +213,49 @@ function draggedBlock(slice: Slice | undefined, specs: SpecMap): PMNode | null {
  * own slot is no target: over itself, nothing happens. Null when no valid
  * spot exists.
  */
-function dropTarget(
-  view: EditorView,
-  x: number,
-  y: number,
-  dragged: PMNode,
-  source: { from: number; to: number } | null,
+/** the specs' say on components: a component takes only the children it names, other containers no child-only row */
+function fits(content: Fragment, parent: PMNode, specs: SpecMap, childOnly: Set<string>): boolean {
+  const names =
+    parent.type.name === COMPONENT_NODE ? childNames(specs.get(parent.attrs.name as string)) : null;
+  let ok = true;
+  content.forEach((child) => {
+    if (child.type.name !== COMPONENT_NODE) {
+      if (names) ok = false;
+      return;
+    }
+    const name = child.attrs.name as string;
+    if (names ? !names.includes(name) : childOnly.has(name)) ok = false;
+  });
+  return ok;
+}
+
+export function dropSlot(
+  state: EditorState,
+  $pos: ResolvedPos,
+  dragged: Fragment,
+  source: BlockRange | null,
   specs: SpecMap,
   childOnly: Set<string>,
+  before: (pos: number) => boolean,
 ): number | null {
-  const component = dragged.type.name === COMPONENT_NODE;
-  const name = dragged.attrs.name as string;
-  const coords = view.posAtCoords({ left: x, top: y });
-  if (!coords) return null;
-  const $pos = view.state.doc.resolve(coords.pos);
+  const first = dragged.firstChild;
+  if (!first) return null;
+  if (first.isInline) {
+    if (source && $pos.pos >= source.from && $pos.pos <= source.to) return null;
+    const index = $pos.index();
+    return movableIn(first, $pos.parent) && $pos.parent.canReplace(index, index, dragged)
+      ? $pos.pos
+      : null;
+  }
 
   let top = $pos.depth;
-  for (let d = 1; d <= $pos.depth; d++) if ($pos.before(d) === source?.from) top = d - 1;
+  for (let d = 1; d <= $pos.depth; d++) {
+    if (source && $pos.before(d) >= source.from && $pos.after(d) <= source.to) top = d - 1;
+  }
 
   for (let depth = top; depth >= 0; depth--) {
     const parent = $pos.node(depth);
-    if (parent.isTextblock) continue;
-    const allowed =
-      parent.type.name === COMPONENT_NODE
-        ? component && childNames(specs.get(parent.attrs.name as string)).includes(name)
-        : !component || !childOnly.has(name);
-    if (!allowed) continue;
+    if (!movableIn(first, parent) || !fits(dragged, parent, specs, childOnly)) continue;
 
     let insert: number;
     if (depth === $pos.depth) {
@@ -238,24 +263,41 @@ function dropTarget(
     } else {
       const child = $pos.node(depth + 1);
       if (child.type.name === INLINE_REGION_NODE || child.type.name === BLOCK_REGION_NODE) {
-        insert = $pos.after(depth + 1);
+        insert = $pos.after(depth + 1); // never split a component's regions
       } else {
-        const dom = view.nodeDOM($pos.before(depth + 1));
-        const rect = dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
-        const before = rect
-          ? y < rect.top + rect.height / 2
-          : $pos.pos <= ($pos.start(depth + 1) + $pos.end(depth + 1)) / 2;
-        insert = before ? $pos.before(depth + 1) : $pos.after(depth + 1);
+        insert = before($pos.before(depth + 1)) ? $pos.before(depth + 1) : $pos.after(depth + 1);
       }
     }
 
-    if (insert === source?.from || insert === source?.to) return null;
-    const $insert = view.state.doc.resolve(insert);
+    if (source && insert >= source.from && insert <= source.to) return null;
+    const $insert = state.doc.resolve(insert);
     if ($insert.nodeAfter?.type.name === FRONTMATTER_NODE) return null; // pinned first
     const index = $insert.index();
-    return $insert.parent.canReplaceWith(index, index, dragged.type) ? insert : null;
+    if ($insert.parent.canReplace(index, index, dragged)) return insert;
   }
   return null;
+}
+
+function dropTarget(
+  view: EditorView,
+  x: number,
+  y: number,
+  dragged: Fragment,
+  source: BlockRange | null,
+  specs: SpecMap,
+  childOnly: Set<string>,
+): number | null {
+  const coords = view.posAtCoords({ left: x, top: y });
+  if (!coords) return null;
+  const { doc } = view.state;
+  return dropSlot(view.state, doc.resolve(coords.pos), dragged, source, specs, childOnly, (pos) => {
+    const dom = view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) {
+      const rect = dom.getBoundingClientRect();
+      return y < rect.top + rect.height / 2;
+    }
+    return coords.pos <= pos + doc.nodeAt(pos)!.nodeSize / 2;
+  });
 }
 
 let line: HTMLElement | null = null;
@@ -289,6 +331,21 @@ function hideIndicator() {
 
 function showIndicator(view: EditorView, target: number) {
   const $pos = view.state.doc.resolve(target);
+  const root = overlay(view);
+  if (!line) {
+    line = document.createElement("div");
+    line.className = contentClass.dropIndicator;
+    root.appendChild(line);
+  }
+  if ($pos.parent.isTextblock) {
+    // an inline drop: a caret-shaped bar at the text position
+    const caret = view.coordsAtPos(target);
+    const at = local(root, caret.left - 1.5, caret.top);
+    line.style.transform = `translate(${at.left}px, ${at.top}px)`;
+    line.style.width = "3px";
+    line.style.height = `${caret.bottom - caret.top}px`;
+    return;
+  }
   const { nodeAfter, nodeBefore } = $pos;
   const next = nodeAfter ? view.nodeDOM(target) : null;
   const prev = nodeBefore ? view.nodeDOM(target - nodeBefore.nodeSize) : null;
@@ -297,21 +354,16 @@ function showIndicator(view: EditorView, target: number) {
   const rect = ref.getBoundingClientRect();
   let y = next ? rect.top : rect.bottom;
   if (next && prev instanceof HTMLElement) y = (prev.getBoundingClientRect().bottom + y) / 2;
-  const root = overlay(view);
-  if (!line) {
-    line = document.createElement("div");
-    line.className = contentClass.dropIndicator;
-    root.appendChild(line);
-  }
   const at = local(root, rect.left, y - 1.5);
   line.style.transform = `translate(${at.left}px, ${at.top}px)`;
   line.style.width = `${rect.width}px`;
+  line.style.height = "";
 }
 
 function hover(
   view: EditorView,
-  dragged: PMNode,
-  source: { from: number; to: number } | null,
+  dragged: Fragment,
+  source: BlockRange | null,
   x: number,
   y: number,
   specs: SpecMap,
@@ -323,13 +375,59 @@ function hover(
   return target;
 }
 
-function lift(root: HTMLElement, dom: HTMLElement, x: number, y: number) {
-  const rect = dom.getBoundingClientRect();
+/** a copy of the run for the ghost: the text of an inline run, the blocks' clones stacked */
+function ghostOf(
+  view: EditorView,
+  from: number,
+  to: number,
+): { el: HTMLElement; rect: DOMRect } | null {
+  const $from = view.state.doc.resolve(from);
+  if ($from.parent.inlineContent) {
+    const start = view.domAtPos(from);
+    const end = view.domAtPos(to);
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    const el = document.createElement("span");
+    el.appendChild(range.cloneContents());
+    const block = view.nodeDOM($from.before());
+    if (block instanceof HTMLElement) el.style.font = getComputedStyle(block).font;
+    return { el, rect: range.getBoundingClientRect() };
+  }
+  const doms: HTMLElement[] = [];
+  const rects: DOMRect[] = [];
+  for (let pos = from; pos < to; pos += view.state.doc.nodeAt(pos)!.nodeSize) {
+    const dom = view.nodeDOM(pos);
+    if (!(dom instanceof HTMLElement)) return null;
+    doms.push(dom);
+    rects.push(dom.getBoundingClientRect());
+  }
+  const left = Math.min(...rects.map((r) => r.left));
+  const right = Math.max(...rects.map((r) => r.right));
+  const rect = new DOMRect(
+    left,
+    rects[0].top,
+    right - left,
+    rects[rects.length - 1].bottom - rects[0].top,
+  );
+  if (doms.length === 1) return { el: doms[0].cloneNode(true) as HTMLElement, rect };
+  const el = document.createElement("div");
+  el.style.display = "flex";
+  el.style.flexDirection = "column";
+  el.style.gap = `${rects[1].top - rects[0].bottom}px`;
+  for (const dom of doms) {
+    const copy = dom.cloneNode(true) as HTMLElement;
+    copy.style.margin = "0";
+    el.appendChild(copy);
+  }
+  return { el, rect };
+}
+
+function lift(root: HTMLElement, ghost: HTMLElement, rect: DOMRect, x: number, y: number) {
   const at = local(root, rect.left, rect.top);
   const base = local(root, x, y);
-  const ghost = dom.cloneNode(true) as HTMLElement;
   ghost.className += ` ${contentClass.dragGhost}`;
-  ghost.style.cssText = `position:absolute;left:${at.left}px;top:${at.top}px;width:${rect.width}px;box-sizing:border-box;margin:0;z-index:49;pointer-events:none`;
+  ghost.style.cssText += `;position:absolute;left:${at.left}px;top:${at.top}px;width:${rect.width}px;box-sizing:border-box;margin:0;z-index:49;pointer-events:none`;
   root.appendChild(ghost);
   return {
     move(x: number, y: number) {
@@ -340,19 +438,19 @@ function lift(root: HTMLElement, dom: HTMLElement, x: number, y: number) {
   };
 }
 
-function placeDrop(
+export function placeDrop(
   view: EditorView,
-  node: PMNode,
+  content: Fragment,
   insert: number,
-  source: { from: number; to: number } | null,
+  source: BlockRange | null,
 ) {
   const { selection } = view.state;
   const tr = view.state.tr;
-  if (source) tr.delete(source.from, source.to);
+  if (source) deleteBlocks(tr, source);
   // an insert point inside the deleted source maps to the deletion
   // boundary, so dropping into itself is a no-op
   const mapped = tr.mapping.map(insert);
-  tr.insert(mapped, node);
+  tr.insert(mapped, content);
   const shift =
     source && selection.from >= source.from && selection.to <= source.to
       ? mapped - source.from
@@ -363,7 +461,7 @@ function placeDrop(
     tr.setSelection(NodeSelection.create(tr.doc, selection.from + shift));
   } else {
     const text = Selection.findFrom(tr.doc.resolve(mapped + 1), 1, true);
-    if (text && text.from < mapped + node.nodeSize) tr.setSelection(text);
+    if (text && text.from < mapped + content.size) tr.setSelection(text);
   }
   view.dispatch(tr.scrollIntoView());
 }
@@ -382,18 +480,33 @@ const SLOP = 3;
  */
 export function startPointerDrag(
   view: EditorView,
-  pos: number,
+  range: BlockRange,
   handle: HTMLElement,
   event: PointerEvent,
   specs: SpecMap,
   tilt: (dx: number, dy: number) => void,
 ): void {
-  const node = view.state.doc.nodeAt(pos);
-  const dom = view.nodeDOM(pos);
-  if (!node || !(dom instanceof HTMLElement)) return;
+  const { from } = range;
+  if (range.to <= from) return;
+  const $from = view.state.doc.resolve(from);
+  const inline = $from.parent.inlineContent;
+  const count = inline ? 0 : view.state.doc.resolve(range.to).index() - $from.index();
+  const shape = ghostOf(view, from, range.to);
+  if (!shape) return;
+  const content = view.state.doc.slice(from, range.to).content;
   const childOnly = childOnlyNames(specs.values());
   const viewport = window.visualViewport;
-  const source = { from: pos, to: pos + node.nodeSize };
+  const source: BlockRange = { from, to: range.to };
+  // the run as it stands: a composition committing mid-drag rewrites a
+  // block in place, so for blocks the count is the guide, not the sizes
+  const extent = () => {
+    const { doc } = view.state;
+    if (range.to > doc.content.size) return null;
+    if (inline) return range.to;
+    const $now = doc.resolve(from);
+    const end = $now.index() + count;
+    return end <= $now.parent.childCount ? $now.posAtIndex(end) : null;
+  };
   const { pointerId, clientX: startX, clientY: startY } = event;
   let x = startX;
   let y = startY;
@@ -402,10 +515,10 @@ export function startPointerDrag(
   let scrolling = 0;
 
   const follow = () => {
-    // the block's extent as it stands: a composition committing mid-drag
-    // rewrites it in place, so its identity is no guide, its position is
-    source.to = pos + (view.state.doc.nodeAt(pos)?.nodeSize ?? node.nodeSize);
-    target = hover(view, node, source, x, y, specs, childOnly);
+    const to = extent();
+    if (to == null) return;
+    source.to = to;
+    target = hover(view, content, source, x, y, specs, childOnly);
     ghost!.move(x, y);
   };
   const scroll = () => {
@@ -424,7 +537,7 @@ export function startPointerDrag(
     tilt(x - startX, y - startY);
     if (!ghost) {
       if (Math.abs(x - startX) < SLOP && Math.abs(y - startY) < SLOP) return;
-      ghost = lift(overlay(view), dom, x, y);
+      ghost = lift(overlay(view), shape.el, shape.rect, x, y);
       // a finger's drag leaves the keyboard: the page shows under the
       // block, and the IME commits the word it was composing in it (the
       // browser fights a block moving under an open composition)
@@ -444,9 +557,9 @@ export function startPointerDrag(
     tilt(0, 0);
     if (!ghost) return;
     ghost.remove();
-    const current = view.state.doc.nodeAt(pos);
-    if (e.type === "pointerup" && target != null && current?.type === node.type) {
-      placeDrop(view, current, target, { from: pos, to: pos + current.nodeSize });
+    const to = extent();
+    if (e.type === "pointerup" && target != null && to != null) {
+      placeDrop(view, view.state.doc.slice(from, to).content, target, { from, to });
       // a finger's drop must not raise the keyboard
       if (e.pointerType === "mouse") view.focus();
     }
@@ -505,17 +618,18 @@ export function structureGuard(specs: SpecMap): Extension {
             handleDrop(view, event, slice) {
               const dragged = draggedBlock(slice, specs);
               if (!dragged) return false;
+              const content = Fragment.from(dragged);
               const insert = dropTarget(
                 view,
                 event.clientX,
                 event.clientY,
-                dragged,
+                content,
                 null,
                 specs,
                 childOnly,
               );
               if (insert == null) return true; // nowhere valid: swallow the drop
-              placeDrop(view, dragged, insert, null);
+              placeDrop(view, content, insert, null);
               view.focus();
               return true;
             },

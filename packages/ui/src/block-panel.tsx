@@ -10,20 +10,27 @@ import { Popover } from "@base-ui/react/popover";
 import {
   ArrowDown,
   ArrowUp,
+  BoxSelect,
   ChevronDown,
   IndentDecrease,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { COMPONENT_NODE } from "@fumadocs-editor/core";
 import type { UiComponentSpec } from "./components/spec";
 import {
   childInsertContext,
+  deleteBlocks,
   entryParentFolder,
   entryToggleTarget,
   focusAt,
-  moveBlockAt,
+  moveBlocks,
   outdentEntry,
+  parentBlock,
+  selectNode,
   toggleEntryType,
+  type BlockRange,
 } from "./components/keymap";
 import { PropControl } from "./attributes-panel";
 import { setComponentAttributes } from "./components/attributes";
@@ -96,7 +103,7 @@ export function BlockMenu({
   editor,
   specs,
   active,
-  block,
+  range,
   open,
   onOpenChange,
   container,
@@ -110,7 +117,7 @@ export function BlockMenu({
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   active: ActiveComponent | null;
-  block: { pos: number } | null;
+  range: BlockRange | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: HTMLElement | undefined;
@@ -123,7 +130,7 @@ export function BlockMenu({
   compact?: boolean;
 }) {
   const spec = active ? specs.get(active.name) : undefined;
-  const pos = active ? active.pos : block?.pos;
+  const pos = active ? active.pos : range?.from;
   if (pos == null) return null;
   const label = spec ? (spec.label ?? spec.name) : null;
   const close = () => onOpenChange(false);
@@ -161,7 +168,7 @@ export function BlockMenu({
             {active && spec ? (
               <BlockPanel editor={editor} specs={specs} active={active} onDone={close} />
             ) : (
-              <BlockActions editor={editor} pos={pos} onDone={close} />
+              range && <BlockActions editor={editor} range={range} onDone={close} />
             )}
           </Popover.Popup>
         </Popover.Positioner>
@@ -264,23 +271,39 @@ function BlockPanel({
           <span>Move out of {folder.label ?? folder.name}</span>
         </button>
       )}
-      <BlockActions editor={editor} pos={active.pos} onDone={onDone} />
+      <BlockActions
+        editor={editor}
+        range={() => {
+          const node = editor.state.doc.nodeAt(active.pos);
+          return node && { from: active.pos, to: active.pos + node.nodeSize };
+        }}
+        onDone={onDone}
+      />
     </>
   );
 }
 
+/** "bulletList" reads as "bullet list"; a component goes by its name */
+function blockLabel(node: PMNode): string {
+  if (node.type.name === COMPONENT_NODE) return node.attrs.name as string;
+  return node.type.name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
+}
+
 export function BlockActions({
   editor,
-  pos: at,
+  range: at,
   onDone,
   itemLook,
 }: {
   editor: Editor;
-  pos: number | (() => number | undefined);
+  /** a node view passes a getter: an edit above it shifts the range without a re-render */
+  range: BlockRange | (() => BlockRange | null | undefined);
   onDone: () => void;
   itemLook?: stylex.StyleXStyles;
 }) {
-  const pos = () => (typeof at === "function" ? at() : at);
+  const range = () => (typeof at === "function" ? at() : at);
+  const current = range();
+  const parent = current ? parentBlock(editor.state.doc, current.from) : null;
   return (
     <>
       {(
@@ -294,8 +317,8 @@ export function BlockActions({
           type="button"
           {...stylex.props(chrome.button, chrome.item, itemLook)}
           onClick={() => {
-            const from = pos();
-            if (from != null && moveBlockAt(editor, from, dir)) onDone();
+            const blocks = range();
+            if (blocks && moveBlocks(editor, blocks, dir)) onDone();
             editor.view.focus();
           }}
         >
@@ -303,14 +326,29 @@ export function BlockActions({
           <span>{label}</span>
         </button>
       ))}
+      {parent && (
+        <button
+          type="button"
+          {...stylex.props(chrome.button, chrome.item, itemLook)}
+          onClick={() => {
+            const blocks = range();
+            const target = blocks && parentBlock(editor.state.doc, blocks.from);
+            if (target) selectNode(editor, target.from);
+            onDone();
+            editor.view.focus();
+          }}
+        >
+          <BoxSelect size={13} {...stylex.props(styles.actionIcon)} />
+          <span>Select {blockLabel(parent.node)}</span>
+        </button>
+      )}
       <button
         type="button"
         {...stylex.props(chrome.button, chrome.item, styles.danger, itemLook)}
         onClick={() => {
-          const from = pos();
-          const current = from != null ? editor.state.doc.nodeAt(from) : null;
-          if (from == null || !current) return;
-          editor.commands.deleteRange({ from, to: from + current.nodeSize });
+          const blocks = range();
+          if (!blocks) return;
+          editor.view.dispatch(deleteBlocks(editor.state.tr, blocks).scrollIntoView());
           onDone();
           editor.view.focus();
         }}

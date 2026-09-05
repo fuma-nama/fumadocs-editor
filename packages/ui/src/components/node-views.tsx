@@ -19,8 +19,8 @@ import type { UiComponentSpec } from "./spec";
 import { FallbackCard, RenderBoundary } from "../static-mdx";
 import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
 import { caretPolicy } from "./caret-policy";
-import { componentKeymap } from "./keymap";
-import { nodeViewOptions } from "./node-view-options";
+import { componentKeymap, type BlockRange } from "./keymap";
+import { isRinged, nodeViewOptions } from "./node-view-options";
 import { structureGuard } from "./structure";
 import { content, contentClass } from "../styles/content";
 
@@ -32,16 +32,11 @@ const hole = <NodeViewContent {...stylex.props(content.hole)} data-fde-hole="" /
 
 function makeComponentView(specs: SpecMap) {
   return function ComponentNodeView(props: NodeViewProps) {
-    const { node, editor, getPos, updateAttributes, selected } = props;
+    const { node, updateAttributes, selected } = props;
     const name = node.attrs.name as string | null;
     const spec = name ? specs.get(name) : undefined;
     const attributes = (node.attrs.attributes ?? []) as MdxAttribute[];
-    // `selected` is true for every node view the selection covers; ring only
-    // the node that is itself node-selected, or nested children stack rings
-    const ringed =
-      selected &&
-      editor.state.selection instanceof NodeSelection &&
-      editor.state.selection.from === (typeof getPos === "function" ? getPos() : -1);
+    const ringed = isRinged(props);
 
     if (!spec) {
       return (
@@ -185,11 +180,12 @@ const activeComponent = ExtensionBase.create({
   },
 });
 
-const liftKey = new PluginKey<number | null>("fdeLift");
+const liftKey = new PluginKey<BlockRange | null>("fdeLift");
 
-export function setLifted(editor: Editor, pos: number | null): void {
-  if (liftKey.getState(editor.state) === pos) return;
-  editor.view.dispatch(editor.state.tr.setMeta(liftKey, pos));
+export function setLifted(editor: Editor, range: BlockRange | null): void {
+  const lit = liftKey.getState(editor.state);
+  if (lit?.from === range?.from && lit?.to === range?.to) return;
+  editor.view.dispatch(editor.state.tr.setMeta(liftKey, range));
 }
 
 /**
@@ -201,25 +197,34 @@ const liftedBlock = ExtensionBase.create({
   name: "fdeLiftedBlock",
   addProseMirrorPlugins() {
     return [
-      new Plugin<number | null>({
+      new Plugin<BlockRange | null>({
         key: liftKey,
         state: {
           init: () => null,
-          apply(tr, pos) {
-            const meta = tr.getMeta(liftKey) as number | null | undefined;
+          apply(tr, range) {
+            const meta = tr.getMeta(liftKey) as BlockRange | null | undefined;
             if (meta !== undefined) return meta;
-            return tr.docChanged ? null : pos;
+            return tr.docChanged ? null : range;
           },
         },
         props: {
           decorations(state) {
-            const pos = liftKey.getState(state);
-            if (pos == null) return DecorationSet.empty;
-            const node = state.doc.nodeAt(pos);
-            if (!node) return DecorationSet.empty;
-            return DecorationSet.create(state.doc, [
-              Decoration.node(pos, pos + node.nodeSize, { class: contentClass.lifted }),
-            ]);
+            const range = liftKey.getState(state);
+            if (!range || range.to > state.doc.content.size) return DecorationSet.empty;
+            if (state.doc.resolve(range.from).parent.inlineContent) {
+              return DecorationSet.create(state.doc, [
+                Decoration.inline(range.from, range.to, { class: contentClass.lifted }),
+              ]);
+            }
+            const decorations: Decoration[] = [];
+            state.doc.nodesBetween(range.from, range.to, (node, pos) => {
+              if (pos < range.from) return true;
+              decorations.push(
+                Decoration.node(pos, pos + node.nodeSize, { class: contentClass.lifted }),
+              );
+              return false;
+            });
+            return DecorationSet.create(state.doc, decorations);
           },
         },
       }),

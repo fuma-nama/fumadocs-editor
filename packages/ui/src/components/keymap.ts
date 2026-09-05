@@ -1,6 +1,12 @@
 import { Extension, isMacOS, type Editor } from "@tiptap/core";
-import { NodeSelection, Selection, TextSelection, type EditorState } from "@tiptap/pm/state";
-import type { Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
+import {
+  NodeSelection,
+  Selection,
+  TextSelection,
+  type EditorState,
+  type Transaction,
+} from "@tiptap/pm/state";
+import type { Node as PMNode, NodeType, ResolvedPos } from "@tiptap/pm/model";
 import {
   BLOCK_REGION_NODE,
   COMPONENT_NODE,
@@ -77,29 +83,67 @@ export function focusAt(editor: Editor, pos: number): void {
   focusNear(editor, pos, 1);
 }
 
-function inlineRegionDepth($from: ResolvedPos): number {
+/** depth of the innermost ancestor whose type matches, or -1 */
+function ancestor($from: ResolvedPos, match: (type: NodeType) => boolean): number {
   for (let depth = $from.depth; depth > 0; depth--) {
-    if ($from.node(depth).type.name === INLINE_REGION_NODE) return depth;
+    if (match($from.node(depth).type)) return depth;
   }
   return -1;
 }
 
-function regionDepth($from: ResolvedPos): number {
-  for (let depth = $from.depth; depth > 0; depth--) {
-    const name = $from.node(depth).type.name;
-    if (name === INLINE_REGION_NODE || name === BLOCK_REGION_NODE) return depth;
-  }
-  return -1;
-}
+const isInlineRegion = (type: NodeType) => type.name === INLINE_REGION_NODE;
+const isRegion = (type: NodeType) => isInlineRegion(type) || type.name === BLOCK_REGION_NODE;
+const isComponent = (type: NodeType) => type.name === COMPONENT_NODE;
+/** TipTap's lists share the `list` group: their items are the blocks that move */
+export const isList = (type: NodeType): boolean => type.isInGroup("list");
+const isTable = (type: NodeType) => type.spec.tableRole === "table";
+
+const inlineRegionDepth = ($from: ResolvedPos) => ancestor($from, isInlineRegion);
+const regionDepth = ($from: ResolvedPos) => ancestor($from, isRegion);
+const componentDepth = ($from: ResolvedPos) => ancestor($from, isComponent);
 
 /** the YAML frontmatter atom: pinned first, so never moved or moved past */
 export const FRONTMATTER_NODE = "frontmatter";
 
-function componentDepth($from: ResolvedPos): number {
-  for (let depth = $from.depth; depth > 0; depth--) {
-    if ($from.node(depth).type.name === COMPONENT_NODE) return depth;
+// a nested list's parent is an item: it is a container for items, not a block
+export function movableIn(node: PMNode, parent: PMNode): boolean {
+  // an inline region backs an attribute string: text only
+  if (node.isInline) {
+    return parent.isTextblock && (node.isText || parent.type.name !== INLINE_REGION_NODE);
   }
-  return -1;
+  if (node.type.name === FRONTMATTER_NODE) return false;
+  const container = parent.type.name;
+  if (container === COMPONENT_NODE) return node.type.name === COMPONENT_NODE;
+  return container === "doc" || container === BLOCK_REGION_NODE || isList(parent.type);
+}
+
+/** a run of sibling blocks: `from` before the first, `to` after the last */
+export interface BlockRange {
+  from: number;
+  to: number;
+}
+
+export function parentBlock(doc: PMNode, pos: number): (BlockRange & { node: PMNode }) | null {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const node = $pos.node(depth);
+    if (movableIn(node, $pos.node(depth - 1))) {
+      return { from: $pos.before(depth), to: $pos.after(depth), node };
+    }
+  }
+  return null;
+}
+
+// `tr.delete` of a list's only item refills the list with an empty item, and
+// `deleteRange` would also eat a region: the emptied list goes explicitly
+export function deleteBlocks(tr: Transaction, range: BlockRange): Transaction {
+  let { from, to } = range;
+  for (let $from = tr.doc.resolve(from); $from.depth > 0; $from = tr.doc.resolve(from)) {
+    if (!isList($from.parent.type) || from !== $from.start() || to !== $from.end()) break;
+    from = $from.before();
+    to = $from.after();
+  }
+  return tr.delete(from, to);
 }
 
 function hasComponentChild(node: PMNode): boolean {
@@ -384,77 +428,87 @@ function navigateRegion(editor: Editor, dir: 1 | -1): boolean {
 
 function handleTab(editor: Editor, specs: SpecMap, dir: 1 | -1): boolean {
   const { $from } = editor.state.selection;
-  if ($from.parent.type.name === "codeBlock") {
+  if ($from.parent.type.spec.code) {
     return dir === 1 ? editor.commands.insertContent("  ") : true;
   }
   // lists and tables keep their own Tab handling; the guard extension swallows misses
-  if (editor.isActive("listItem") || editor.isActive("taskItem") || editor.isActive("table")) {
-    return false;
-  }
+  if (ancestor($from, (type) => isList(type) || isTable(type)) !== -1) return false;
   if (listEntryDepth($from, specs) !== -1) {
     return (dir === 1 ? toggleEntryType(editor, specs) : outdentEntry(editor, specs)) || true;
   }
   return navigateRegion(editor, dir);
 }
 
-export function moveBlockAt(editor: Editor, pos: number, dir: 1 | -1): boolean {
+export function moveBlocks(editor: Editor, range: BlockRange, dir: 1 | -1): boolean {
   const { state } = editor;
-  const node = state.doc.nodeAt(pos);
-  if (!node) return false;
-  const $pos = state.doc.resolve(pos);
-  const index = $pos.index();
-  const siblingIndex = index + dir;
-  if (siblingIndex < 0 || siblingIndex >= $pos.parent.childCount) return false;
-  const sibling = $pos.parent.child(siblingIndex);
-  const name = sibling.type.name;
-  if (name === INLINE_REGION_NODE || name === BLOCK_REGION_NODE || name === FRONTMATTER_NODE) {
-    return false;
+  const $from = state.doc.resolve(range.from);
+  const first = $from.nodeAfter;
+  if (!first) return false;
+  if (first.isInline) {
+    const block = parentBlock(state.doc, range.from);
+    return block ? moveBlocks(editor, block, dir) : false;
   }
+  const { parent } = $from;
+  const siblingIndex = dir === -1 ? $from.index() - 1 : state.doc.resolve(range.to).index();
+  if (siblingIndex < 0 || siblingIndex >= parent.childCount) return false;
+  const sibling = parent.child(siblingIndex);
+  if (isRegion(sibling.type) || sibling.type.name === FRONTMATTER_NODE) return false;
 
-  const end = pos + node.nodeSize;
-  const newStart = dir === -1 ? pos - sibling.nodeSize : pos + sibling.nodeSize;
-  const selection = state.selection;
-  const inside = selection.from >= pos && selection.to <= end;
-  const offset = selection.from - pos;
-
-  const tr = state.tr.delete(pos, end);
-  tr.insert(newStart, node);
-  if (selection instanceof NodeSelection && selection.from === pos) {
-    tr.setSelection(NodeSelection.create(tr.doc, newStart));
-  } else if (inside) {
-    tr.setSelection(TextSelection.create(tr.doc, newStart + offset));
+  const shift = dir === -1 ? -sibling.nodeSize : sibling.nodeSize;
+  const { selection } = state;
+  const inside = selection.from >= range.from && selection.to <= range.to;
+  const tr = state.tr.delete(range.from, range.to);
+  tr.insert(range.from + shift, state.doc.slice(range.from, range.to).content);
+  if (inside && selection instanceof NodeSelection) {
+    tr.setSelection(NodeSelection.create(tr.doc, selection.from + shift));
+  } else if (inside && selection instanceof TextSelection) {
+    tr.setSelection(TextSelection.create(tr.doc, selection.anchor + shift, selection.head + shift));
   }
   editor.view.dispatch(tr.scrollIntoView());
   return true;
 }
 
-export function handleBlock(selection: Selection): { pos: number; type: string } | null {
-  const { $from } = selection;
-  const pick = (node: PMNode, parent: PMNode, pos: number) => {
-    if (parent.type.name !== "doc" && parent.type.name !== BLOCK_REGION_NODE) return undefined;
-    const type = node.type.name;
-    return type === COMPONENT_NODE || type === FRONTMATTER_NODE ? null : { pos, type };
-  };
-  if (selection instanceof NodeSelection) {
-    const hit = pick(selection.node, $from.parent, $from.pos);
-    if (hit !== undefined) return hit;
+/** a block that moves as a unit: a component, or an item of its container */
+const isUnit = (node: PMNode, parent: PMNode) => isComponent(node.type) || movableIn(node, parent);
+
+/**
+ * What the joystick, ⋯ and Alt-Arrow serve. A caret: the innermost unit
+ * around it. A selection: what it covers at the deepest node holding all of
+ * it (a text range, or the whole children touched), widened to each parent
+ * whose entire content it covers, and settled on the last of those that is
+ * a unit (every item: the list; a component's whole body: still its blocks,
+ * since a region is no unit). No unit at all: the covered run itself.
+ */
+export function handleBlock(selection: Selection): BlockRange | null {
+  const { $from, $to, from, to } = selection;
+  if (selection.empty) {
+    for (let depth = $from.depth; depth > 0; depth--) {
+      if (isUnit($from.node(depth), $from.node(depth - 1))) {
+        return { from: $from.before(depth), to: $from.after(depth) };
+      }
+    }
+    return null;
   }
-  for (let depth = $from.depth; depth > 0; depth--) {
-    const hit = pick($from.node(depth), $from.node(depth - 1), $from.before(depth));
-    if (hit !== undefined) return hit;
+  let depth = $from.sharedDepth(to);
+  let run: BlockRange = $from.node(depth).inlineContent
+    ? { from, to }
+    : {
+        from: $from.depth > depth ? $from.before(depth + 1) : from,
+        to: $to.depth > depth ? $to.after(depth + 1) : to,
+      };
+  let result = run;
+  while (depth > 0 && run.from === $from.start(depth) && run.to === $from.end(depth)) {
+    const node = $from.node(depth);
+    run = { from: $from.before(depth), to: $from.after(depth) };
+    depth--;
+    if (isUnit(node, $from.node(depth))) result = run;
   }
-  return null;
+  return result;
 }
 
 function handleMove(editor: Editor, dir: 1 | -1): boolean {
-  const { selection } = editor.state;
-  if (selection instanceof NodeSelection && selection.node.type.name === COMPONENT_NODE) {
-    return moveBlockAt(editor, selection.from, dir);
-  }
-  const depth = componentDepth(selection.$from);
-  if (depth !== -1) return moveBlockAt(editor, selection.$from.before(depth), dir);
-  const block = handleBlock(selection);
-  return block ? moveBlockAt(editor, block.pos, dir) : false;
+  const block = handleBlock(editor.state.selection);
+  return block ? moveBlocks(editor, block, dir) : false;
 }
 
 function handleClearingDelete(editor: Editor, specs: SpecMap): boolean {
@@ -609,29 +663,18 @@ function guardRegionBoundary(editor: Editor, dir: 1 | -1): boolean {
 }
 
 function handleEscape(editor: Editor): boolean {
-  const { state } = editor;
-  const selection = state.selection;
-
-  if (selection instanceof NodeSelection) {
-    const $pos = state.doc.resolve(selection.from);
-    for (let depth = $pos.depth; depth > 0; depth--) {
-      if ($pos.node(depth).type.name === COMPONENT_NODE) {
-        selectNode(editor, $pos.before(depth));
-        return true;
-      }
-    }
-    return editor.commands.blur();
-  }
-
-  const depth = componentDepth(selection.$from);
-  if (depth !== -1) {
-    selectNode(editor, selection.$from.before(depth));
-    return true;
-  }
-  return editor.commands.blur();
+  const { selection, doc } = editor.state;
+  const block = handleBlock(selection);
+  if (!block) return editor.commands.blur();
+  const single = doc.nodeAt(block.from)!.nodeSize === block.to - block.from;
+  const selected = selection instanceof NodeSelection && selection.from === block.from;
+  const pos = single && !selected ? block.from : parentBlock(doc, block.from)?.from;
+  if (pos == null) return editor.commands.blur();
+  selectNode(editor, pos);
+  return true;
 }
 
-function selectNode(editor: Editor, pos: number): void {
+export function selectNode(editor: Editor, pos: number): void {
   const tr = editor.state.tr;
   tr.setSelection(NodeSelection.create(tr.doc, pos));
   editor.view.dispatch(tr.scrollIntoView());
@@ -645,7 +688,7 @@ function handleSelectScope(editor: Editor): boolean {
   const candidates: { from: number; to: number; node?: number }[] = [];
   const rd = regionDepth($from);
   if (rd !== -1) candidates.push({ from: $from.start(rd), to: $from.end(rd) });
-  else if ($from.parent.type.name === "codeBlock") {
+  else if ($from.parent.type.spec.code) {
     candidates.push({ from: $from.start($from.depth), to: $from.end($from.depth) });
   }
   for (let depth = $from.depth; depth > 0; depth--) {

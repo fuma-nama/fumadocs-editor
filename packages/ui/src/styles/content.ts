@@ -22,7 +22,8 @@ export const content = stylex.create({
     marginBottom: 0,
     marginInline: 0,
   },
-  atom: {
+  /** a node-selected block shows a ring; node views draw theirs from `isRinged` */
+  ring: {
     outline: {
       default: null,
       ":is(.ProseMirror-selectednode)": `2px solid ${tokens.ring}`,
@@ -191,6 +192,8 @@ export const content = stylex.create({
     fontSize: 14,
     lineHeight: "1.25rem",
     boxShadow: consts.shadowSm,
+    outline: { default: null, ":is([data-selected])": `2px solid ${tokens.ring}` },
+    outlineOffset: 2,
   },
   codeHeader: {
     boxSizing: "border-box",
@@ -390,35 +393,35 @@ export const content = stylex.create({
 const cls = (...styles: stylex.CompiledStyles[]) => stylex.props(...styles).className!;
 
 const HEADING = [
-  cls(content.block, content.heading, content.h1),
-  cls(content.block, content.heading, content.h2),
-  cls(content.block, content.heading, content.h3),
-  cls(content.block, content.heading, content.h4),
+  cls(content.block, content.heading, content.ring, content.h1),
+  cls(content.block, content.heading, content.ring, content.h2),
+  cls(content.block, content.heading, content.ring, content.h3),
+  cls(content.block, content.heading, content.ring, content.h4),
 ];
 
 export const nodeClass = {
-  paragraph: cls(content.block, content.paragraph),
-  bulletList: cls(content.block, content.list, content.ul),
-  orderedList: cls(content.block, content.list, content.ol),
-  listItem: cls(content.li),
-  taskList: cls(content.block, content.taskList),
-  taskItem: cls(content.li, content.taskItem),
-  blockquote: cls(content.block, content.blockquote),
-  horizontalRule: cls(content.hr, content.atom),
-  image: cls(content.img, content.atom),
+  paragraph: cls(content.block, content.ring, content.paragraph),
+  bulletList: cls(content.block, content.ring, content.list, content.ul),
+  orderedList: cls(content.block, content.ring, content.list, content.ol),
+  listItem: cls(content.ring, content.li),
+  taskList: cls(content.block, content.ring, content.taskList),
+  taskItem: cls(content.ring, content.li, content.taskItem),
+  blockquote: cls(content.block, content.ring, content.blockquote),
+  horizontalRule: cls(content.hr, content.ring),
+  image: cls(content.img, content.ring),
   table: cls(content.table),
   tableHeader: cls(content.cell, content.th),
   tableCell: cls(content.cell),
   code: cls(content.code),
   link: cls(content.link),
-  mdxJsxFlowElement: cls(content.block, content.mdxFlow, content.atom),
+  mdxJsxFlowElement: cls(content.block, content.mdxFlow, content.ring),
   mdxJsxTextElement: cls(content.mdxInline),
   mdxTextExpression: cls(content.code, content.mdxCode),
   verbatimInline: cls(content.code, content.mdxCode),
-  mdxFlowExpression: cls(content.block, content.pre, content.atom),
-  mdxjsEsm: cls(content.block, content.pre, content.atom),
-  verbatim: cls(content.block, content.pre, content.atom),
-  frontmatter: cls(content.block, content.pre, content.frontmatter, content.atom),
+  mdxFlowExpression: cls(content.block, content.pre, content.ring),
+  mdxjsEsm: cls(content.block, content.pre, content.ring),
+  verbatim: cls(content.block, content.pre, content.ring),
+  frontmatter: cls(content.block, content.pre, content.frontmatter, content.ring),
 };
 
 export const contentClass = {
@@ -427,7 +430,6 @@ export const contentClass = {
   root: cls(content.root),
   block: cls(content.block),
   component: cls(content.block, content.component),
-  atom: cls(content.atom),
   dropIndicator: cls(content.dropIndicator),
   lifted: cls(content.lifted),
   dragGhost: cls(content.dragGhost),

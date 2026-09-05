@@ -46,10 +46,14 @@ export const MdxInlineRegion = Node.create({
   },
 });
 
-/** A block editable region backed by element children. */
+/**
+ * A block editable region backed by element children. Never empty: with a
+ * required block ProseMirror refills a paragraph whenever the last one goes,
+ * so the region always has a textblock to place the caret in.
+ */
 export const MdxBlockRegion = Node.create({
   name: "mdxBlockRegion",
-  content: "block*",
+  content: "block+",
   selectable: false,
   defining: true,
   isolating: true,

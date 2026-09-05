@@ -128,7 +128,9 @@ export function editorExtensions({
     ...(image ? [Image.configure({ inline: true })] : []),
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableMdx,
+    // prosemirror-tables would otherwise turn a node-selected table into a
+    // CellSelection: the table then rings and moves like any other block
+    TableMdx.configure({ allowTableNodeSelection: true }),
     TableRow,
     TableHeader,
     TableCell,

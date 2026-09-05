@@ -6,6 +6,7 @@ import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import type { UiComponentSpec } from "./components/spec";
 import { bubbleState } from "./bubble-menu";
+import { isList } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
 
 const GUTTER_BUTTON = 28;
@@ -31,14 +32,16 @@ const styles = stylex.create({
   },
 });
 
-function gutterRow(dom: HTMLElement): DOMRect {
+function gutterRow(dom: HTMLElement, inList: boolean): DOMRect {
   const row = dom.querySelector("[data-fde-row]");
   if (row instanceof HTMLElement && row.closest(".react-renderer") === dom) {
     return row.getBoundingClientRect();
   }
   const rect = dom.getBoundingClientRect();
   const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
-  return new DOMRect(rect.left, rect.top, rect.width, Math.min(line, rect.height));
+  // an item's marker or checkbox renders in the list's padding, outside the item's box
+  const pad = inList ? parseFloat(getComputedStyle(dom.parentElement!).paddingInlineStart) || 0 : 0;
+  return new DOMRect(rect.left - pad, rect.top, rect.width + pad, Math.min(line, rect.height));
 }
 
 function controlsSlot(dom: HTMLElement): HTMLElement | null {
@@ -66,22 +69,23 @@ export function BlockGutter({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const { active, block } = bubbleState(current.state, specs);
-      const pos = active?.pos ?? block?.pos;
-      if (pos == null) return null;
-      const node = current.state.doc.nodeAt(pos)!;
-      if (node.type.spec.code) return pos;
+      const { range } = bubbleState(current.state, specs);
+      if (!range) return null;
+      const node = current.state.doc.nodeAt(range.from)!;
+      if (node.type.spec.code) return range;
       if (!touch || (node.isTextblock && node.content.size === 0)) return null;
-      return pos;
+      return range;
     },
   });
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || target == null) return;
+    if (!el || !target) return;
     const place = () => {
-      const dom = editor.view.nodeDOM(target);
+      // an inline run sits beside its textblock
+      const $from = editor.state.doc.resolve(target.from);
+      const dom = editor.view.nodeDOM($from.parent.inlineContent ? $from.before() : target.from);
       const frame = el.offsetParent;
       if (!(dom instanceof HTMLElement) || !frame) return;
       const base = frame.getBoundingClientRect();
@@ -91,7 +95,7 @@ export function BlockGutter({
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
         return;
       }
-      const row = gutterRow(dom);
+      const row = gutterRow(dom, isList($from.parent.type));
       // centred on the row, in the 24px gutter of the content's padding
       const x = row.left - base.left - (24 + GUTTER_BUTTON) / 2;
       const y = row.top - base.top + (row.height - GUTTER_BUTTON) / 2;
@@ -103,10 +107,10 @@ export function BlockGutter({
     return () => observer.disconnect();
   }, [editor, target]);
 
-  if (target == null) return null;
+  if (!target) return null;
   return (
     <div ref={ref} {...stylex.props(styles.gutter)}>
-      <DragHandle editor={editor} pos={target} specs={specs} look={styles.button} size={18} />
+      <DragHandle editor={editor} range={target} specs={specs} look={styles.button} size={18} />
     </div>
   );
 }

@@ -548,7 +548,7 @@ function componentToNode(
     regions.push({
       type: "mdxBlockRegion",
       attrs: { region: spec.childrenRegion.region },
-      content: content.length > 0 ? content : undefined,
+      content: content.length > 0 ? content : [{ type: "paragraph" }],
     });
   }
 

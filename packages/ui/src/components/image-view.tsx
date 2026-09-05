@@ -9,7 +9,7 @@ import { ImageIcon } from "lucide-react";
 import { useState } from "react";
 import { content } from "../styles/content";
 import { resolveSrc, type MediaProvider } from "./media";
-import { nodeViewOptions } from "./node-view-options";
+import { isRinged, nodeViewOptions } from "./node-view-options";
 
 const styles = stylex.create({
   wrapper: { display: "inline-block", maxWidth: "100%" },
@@ -52,7 +52,9 @@ export async function insertImages(
 }
 
 function makeImageView(media: MediaProvider | undefined) {
-  return function ImageView({ node, selected }: NodeViewProps) {
+  return function ImageView(props: NodeViewProps) {
+    const { node } = props;
+    const selected = isRinged(props);
     const src = (node.attrs.src as string) ?? "";
     const [broken, setBroken] = useState("");
     const failed = src !== "" && broken === src;

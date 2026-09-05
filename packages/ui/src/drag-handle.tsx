@@ -5,6 +5,7 @@ import type { Editor } from "@tiptap/react";
 import type { UiComponentSpec } from "./components/spec";
 import { setLifted } from "./components/node-views";
 import { startPointerDrag } from "./components/structure";
+import type { BlockRange } from "./components/keymap";
 import { joystick as marker } from "./styles/markers.stylex";
 import { consts } from "./styles/consts.stylex";
 import { tokens } from "./styles/tokens.stylex";
@@ -75,13 +76,13 @@ const styles = stylex.create({
 
 export function DragHandle({
   editor,
-  pos,
+  range,
   specs,
   look,
   size,
 }: {
   editor: Editor;
-  pos: number;
+  range: BlockRange;
   specs: Map<string, UiComponentSpec>;
   look: stylex.StyleXStyles;
   size: number;
@@ -97,7 +98,7 @@ export function DragHandle({
   // enter/leave never reaches it there.
   useEffect(() => {
     const el = button.current!;
-    const enter = () => setLifted(editor, pos);
+    const enter = () => setLifted(editor, range);
     const leave = () => setLifted(editor, null);
     el.addEventListener("pointerenter", enter);
     el.addEventListener("pointerleave", leave);
@@ -106,11 +107,11 @@ export function DragHandle({
       el.removeEventListener("pointerleave", leave);
       if (!editor.isDestroyed) setLifted(editor, null);
     };
-  }, [editor, pos]);
+  }, [editor, range]);
 
   const tilt = (dx: number, dy: number) => {
     const dist = Math.hypot(dx, dy);
-    if (dist > 0) setLifted(editor, pos);
+    if (dist > 0) setLifted(editor, range);
     const lean = Math.min(1, dist / REACH);
     const ux = dist && (dx / dist) * lean * radius;
     const uy = dist && (dy / dist) * lean * radius;
@@ -135,7 +136,7 @@ export function DragHandle({
         event.preventDefault();
         // React's currentTarget is this button; the native event's is the
         // node React listens on (a root container, or the document)
-        startPointerDrag(editor.view, pos, event.currentTarget, event.nativeEvent, specs, tilt);
+        startPointerDrag(editor.view, range, event.currentTarget, event.nativeEvent, specs, tilt);
       }}
     >
       <span {...stylex.props(styles.socket)} aria-hidden>

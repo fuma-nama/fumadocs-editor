@@ -12,7 +12,7 @@ import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { COMPONENT_NODE, INLINE_REGION_NODE, type MdxAttribute } from "@fumadocs-editor/core";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
@@ -41,8 +41,8 @@ import type { UiComponentSpec } from "./components/spec";
 import type { MediaProvider } from "./components/media";
 import { BlockMenu, useBlockMenuOpen, type ActiveComponent } from "./block-panel";
 import { DragHandle } from "./drag-handle";
-import { activeComponent, updateAtomAttributes } from "./components/attributes";
-import { handleBlock } from "./components/keymap";
+import { updateAtomAttributes } from "./components/attributes";
+import { handleBlock, movableIn, type BlockRange } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
 import { chrome } from "./styles/shared";
@@ -276,18 +276,19 @@ export interface BubbleState {
   table: boolean;
   atom: { kind: "image" | "frontmatter"; pos: number } | null;
   active: ActiveComponent | null;
-  block: { pos: number } | null;
+  /** the run of blocks the joystick and ⋯ serve */
+  range: BlockRange | null;
 }
 
 export function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
   const selection = state.selection;
   const { $from } = selection;
-  let format = selection instanceof TextSelection && $from.parent.type.name !== "codeBlock";
+  let format = selection instanceof TextSelection && !$from.parent.type.spec.code;
   let table = false;
   for (let depth = $from.depth; depth > 0; depth--) {
-    const name = $from.node(depth).type.name;
-    if (name === INLINE_REGION_NODE) format = false;
-    else if (name === "table") table = true;
+    const { type } = $from.node(depth);
+    if (type.name === INLINE_REGION_NODE) format = false;
+    else if (type.spec.tableRole === "table") table = true;
   }
 
   let atom: BubbleState["atom"] = null;
@@ -296,14 +297,26 @@ export function bubbleState(state: EditorState, specs: Map<string, UiComponentSp
     if (name === "image" || name === "frontmatter") atom = { kind: name, pos: selection.from };
   }
 
-  const component = activeComponent(state);
-  const active = component && specs.has(component.name) ? component : null;
+  const range = handleBlock(selection);
+  const node = range && state.doc.nodeAt(range.from);
+  const component =
+    range &&
+    node &&
+    node.type.name === COMPONENT_NODE &&
+    node.nodeSize === range.to - range.from &&
+    specs.has(node.attrs.name as string);
   return {
     format,
     table: format && table,
     atom,
-    active,
-    block: active ? null : handleBlock(selection),
+    active: component
+      ? {
+          pos: range.from,
+          name: node.attrs.name as string,
+          attributes: node.attrs.attributes as MdxAttribute[],
+        }
+      : null,
+    range,
   };
 }
 
@@ -312,7 +325,9 @@ function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): bool
   if (selection instanceof NodeSelection) {
     const { node } = selection;
     if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
-    return node.type.name === "image" || node.type.name === "frontmatter";
+    // a code block's header holds its menu, the gutter its joystick
+    if (node.type.spec.code) return false;
+    return node.type.name === "frontmatter" || movableIn(node, selection.$from.parent);
   }
   // a selection of structural tokens only (a double-click at a region's
   // end can produce one) renders nothing: it must not summon the bubble.
@@ -646,8 +661,8 @@ export function EditorBubble({
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
 
-  const target = state?.active?.pos ?? state?.block?.pos;
-  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
+  const target = state?.range ?? null;
+  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target?.from);
 
   useEffect(() => {
     const dom = editor.view.dom;
@@ -765,13 +780,13 @@ export function EditorBubble({
       )}
       {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
       {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
-      {state && target != null && (
+      {state && target && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
           {!touch && (
             <DragHandle
               editor={editor}
-              pos={target}
+              range={target}
               specs={specs}
               look={chrome.iconButton}
               size={20}
@@ -781,7 +796,7 @@ export function EditorBubble({
             editor={editor}
             specs={specs}
             active={state.active}
-            block={state.block}
+            range={target}
             open={panelOpen}
             onOpenChange={setPanelOpen}
             container={wrapper}

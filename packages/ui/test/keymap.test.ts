@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 import { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
+import { deleteBlocks, handleBlock } from "../src/components/keymap";
 import { caret, caretPath, makeEditor, press } from "./helpers";
 
 const FILES = `<Files>
@@ -261,6 +262,27 @@ after
     expect(out).toContain("npm.");
     // still exactly two tabs, each with its own label region
     expect(out.match(/<Tab>/g)).toHaveLength(2);
+  });
+
+  test("deleting a body's only block leaves an empty paragraph, not an empty region", () => {
+    const { editor, serialize } = makeEditor(`<Tabs items={["npm", "pnpm"]}>
+  <Tab>
+    Run npm.
+  </Tab>
+
+  <Tab>
+    Run pnpm.
+  </Tab>
+</Tabs>
+`);
+    const $pos = editor.state.doc.resolve(caret(editor, "Run npm."));
+    editor.commands.setNodeSelection($pos.before());
+    editor.commands.deleteSelection();
+    const body = editor.state.selection.$from.node(-1);
+    expect(body.type.name).toBe("mdxBlockRegion");
+    expect(body.childCount).toBe(1);
+    expect(caretPath(editor)).toContain("paragraph");
+    expect(serialize().match(/<Tab>/g)).toHaveLength(2);
   });
 
   test("type-over of a region-crossing selection edits text in place", () => {
@@ -574,11 +596,11 @@ describe("moving components", () => {
     const { editor, serialize } = makeEditor(`${CALLOUT}
 After.
 `);
-    caret(editor, "Body text.");
+    caret(editor, "Heads up");
     expect(press(editor, "ArrowDown", { altKey: true })).toBe(true);
     const out = serialize();
     expect(out.indexOf("After.")).toBeLessThan(out.indexOf("<Callout"));
-    expect(editor.state.selection.$from.parent.textContent).toBe("Body text.");
+    expect(editor.state.selection.$from.parent.textContent).toBe("Heads up");
   });
 });
 
@@ -619,5 +641,264 @@ describe("panel attribute edits", () => {
     const selection = editor.state.selection;
     expect(selection).toBeInstanceOf(NodeSelection);
     expect((selection as NodeSelection).node.attrs.name).toBe("GithubInfo");
+  });
+});
+
+describe("block targets", () => {
+  const LISTS = `Intro.
+
+- one
+- two
+  - nested a
+  - nested b
+- three
+
+Between.
+
+- [ ] task a
+- [x] task b
+
+<Callout type="info" title="Heads up">
+  Body text.
+
+  - in callout
+</Callout>
+
+\`\`\`ts
+code
+\`\`\`
+`;
+
+  /** the node of a single-block target */
+  const nodeOf = (editor: Editor) => {
+    const block = handleBlock(editor.state.selection)!;
+    return editor.state.doc.nodeAt(block.from)!;
+  };
+
+  /** node names Escape selects, one per press, until it stops widening */
+  const escalate = (editor: Editor) => {
+    const names: string[] = [];
+    let last = -1;
+    for (let i = 0; i < 6; i++) {
+      press(editor, "Escape");
+      const sel = editor.state.selection;
+      if (!(sel instanceof NodeSelection) || sel.from === last) break;
+      last = sel.from;
+      names.push((sel.node.attrs.name as string | null) ?? sel.node.type.name);
+    }
+    return names;
+  };
+
+  const target = async (text: string) => {
+    const { editor } = makeEditor(LISTS);
+    caret(editor, text);
+    const node = nodeOf(editor);
+    return { editor, node, name: node.type.name, text: node.textContent };
+  };
+
+  test("a caret resolves to the innermost movable block", async () => {
+    expect(await target("Intro.")).toMatchObject({ name: "paragraph" });
+    expect(await target("two")).toMatchObject({ name: "listItem", text: "twonested anested b" });
+    expect(await target("nested a")).toMatchObject({ name: "listItem", text: "nested a" });
+    expect(await target("task a")).toMatchObject({ name: "taskItem" });
+    expect(await target("in callout")).toMatchObject({ name: "listItem", text: "in callout" });
+    expect(await target("code")).toMatchObject({ name: "codeBlock" });
+  });
+
+  /** the run a selection spans: its parent and the item count */
+  const runOf = (editor: Editor) => {
+    const block = handleBlock(editor.state.selection)!;
+    const $from = editor.state.doc.resolve(block.from);
+    return {
+      parent: $from.parent.type.name,
+      count: editor.state.doc.resolve(block.to).index() - $from.index(),
+    };
+  };
+
+  test("a selection across every item of a list targets the list", async () => {
+    const { editor } = makeEditor(LISTS);
+    const from = caret(editor, "one", "start");
+    const to = caret(editor, "three");
+    editor.commands.setTextSelection({ from, to });
+    expect(nodeOf(editor).type.name).toBe("bulletList");
+    // all the nested items: the nested list is a container, so the run stays
+    editor.commands.setTextSelection({
+      from: caret(editor, "nested a", "start"),
+      to: caret(editor, "nested b"),
+    });
+    expect(runOf(editor)).toEqual({ parent: "bulletList", count: 2 });
+    editor.commands.setTextSelection({ from, to });
+    expect(press(editor, "ArrowDown", { altKey: true })).toBe(true);
+    expect(editor.state.doc.child(1).textContent).toBe("Between.");
+    expect(editor.state.doc.child(2).type.name).toBe("bulletList");
+  });
+
+  test("some items of a list are a run: moved, deleted and widened together", async () => {
+    const { editor } = makeEditor(LISTS);
+    const from = caret(editor, "one", "start");
+    editor.commands.setTextSelection({ from, to: caret(editor, "two") });
+    expect(runOf(editor)).toEqual({ parent: "bulletList", count: 2 });
+    expect(press(editor, "ArrowDown", { altKey: true })).toBe(true);
+    const list = editor.state.doc.child(1);
+    expect(list.child(0).textContent).toBe("three");
+    expect(list.child(1).textContent).toBe("one");
+    expect(list.child(2).firstChild!.textContent).toBe("two");
+    const { selection } = editor.state;
+    expect(editor.state.doc.textBetween(selection.from, selection.to, "|")).toBe("one|two");
+    press(editor, "Escape");
+    expect((editor.state.selection as NodeSelection).node.type.name).toBe("bulletList");
+    editor.commands.setTextSelection({
+      from: caret(editor, "three", "start"),
+      to: caret(editor, "two"),
+    });
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    expect(editor.state.doc.child(1).textContent).toBe("Between.");
+  });
+
+  test("an inline image among text is the target; alone, it is its paragraph", async () => {
+    const { editor, serialize } = makeEditor(`Intro.
+
+![pic](/a.png)
+
+Text ![inline](/b.png) more.
+`);
+    const images: number[] = [];
+    editor.state.doc.descendants((node, at) => {
+      if (node.type.name === "image") images.push(at);
+    });
+    editor.commands.setNodeSelection(images[0]);
+    expect(nodeOf(editor).type.name).toBe("paragraph");
+    editor.commands.setNodeSelection(images[1]);
+    expect(nodeOf(editor).type.name).toBe("image");
+    expect(press(editor, "ArrowUp", { altKey: true })).toBe(true);
+    expect(editor.state.doc.child(1).textContent).toBe("Text  more.");
+    const sel = editor.state.selection;
+    expect(sel).toBeInstanceOf(NodeSelection);
+    expect((sel as NodeSelection).node.type.name).toBe("image");
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(sel)!));
+    let alone = -1;
+    editor.state.doc.descendants((node, at) => {
+      if (node.type.name === "image") alone = at;
+    });
+    // the image alone in its paragraph is the paragraph: deleting the target takes it
+    editor.commands.setNodeSelection(alone);
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    expect(serialize()).toBe(`Intro.
+
+Text  more.
+`);
+  });
+
+  test("a selection widens to each parent it covers entirely, settling on a unit", async () => {
+    const { editor } = makeEditor(LISTS);
+    const select = (start: string, end: string) => {
+      const from = caret(editor, start, "start");
+      const to = caret(editor, end);
+      editor.commands.setTextSelection({ from, to });
+    };
+    // part of a text: the text itself
+    select("Intro", "Intro");
+    const part = handleBlock(editor.state.selection)!;
+    expect(part).toEqual({ from: editor.state.selection.from, to: editor.state.selection.to });
+    // the whole text of a bullet: the bullet
+    select("three", "three");
+    expect(nodeOf(editor).type.name).toBe("listItem");
+    // the whole text of a bullet with a nested list: the text (the bullet is more)
+    select("two", "two");
+    expect(runOf(editor)).toEqual({ parent: "paragraph", count: 1 });
+    // the whole body text: its paragraph, since a region is no unit
+    select("Body text.", "Body text.");
+    expect(nodeOf(editor).type.name).toBe("paragraph");
+  });
+
+  test("dragging an attribute's whole text away leaves its region in place", async () => {
+    const { editor, serialize } = makeEditor(CALLOUT);
+    const from = caret(editor, "Heads up", "start");
+    editor.commands.setTextSelection({ from, to: caret(editor, "Heads up") });
+    const run = handleBlock(editor.state.selection)!;
+    expect(run).toEqual({ from, to: from + 8 });
+    editor.view.dispatch(deleteBlocks(editor.state.tr, run));
+    const callout = editor.state.doc.firstChild!;
+    expect(callout.child(0).type.name).toBe("mdxInlineRegion");
+    expect(callout.child(0).textContent).toBe("");
+    expect(serialize()).toContain('title=""');
+  });
+
+  test("a whole file name is its row", async () => {
+    const { editor } = makeEditor(`<Files>
+  <File name="layout.tsx" />
+  <File name="page.tsx" />
+</Files>
+`);
+    const from = caret(editor, "layout.tsx", "start");
+    editor.commands.setTextSelection({ from, to: caret(editor, "layout.tsx") });
+    const node = nodeOf(editor);
+    expect(node.type.name).toBe("mdxComponent");
+    expect(node.attrs.name).toBe("File");
+  });
+
+  test("a body paragraph is its own target; its component is one step up", async () => {
+    const { editor, name } = await target("Body text.");
+    expect(name).toBe("paragraph");
+    expect(escalate(editor)).toEqual(["paragraph", "Callout"]);
+  });
+
+  test("Escape widens from the target to each enclosing block", async () => {
+    expect(escalate((await target("Intro.")).editor)).toEqual(["paragraph"]);
+    expect(escalate((await target("two")).editor)).toEqual(["listItem", "bulletList"]);
+    // a nested list sits in an item, not a list: it is a container, not a block
+    expect(escalate((await target("nested a")).editor)).toEqual([
+      "listItem",
+      "listItem",
+      "bulletList",
+    ]);
+    expect(escalate((await target("task a")).editor)).toEqual(["taskItem", "taskList"]);
+    expect(escalate((await target("in callout")).editor)).toEqual([
+      "listItem",
+      "bulletList",
+      "Callout",
+    ]);
+    expect(escalate((await target("code")).editor)).toEqual(["codeBlock"]);
+  });
+
+  test("a node-selected list is the target, wherever it sits", async () => {
+    const { editor } = await target("in callout");
+    press(editor, "Escape");
+    press(editor, "Escape");
+    expect(nodeOf(editor).type.name).toBe("bulletList");
+    expect(editor.state.selection.from).toBe(handleBlock(editor.state.selection)!.from);
+  });
+
+  test("Alt-Arrow moves the item within its list and stops at its edges", async () => {
+    const { editor } = await target("two");
+    expect(press(editor, "ArrowDown", { altKey: true })).toBe(true);
+    const list = editor.state.doc.child(1);
+    expect(list.type.name).toBe("bulletList");
+    expect(list.child(1).textContent).toBe("three");
+    expect(list.child(2).firstChild!.textContent).toBe("two");
+    expect(editor.state.selection.$from.parent.textContent).toBe("two");
+    expect(press(editor, "ArrowDown", { altKey: true })).toBe(false);
+    expect(list.eq(editor.state.doc.child(1))).toBe(true);
+  });
+
+  test("deleting the last item takes the emptied list with it", async () => {
+    const { editor, serialize } = makeEditor(LISTS);
+    caret(editor, "nested a");
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    caret(editor, "nested b");
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    const out = serialize();
+    expect(out).not.toContain("nested");
+    expect(out).toContain("- two\n- three");
+    caret(editor, "task a");
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    caret(editor, "task b");
+    editor.view.dispatch(deleteBlocks(editor.state.tr, handleBlock(editor.state.selection)!));
+    let lists = 0;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "taskList") lists++;
+    });
+    expect(lists).toBe(0);
+    expect(serialize()).not.toContain("[ ]");
   });
 });

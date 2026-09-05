@@ -1,39 +1,6 @@
 import type { Editor } from "@tiptap/core";
-import { NodeSelection, type EditorState } from "@tiptap/pm/state";
-import { COMPONENT_NODE, type MdxAttribute } from "@fumadocs-editor/core";
-
-/**
- * The component that is node-selected or contains the caret. Panels render
- * from this snapshot. `attributes` must be part of it, or `useEditorState`
- * won't re-render on attribute edits and React resets the controlled
- * inputs' caret on every keystroke.
- */
-export function activeComponent(
-  state: EditorState,
-): { pos: number; name: string; attributes: MdxAttribute[] } | null {
-  const selection = state.selection;
-  if (selection instanceof NodeSelection) {
-    const node = selection.node;
-    if (node.type.name !== COMPONENT_NODE) return null;
-    return {
-      pos: selection.from,
-      name: node.attrs.name as string,
-      attributes: node.attrs.attributes as MdxAttribute[],
-    };
-  }
-  const { $from } = selection;
-  for (let depth = $from.depth; depth > 0; depth--) {
-    const node = $from.node(depth);
-    if (node.type.name === COMPONENT_NODE) {
-      return {
-        pos: $from.before(depth),
-        name: node.attrs.name as string,
-        attributes: node.attrs.attributes as MdxAttribute[],
-      };
-    }
-  }
-  return null;
-}
+import { NodeSelection } from "@tiptap/pm/state";
+import type { MdxAttribute } from "@fumadocs-editor/core";
 
 /**
  * Write a component's attributes without losing a NodeSelection on it:

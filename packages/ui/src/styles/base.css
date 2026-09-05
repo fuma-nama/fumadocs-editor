@@ -143,12 +143,20 @@
 [data-fde-root] .tableWrapper:not(:first-child) {
   margin-top: var(--fde-gap);
 }
+[data-fde-root] .tableWrapper.ProseMirror-selectednode {
+  outline: 2px solid var(--fde-ring);
+  outline-offset: 2px;
+}
 
 /* TaskItem's own markup: label > checkbox, then the content div. The
  * checkbox matches the chrome checkboxes (TypeTable), not the OS. */
 [data-fde-root] ul[data-type="taskList"] > li > label {
   flex-shrink: 0;
-  margin-top: 0.3em;
+  display: flex;
+  align-items: center;
+  /* one line box tall: the checkbox centers on the first line whether that
+   * line is taller or shorter than the checkbox itself */
+  height: 1lh;
 }
 [data-fde-root] ul[data-type="taskList"] > li > div {
   flex: 1;

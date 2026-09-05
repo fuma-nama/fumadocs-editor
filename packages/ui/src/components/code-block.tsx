@@ -19,7 +19,7 @@ import type { Editor } from "@tiptap/core";
 import { chrome } from "../styles/shared";
 import { BlockActions } from "../block-panel";
 import { content, contentClass } from "../styles/content";
-import { nodeViewOptions } from "./node-view-options";
+import { isRinged, nodeViewOptions } from "./node-view-options";
 import { Picker } from "./picker";
 import { buildCodeMeta, parseCodeMeta } from "./code-meta";
 import { MermaidDiagram } from "./mermaid";
@@ -306,7 +306,11 @@ function MetaSettings({
             <div {...stylex.props(styles.actions)}>
               <BlockActions
                 editor={editor}
-                pos={getPos}
+                range={() => {
+                  const pos = getPos();
+                  const block = pos == null ? undefined : editor.state.doc.nodeAt(pos);
+                  return block && pos != null ? { from: pos, to: pos + block.nodeSize } : undefined;
+                }}
                 onDone={() => setOpen(false)}
                 itemLook={styles.actionItem}
               />
@@ -318,7 +322,8 @@ function MetaSettings({
   );
 }
 
-function CodeBlockView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
+function CodeBlockView(props: NodeViewProps) {
+  const { node, editor, getPos, updateAttributes } = props;
   const language = (node.attrs.language as string | null) ?? null;
   const meta = parseCodeMeta(node.attrs.meta as string | null);
   useEffect(() => ensureGrammars(editor), [editor]);
@@ -333,7 +338,12 @@ function CodeBlockView({ node, editor, getPos, updateAttributes }: NodeViewProps
   }
 
   return (
-    <NodeViewWrapper as="figure" dir="ltr" {...stylex.props(content.codeBlock)}>
+    <NodeViewWrapper
+      as="figure"
+      dir="ltr"
+      data-selected={isRinged(props) || undefined}
+      {...stylex.props(content.codeBlock)}
+    >
       <div
         {...stylex.props(chrome.static, content.codeHeader)}
         contentEditable={false}

@@ -1,4 +1,12 @@
 import type { NodeViewRendererOptions } from "@tiptap/core";
+import type { NodeViewProps } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
+
+/** TipTap flags every node view the selection covers as `selected`; only the node-selected one rings */
+export function isRinged({ selected, editor, getPos }: NodeViewProps): boolean {
+  const { selection } = editor.state;
+  return selected && selection instanceof NodeSelection && selection.from === getPos();
+}
 
 /**
  * TipTap's default `stopEvent` swallows any event whose target
