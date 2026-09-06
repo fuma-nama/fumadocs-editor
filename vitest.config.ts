@@ -4,6 +4,6 @@ import { defineConfig } from "vitest/config";
 // (environment, source aliases) and shows up as a named project
 export default defineConfig({
   test: {
-    projects: ["packages/core", "packages/ui"],
+    projects: ["packages/core", "packages/ui", "packages/studio"],
   },
 });

@@ -1,0 +1,67 @@
+{
+  "name": "@fumadocs-editor/studio",
+  "version": "0.0.0",
+  "description": "Edit a directory of MDX files in the browser: `npx @fumadocs-editor/studio`",
+  "keywords": [
+    "cli",
+    "editor",
+    "fumadocs",
+    "markdown",
+    "mdx",
+    "vite",
+    "wysiwyg"
+  ],
+  "homepage": "https://github.com/fuma-nama/fumadocs-editor",
+  "license": "MIT",
+  "author": "Fuma Nama",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuma-nama/fumadocs-editor.git",
+    "directory": "packages/studio"
+  },
+  "bin": {
+    "fumadocs-studio": "./dist/cli.js"
+  },
+  "files": [
+    "app",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./node": "./dist/node.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fumadocs-editor/core": "workspace:*",
+    "@fumadocs-editor/ui": "workspace:*",
+    "lucide-react": "^1.23.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "vite": "^8.2.2"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^26.4.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
