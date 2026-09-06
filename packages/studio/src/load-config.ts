@@ -5,9 +5,7 @@ import type { StudioArgs } from "./args";
 import type { StudioConfig, StudioServerConfig } from "./config";
 import { baseConfig } from "./server";
 
-const CONFIG_NAMES = ["ts", "mts", "tsx", "js", "mjs"].map(
-  (ext) => `fumadocs-studio.config.${ext}`,
-);
+const CONFIG_NAMES = ["ts", "mts", "tsx", "js", "mjs"];
 const ROOT_CANDIDATES = ["content/docs", "content"];
 const DEFAULT_PORT = 5180;
 
@@ -33,14 +31,9 @@ export interface ResolveStudioOptions {
   load?: (file: string, projectRoot: string) => Promise<unknown>;
 }
 
-const isDirectory = (file: string) =>
+const exists = (file: string, kind: "isFile" | "isDirectory") =>
   stat(file).then(
-    (s) => s.isDirectory(),
-    () => false,
-  );
-const isFile = (file: string) =>
-  stat(file).then(
-    (s) => s.isFile(),
+    (s) => s[kind](),
     () => false,
   );
 
@@ -55,18 +48,18 @@ async function loadModule(file: string, projectRoot: string): Promise<unknown> {
 export async function findConfigFile(cwd: string, explicit?: string): Promise<string | undefined> {
   if (explicit) {
     const file = path.resolve(cwd, explicit);
-    if (!(await isFile(file))) throw new Error(`config file not found: ${file}`);
+    if (!(await exists(file, "isFile"))) throw new Error(`config file not found: ${file}`);
     return file;
   }
-  for (const name of CONFIG_NAMES) {
-    const file = path.join(cwd, name);
-    if (await isFile(file)) return file;
+  for (const ext of CONFIG_NAMES) {
+    const file = path.join(cwd, `fumadocs-studio.config.${ext}`);
+    if (await exists(file, "isFile")) return file;
   }
 }
 
 async function findContentRoot(projectRoot: string, explicit?: string): Promise<string> {
   if (explicit) {
-    if (!(await isDirectory(explicit))) {
+    if (!(await exists(explicit, "isDirectory"))) {
       throw new Error(
         `content directory not found: ${explicit}\nPass --root <dir> or set \`root\` in fumadocs-studio.config.ts`,
       );
@@ -75,7 +68,7 @@ async function findContentRoot(projectRoot: string, explicit?: string): Promise<
   }
   for (const candidate of ROOT_CANDIDATES) {
     const dir = path.join(projectRoot, candidate);
-    if (await isDirectory(dir)) return dir;
+    if (await exists(dir, "isDirectory")) return dir;
   }
   return projectRoot;
 }
@@ -88,14 +81,12 @@ export async function resolveStudioOptions({
 }: ResolveStudioOptions): Promise<StudioOptions> {
   const configFile = await findConfigFile(cwd, args.config);
   const projectRoot = configFile ? path.dirname(configFile) : cwd;
-  const config = configFile
-    ? (((await load(configFile, projectRoot)) as StudioConfig | undefined) ?? {})
-    : {};
+  const loaded = async <T>(file: string): Promise<T> =>
+    ((await load(path.resolve(projectRoot, file), projectRoot)) ?? {}) as T;
+  const config = configFile ? await loaded<StudioConfig>(configFile) : {};
   const server =
     typeof config.server === "string"
-      ? (((await load(path.resolve(projectRoot, config.server), projectRoot)) as
-          | StudioServerConfig
-          | undefined) ?? {})
+      ? await loaded<StudioServerConfig>(config.server)
       : (config.server ?? {});
   const explicitRoot = args.root
     ? path.resolve(cwd, args.root)

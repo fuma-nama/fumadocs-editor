@@ -215,6 +215,7 @@ body {
 }
 
 .link-button {
+  margin-inline-start: 0.5rem;
   padding: 0.125rem 0.5rem;
   border-radius: 0.375rem;
   font-size: 13px;
@@ -230,7 +231,6 @@ body {
     inset: 0 auto 0 0;
     z-index: 20;
     width: min(280px, 85vw);
-    border-right-color: var(--fde-border);
     box-shadow: 0 0 0 1px var(--fde-border);
   }
 

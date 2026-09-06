@@ -180,7 +180,7 @@ export function Studio() {
             <RefreshCw size={14} />
           </button>
         </div>
-        {response && <Sidebar tree={response.tree} active={active} onSelect={select} />}
+        {response && <Sidebar nodes={response.tree} active={active} onSelect={select} />}
       </aside>
       <div className="scrim" onClick={() => setSidebarOpen(false)} />
       <main className="main">
@@ -205,12 +205,9 @@ export function Studio() {
             <p className="panel">
               {panel}
               {error === "offline" && (
-                <>
-                  {" "}
-                  <button type="button" className="link-button" onClick={() => void loadTree()}>
-                    Retry
-                  </button>
-                </>
+                <button type="button" className="link-button" onClick={() => void loadTree()}>
+                  Retry
+                </button>
               )}
             </p>
           ) : (

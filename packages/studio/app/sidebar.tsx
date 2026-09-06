@@ -2,18 +2,21 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { ChevronRight, FileText } from "lucide-react";
 import type { TreeNode } from "./protocol";
 
-interface SidebarProps {
-  tree: TreeNode[];
+interface NodesProps {
+  nodes: TreeNode[];
+  depth: number;
   active: string | null;
   onSelect: (path: string) => void;
 }
 
-interface FolderProps extends SidebarProps {
+function Folder({
+  node,
+  active,
+  onSelect,
+  depth,
+}: Omit<NodesProps, "nodes"> & {
   node: Extract<TreeNode, { type: "folder" }>;
-  depth: number;
-}
-
-function Folder({ node, tree, active, onSelect, depth }: FolderProps) {
+}) {
   const holdsActive = active !== null && active.startsWith(`${node.path}/`);
   const [open, setOpen] = useState(holdsActive);
   useEffect(() => {
@@ -32,19 +35,13 @@ function Folder({ node, tree, active, onSelect, depth }: FolderProps) {
         <span className="tree-label">{node.title}</span>
       </button>
       {open && (
-        <Nodes
-          nodes={node.children}
-          tree={tree}
-          active={active}
-          onSelect={onSelect}
-          depth={depth + 1}
-        />
+        <Nodes nodes={node.children} active={active} onSelect={onSelect} depth={depth + 1} />
       )}
     </li>
   );
 }
 
-function Nodes({ nodes, depth, ...rest }: SidebarProps & { nodes: TreeNode[]; depth: number }) {
+function Nodes({ nodes, depth, ...rest }: NodesProps) {
   return (
     <ul className="tree">
       {nodes.map((node, index) =>
@@ -77,6 +74,6 @@ function Nodes({ nodes, depth, ...rest }: SidebarProps & { nodes: TreeNode[]; de
   );
 }
 
-export function Sidebar(props: SidebarProps) {
-  return <Nodes nodes={props.tree} depth={0} {...props} />;
+export function Sidebar(props: Omit<NodesProps, "depth">) {
+  return <Nodes depth={0} {...props} />;
 }

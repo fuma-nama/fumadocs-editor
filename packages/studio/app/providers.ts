@@ -29,11 +29,9 @@ export const auth =
 export const transport = wsTransport({ auth });
 
 export const collab: MdxEditorSync["collab"] =
-  params.has("collab") || config.collab
-    ? typeof config.collab === "object"
-      ? config.collab
-      : true
-    : false;
+  typeof config.collab === "object"
+    ? config.collab
+    : config.collab === true || params.has("collab");
 
 export async function authHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
