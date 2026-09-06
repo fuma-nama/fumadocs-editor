@@ -1,4 +1,6 @@
+import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
@@ -78,3 +80,14 @@ test("the tree follows the filesystem", async () => {
   };
   expect(tree.map((node) => node.title)).toEqual(["Home", "New"]);
 }, 10_000);
+
+test("serves the assets of packages the app loads modules from", async () => {
+  // fonts are not modules: the stylesheet's package makes them servable
+  const css = realpathSync(createRequire(import.meta.url).resolve("@fontsource-variable/geist"));
+  const font = path.join(path.dirname(css), "files/geist-latin-wght-normal.woff2");
+  await fetch(`${url}/main.tsx`);
+  await fetch(`${url}/@fs${css}`);
+  expect((await fetch(`${url}/@fs${font}`)).status).toBe(200);
+  const outside = path.resolve(import.meta.dirname, "../package.json");
+  expect((await fetch(`${url}/@fs${outside}`)).status).toBe(403);
+});

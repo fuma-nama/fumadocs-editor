@@ -1,3 +1,9 @@
+import type { Extensions } from "@tiptap/core";
+import { Collaboration } from "@tiptap/extension-collaboration";
+import {
+  CollaborationCaret,
+  type CollaborationCaretOptions,
+} from "@tiptap/extension-collaboration-caret";
 import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
@@ -38,9 +44,24 @@ export interface CollabSessionOptions {
   doc?: Y.Doc;
 }
 
+/** presence shown to peers; without one the session syncs edits only */
+export interface CollabCaret {
+  /** announced to peers as this client's identity */
+  user: SyncUser;
+  /** the element placed at this user's cursor on other clients */
+  render?(user: SyncUser): HTMLElement;
+  /** decoration attributes for this user's selection on other clients */
+  selectionRender?(user: SyncUser): { class?: string; style?: string };
+}
+
 export interface CollabSession {
   doc: Y.Doc;
   awareness: Awareness;
+  /**
+   * Editor extensions bound to this session: shared editing on the doc, undo
+   * scoped to local edits and, given a caret, presence for peers.
+   */
+  extensions(caret?: CollabCaret): Extensions;
   /** resolves once the first server sync lands and the doc holds the document */
   whenSynced: Promise<void>;
   /**
@@ -140,6 +161,20 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   const session: CollabSession = {
     doc,
     awareness,
+    extensions(caret) {
+      const list: Extensions = [Collaboration.configure({ document: doc })];
+      if (caret) {
+        // configure merges keys as given: an absent renderer keeps tiptap's default
+        const options: Partial<CollaborationCaretOptions> = {
+          provider: { awareness },
+          user: caret.user,
+        };
+        if (caret.render) options.render = caret.render;
+        if (caret.selectionRender) options.selectionRender = caret.selectionRender;
+        list.push(CollaborationCaret.configure(options));
+      }
+      return list;
+    },
     whenSynced,
     destroy() {
       destroyed = true;

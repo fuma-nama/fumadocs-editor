@@ -46,8 +46,6 @@
     "@tiptap/core": "^3.31.0",
     "@tiptap/extension-bubble-menu": "^3.31.0",
     "@tiptap/extension-code-block-lowlight": "^3.31.0",
-    "@tiptap/extension-collaboration": "^3.31.0",
-    "@tiptap/extension-collaboration-caret": "^3.31.0",
     "@tiptap/extension-image": "^3.31.0",
     "@tiptap/extension-list": "^3.31.0",
     "@tiptap/extension-table": "^3.31.0",
@@ -59,12 +57,13 @@
     "katex": "^0.18.5",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.23.0",
-    "mermaid": "^11.17.2",
-    "yjs": "^13.6.32"
+    "mermaid": "^11.17.2"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@stylexjs/rollup-plugin": "0.19.0",
+    "@tiptap/extension-collaboration": "^3.31.0",
+    "@tiptap/y-tiptap": "3.0.9",
     "@types/katex": "^0.16.8",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
@@ -72,7 +71,8 @@
     "jsdom": "^30.0.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yjs": "^13.6.32"
   },
   "peerDependencies": {
     "react": "^19.0.0",
