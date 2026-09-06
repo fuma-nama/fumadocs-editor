@@ -22,6 +22,10 @@ function buildOnPublish(): TegamiPlugin {
 const paper = tegami({
   npm: {
     updateLockFile: true,
+    trustedPublish: {
+      provider: "github",
+      workflow: "release.yml",
+    },
   },
   plugins: [
     github({
