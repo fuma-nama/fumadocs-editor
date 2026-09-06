@@ -1,7 +1,4 @@
----
-packages:
-  "@fumadocs-editor/studio": minor
----
+## @fumadocs-editor/studio@0.1.0
 
 ### Studio
 

@@ -1,8 +1,4 @@
----
-packages:
-  "@fumadocs-editor/core": minor
-  "@fumadocs-editor/ui": minor
----
+## @fumadocs-editor/ui@0.1.0
 
 ### Initial release
 
