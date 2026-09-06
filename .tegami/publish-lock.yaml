@@ -1,0 +1,26 @@
+core:changelogs:
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Initial release\n\nWYSIWYG editor for Fumadocs MDX.\n\n- **`@fumadocs-editor/ui`**: React editor. Prose, code, tables, MDX\n  components in place. Slash menu, selection toolbar, mobile bar. Untouched\n  blocks serialize byte-for-byte. Custom components: spec + renderer.\n- **`@fumadocs-editor/core`**: parse, incremental serialize, component specs,\n  dialects (math, directive admonitions, files fences, heading suffixes). FS\n  mirror with CAS autosave and block-level merge, Yjs collab, server auth with\n  per-doc scopes.\n"
+    filename: 2026-09-02-initial.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: minor\n---\n\n### Studio\n\n`npx @fumadocs-editor/studio` opens a directory of `.mdx` files in the\neditor without a host app: a sidebar ordered by `meta.json` and frontmatter\ntitles, autosave with live merge, `?collab`, and a `fumadocs-studio.config.ts`\nfor components, syntax, theme, auth, extra stylesheets and Vite plugins.\n"
+    filename: 2026-09-06-studio.md
+    v: 0.0.0
+core:packages:
+  - changelogIds:
+      - 2026-09-02-initial.md
+    id: npm:@fumadocs-editor/core
+    updated: true
+  - changelogIds:
+      - 2026-09-06-studio.md
+    id: npm:@fumadocs-editor/studio
+    updated: true
+  - changelogIds:
+      - 2026-09-02-initial.md
+    id: npm:@fumadocs-editor/ui
+    updated: true
+npm:packages:
+  - id: npm:@fumadocs-editor/core
+  - id: npm:@fumadocs-editor/studio
+  - id: npm:@fumadocs-editor/ui
+  - id: npm:docs
+  - id: npm:playground

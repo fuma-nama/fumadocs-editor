@@ -1,6 +1,6 @@
 {
   "name": "@fumadocs-editor/studio",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Edit a directory of MDX files in the browser: `npx @fumadocs-editor/studio`",
   "keywords": [
     "cli",
