@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { ViteDevServer } from "vite";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
-import { TREE_ENDPOINT } from "../app/protocol";
+import { TREE_ENDPOINT, TREE_EVENT } from "../app/protocol";
 import { startStudio } from "../src/server";
 
 let dir: string;
@@ -62,3 +62,19 @@ test("tree endpoint applies the scope", async () => {
     tree: [{ type: "file", name: "index", path: "index.mdx", title: "Home" }],
   });
 });
+
+test("the tree follows the filesystem", async () => {
+  const send = vi.spyOn(server.hot, "send");
+  await writeFile(path.join(dir, "content/new.mdx"), "---\ntitle: New\n---\n");
+  const headers = { [AUTH_HEADER]: '"viewer"' };
+  const deadline = Date.now() + 5000;
+  const pinged = () => send.mock.calls.some((call) => call[0] === TREE_EVENT);
+  while (!pinged() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  expect(pinged()).toBe(true);
+  const { tree } = (await fetch(url + TREE_ENDPOINT, { headers }).then((r) => r.json())) as {
+    tree: { title: string }[];
+  };
+  expect(tree.map((node) => node.title)).toEqual(["Home", "New"]);
+}, 10_000);

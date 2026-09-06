@@ -45,6 +45,9 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fumadocs-editor/core": "workspace:*",
     "@fumadocs-editor/ui": "workspace:*",
     "lucide-react": "^1.23.0",

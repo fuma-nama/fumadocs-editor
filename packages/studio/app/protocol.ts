@@ -2,6 +2,8 @@
 // imports it at runtime (only `app/` and `dist/` are published)
 
 export const TREE_ENDPOINT = "/__fde_studio/tree";
+/** HMR event: the tree changed on disk, fetch it again */
+export const TREE_EVENT = "fumadocs-studio:tree";
 
 export interface MetaJson {
   title?: string;

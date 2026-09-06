@@ -56,7 +56,16 @@ export interface MdxEditorRef {
    * document. `FileSession` calls this after every write.
    */
   markSaved: (text: string) => void;
+  /** the visual editor or the MDX source */
+  getMode: () => EditorMode;
+  /**
+   * Switch between the visual editor and the MDX source. Source that fails
+   * to parse stays in source mode with the error shown.
+   */
+  setMode: (mode: EditorMode) => void;
 }
+
+export type EditorMode = "visual" | "source";
 
 /** presence identity shown at a user's caret on other clients */
 export interface CollabUser {
@@ -127,6 +136,15 @@ export interface MdxEditorProps {
    * chrome. Does not enforce auth; wire scope `writable` in yourself.
    */
   editable?: boolean;
+  /**
+   * `card` (default): a bordered box among other page content. `page`: the
+   * editor is the page: the header stays at the top while the document
+   * scrolls in a centered column (`--fde-page-width`, default 52rem) that
+   * keeps clear of `--fde-page-inset`, for a panel floating at the start.
+   */
+  variant?: "card" | "page";
+  /** extra controls in the header: `start` before the sync status, `end` after the mode tabs */
+  header?: { start?: ReactNode; end?: ReactNode };
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
@@ -149,7 +167,6 @@ interface EditorViewProps extends Omit<MdxEditorProps, "sync"> {
   collab?: CollabLink;
 }
 
-type Mode = "visual" | "source";
 type Stage = "static" | "mounting" | "live";
 
 const pulse = stylex.keyframes({ "50%": { opacity: 0.5 } });
@@ -173,10 +190,15 @@ const styles = stylex.create({
     lineHeight: 1.625,
     boxShadow: consts.shadowSm,
   },
+  page: {
+    minHeight: "100dvh",
+    borderWidth: 0,
+    borderRadius: 0,
+    boxShadow: "none",
+  },
   bar: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: "0.75rem",
     borderStartStartRadius: "inherit",
     borderStartEndRadius: "inherit",
@@ -187,6 +209,16 @@ const styles = stylex.create({
     paddingInline: "0.5rem",
     paddingBlock: "0.25rem",
   },
+  barPage: {
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    backgroundColor: `color-mix(in oklab, ${tokens.background} 85%, transparent)`,
+    backdropFilter: "blur(12px)",
+    paddingInline: "0.75rem",
+    paddingBlock: "0.375rem",
+  },
+  grow: { flex: 1, minWidth: 0 },
   tabs: {
     boxSizing: "border-box",
     display: "flex",
@@ -226,7 +258,6 @@ const styles = stylex.create({
   },
   status: {
     display: "flex",
-    minWidth: 0,
     alignItems: "center",
     gap: "0.5rem",
     paddingInlineStart: "0.375rem",
@@ -268,6 +299,17 @@ const styles = stylex.create({
     color: tokens.foreground,
   },
   body: { position: "relative" },
+  // centered in the viewport when there is room, else right of the inset
+  pageColumn: {
+    flex: 1,
+    maxWidth: "var(--fde-page-width, 52rem)",
+    marginInlineStart:
+      "max(calc((100% - var(--fde-page-width, 52rem)) / 2), var(--fde-page-inset, 0px))",
+    transition: {
+      default: `margin-inline-start 150ms ${consts.ease}`,
+      [consts.reduceMotion]: "none",
+    },
+  },
   staticView: { cursor: "text", outline: "none" },
   source: { display: "flex", flex: 1, flexDirection: "column" },
   sourceError: {
@@ -302,6 +344,7 @@ const styles = stylex.create({
       ":focus-visible": `inset 0 0 0 1px color-mix(in oklab, ${tokens.ring} 40%, transparent)`,
     },
   },
+  textareaPage: { resize: "none" },
 });
 
 const SYNC_LABEL: Record<SessionStatus, string> = {
@@ -315,7 +358,7 @@ const SYNC_LABEL: Record<SessionStatus, string> = {
 
 function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (
-    <div {...stylex.props(styles.status)}>
+    <div {...stylex.props(styles.grow, styles.status)}>
       <span aria-hidden {...stylex.props(styles.dot, styles[status])} />
       <span {...stylex.props(styles.label)}>{SYNC_LABEL[status]}</span>
       {status === "conflict" && (
@@ -367,6 +410,8 @@ const EditorView = memo(function EditorView({
   media,
   files,
   editable = true,
+  variant = "card",
+  header,
   className,
   ref,
 }: EditorViewProps) {
@@ -378,7 +423,7 @@ const EditorView = memo(function EditorView({
 
   const [parsed, setParsed] = useState<ParsedDoc | null>(null);
   const [stage, setStage] = useState<Stage>("static");
-  const [mode, setMode] = useState<Mode>("visual");
+  const [mode, setMode] = useState<EditorMode>("visual");
   const [source, setSource] = useState("");
   const [sourceError, setSourceError] = useState<string | null>(null);
 
@@ -556,9 +601,16 @@ const EditorView = memo(function EditorView({
     });
   };
 
-  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown, markSaved }));
+  useImperativeHandle(ref, () => ({
+    getMarkdown,
+    applyExternalMarkdown,
+    setMarkdown,
+    markSaved,
+    getMode: () => mode,
+    setMode: switchMode,
+  }));
 
-  function switchMode(next: Mode) {
+  function switchMode(next: EditorMode) {
     if (next === mode) return;
 
     if (next === "source") {
@@ -582,7 +634,8 @@ const EditorView = memo(function EditorView({
 
   const providers = useMemo(() => ({ media, files }), [media, files]);
 
-  let rootClass = stylex.props(styles.root).className!;
+  const page = variant === "page";
+  let rootClass = stylex.props(styles.root, page && styles.page).className!;
   if (scoped) rootClass += ` ${scoped}`;
   if (className) rootClass += ` ${className}`;
 
@@ -600,10 +653,11 @@ const EditorView = memo(function EditorView({
       >
         <Tabs.Root
           value={mode}
-          onValueChange={(value) => switchMode(value as Mode)}
-          {...stylex.props(styles.bar)}
+          onValueChange={(value) => switchMode(value as EditorMode)}
+          {...stylex.props(styles.bar, page && styles.barPage)}
         >
-          {sync ? <SyncIndicator {...sync} /> : <span />}
+          {header?.start}
+          {sync ? <SyncIndicator {...sync} /> : <span {...stylex.props(styles.grow)} />}
           <Tabs.List {...stylex.props(styles.tabs)}>
             <Tabs.Tab {...stylex.props(chrome.button, styles.tab)} value="visual">
               Visual
@@ -616,9 +670,10 @@ const EditorView = memo(function EditorView({
               MDX
             </Tabs.Tab>
           </Tabs.List>
+          {header?.end}
         </Tabs.Root>
         {mode === "visual" ? (
-          <div data-fde-overlay="" {...stylex.props(styles.body)}>
+          <div data-fde-overlay="" {...stylex.props(styles.body, page && styles.pageColumn)}>
             {stage !== "static" && parsed && (!collab || collabRuntime) && (
               <Suspense fallback={null}>
                 <LiveEditor
@@ -676,10 +731,10 @@ const EditorView = memo(function EditorView({
             )}
           </div>
         ) : (
-          <div {...stylex.props(styles.source)}>
+          <div {...stylex.props(styles.source, page && styles.pageColumn)}>
             {sourceError != null && <div {...stylex.props(styles.sourceError)}>{sourceError}</div>}
             <textarea
-              {...stylex.props(chrome.input, styles.textarea)}
+              {...stylex.props(chrome.input, styles.textarea, page && styles.textareaPage)}
               value={source}
               readOnly={!editable}
               spellCheck={false}

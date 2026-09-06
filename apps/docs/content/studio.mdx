@@ -5,7 +5,9 @@ description: Edit a folder of MDX files without writing a host app
 ---
 
 Studio is the editor as a command. It starts a dev server, opens the browser
-and shows every `.md` and `.mdx` file under a directory in a sidebar:
+and turns a directory of `.md` and `.mdx` files into one editing surface: the
+document fills the window, the file list floats beside it, and `⌘K` finds
+files and actions:
 
 ```bash
 npx @fumadocs-editor/studio
@@ -13,13 +15,25 @@ npx @fumadocs-editor/studio
 
 - edits autosave to disk; changes made on disk (a `git pull`, your IDE)
   merge into the open document, see [Sync](/sync)
-- the sidebar follows the `meta.json` ordering Fumadocs uses and shows
-  frontmatter titles
+- the file list follows the filesystem: files added, removed or retitled on
+  disk show up as it happens, in the `meta.json` order Fumadocs uses
 - `?collab` in the URL turns on [collaborative editing](/collab) for that
-  tab; the toggle in the header does the same
+  tab; the palette has the same switch
 
 Studio needs Node 24 or later. It browses and edits existing files; creating,
 renaming and deleting stay with your file manager for now.
+
+## Keyboard
+
+| Keys                             | Does                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `⌘K` / `Ctrl+K`                  | Search files by title or path; switch theme, collaboration or the MDX source view; copy the file path |
+| `⌘S`                             | Save now (autosave runs anyway)                                                                       |
+| `↑` `↓` `←` `→` in the file list | Move between files, close or open a folder                                                            |
+| `Esc` in the file list           | Close it. The button in the header opens it again; the choice is remembered                           |
+
+On wide screens the open file list gets its own column; on narrow ones it
+floats over the document.
 
 ## Flags
 
@@ -83,7 +97,7 @@ export default defineServerConfig({ vite: { plugins: [tailwindcss()] } });
 The editor's own chrome uses `--fde-*` tokens, so a stylesheet can restyle it
 too, as on any host page.
 
-## Sidebar order
+## File list order
 
 Studio reads the subset of `meta.json` that orders pages:
 

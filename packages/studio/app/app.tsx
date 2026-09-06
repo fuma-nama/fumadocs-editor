@@ -1,40 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MdxEditor,
   useEditorTheme,
+  type EditorTheme,
   type FileProvider,
+  type MdxEditorRef,
   type MdxEditorSync,
 } from "@fumadocs-editor/ui";
 import type { SessionStatus } from "@fumadocs-editor/core/sync";
-import { Moon, PanelLeft, RefreshCw, Sun } from "lucide-react";
-import { frontmatterTitle, TREE_ENDPOINT, type TreeNode, type TreeResponse } from "./protocol";
+import {
+  Code,
+  Copy,
+  Eye,
+  FileText,
+  Monitor,
+  Moon,
+  PanelLeft,
+  PanelLeftClose,
+  Search,
+  Sun,
+  SunMoon,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  frontmatterTitle,
+  TREE_ENDPOINT,
+  TREE_EVENT,
+  type TreeNode,
+  type TreeResponse,
+} from "./protocol";
 import { authHeaders, collab, components, media, syntax, transport } from "./providers";
-import { Sidebar } from "./sidebar";
+import { FilePanel } from "./files";
+import { Palette, type PaletteGroup, type PaletteItem } from "./palette";
 
 type TreeError = "denied" | "offline";
+type FileNode = Extract<TreeNode, { type: "file" }>;
 
 const UNSAVED = new Set<SessionStatus>(["dirty", "saving", "conflict"]);
-const DESKTOP = "(min-width: 960px)";
+const PANEL_KEY = "fde-studio-files";
+const THEMES: [EditorTheme, string, LucideIcon][] = [
+  ["light", "Light", Sun],
+  ["dark", "Dark", Moon],
+  ["system", "System", Monitor],
+];
+const META_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useEditorTheme();
-  const next = resolvedTheme === "dark" ? "light" : "dark";
-  return (
-    <button
-      type="button"
-      className="icon-button"
-      aria-label={`Switch to ${next} theme`}
-      onClick={() => setTheme(next)}
-    >
-      {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-    </button>
-  );
-}
-
-/** file paths in sidebar order */
-function collectFiles(nodes: TreeNode[], into: string[] = []): string[] {
+/** file nodes in tree order */
+function collectFiles(nodes: TreeNode[], into: FileNode[] = []): FileNode[] {
   for (const node of nodes) {
-    if (node.type === "file") into.push(node.path);
+    if (node.type === "file") into.push(node);
     else if (node.type === "folder") collectFiles(node.children, into);
   }
   return into;
@@ -62,6 +77,9 @@ function relativeTo(from: string, to: string): string {
 }
 
 const readHash = () => decodeURIComponent(location.hash.slice(1)) || null;
+const openFile = (path: string) => {
+  location.hash = encodeURIComponent(path);
+};
 
 export function Studio() {
   const [response, setResponse] = useState<TreeResponse | null>(null);
@@ -69,27 +87,36 @@ export function Studio() {
   const [active, setActive] = useState(readHash);
   const [status, setStatus] = useState<SessionStatus>("synced");
   const [writable, setWritable] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(() => matchMedia(DESKTOP).matches);
+  const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem(PANEL_KEY) === "1");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [groups, setGroups] = useState<PaletteGroup[]>([]);
+  const { theme, setTheme } = useEditorTheme();
+  const editorRef = useRef<MdxEditorRef>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const loads = useRef(0);
 
   const loadTree = useCallback(async () => {
+    // only the latest response may land
+    const id = ++loads.current;
     try {
       const res = await fetch(TREE_ENDPOINT, { headers: await authHeaders(), cache: "no-store" });
+      const body = res.ok ? ((await res.json()) as TreeResponse) : null;
+      if (id !== loads.current) return;
       if (res.status === 401 || res.status === 403) return setError("denied");
-      if (!res.ok) throw new Error(res.statusText);
-      setResponse((await res.json()) as TreeResponse);
+      if (!body) throw new Error(res.statusText);
+      setResponse(body);
       setError(null);
     } catch {
-      setError("offline");
+      if (id === loads.current) setError("offline");
     }
   }, []);
 
+  // the server pings over Vite's HMR socket whenever the tree changes on disk
   useEffect(() => {
     void loadTree();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void loadTree();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    const hot = import.meta.hot;
+    hot?.on(TREE_EVENT, loadTree);
+    return () => hot?.off(TREE_EVENT, loadTree);
   }, [loadTree]);
 
   useEffect(() => {
@@ -98,12 +125,28 @@ export function Studio() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem(PANEL_KEY, panelOpen ? "1" : "0");
+  }, [panelOpen]);
+
+  const openPaletteRef = useRef(() => {});
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openPaletteRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
   const files = useMemo(() => (response ? collectFiles(response.tree) : []), [response]);
-  const known = active !== null && files.includes(active);
+  const known = active !== null && files.some((file) => file.path === active);
 
   // the hash is the source of truth for the open file; fall back to the first
   useEffect(() => {
-    if (!known && files.length > 0) location.replace(`#${encodeURIComponent(files[0])}`);
+    if (!known && files.length > 0) location.replace(`#${encodeURIComponent(files[0].path)}`);
   }, [known, files]);
 
   useEffect(() => {
@@ -137,7 +180,9 @@ export function Studio() {
     return {
       list: async () => {
         const paths: string[] = [];
-        for (const file of files) if (file !== active) paths.push(relativeTo(active, file));
+        for (const file of files) {
+          if (file.path !== active) paths.push(relativeTo(active, file.path));
+        }
         return paths;
       },
     };
@@ -154,77 +199,145 @@ export function Studio() {
     });
   };
 
-  const select = (path: string) => {
-    location.hash = encodeURIComponent(path);
-    if (!matchMedia(DESKTOP).matches) setSidebarOpen(false);
-  };
-
-  const collabHref = `${collab ? location.pathname : "?collab"}${location.hash}`;
-
-  let panel: string | null = null;
-  if (error === "denied") panel = "Access denied: this token cannot open the workspace.";
-  else if (error === "offline") panel = "The studio server is not reachable.";
-  else if (response && files.length === 0) panel = `No .md or .mdx files under ${response.root}.`;
-
-  return (
-    <div className="studio" data-sidebar={sidebarOpen ? "open" : "closed"}>
-      <aside className="sidebar">
-        <div className="sidebar-head">
-          <span className="sidebar-title">{response?.root ?? "…"}</span>
+  const header = useMemo(
+    () => ({
+      start: (
+        <>
           <button
             type="button"
             className="icon-button"
-            aria-label="Refresh files"
-            onClick={() => void loadTree()}
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-        {response && <Sidebar nodes={response.tree} active={active} onSelect={select} />}
-      </aside>
-      <div className="scrim" onClick={() => setSidebarOpen(false)} />
-      <main className="main">
-        <header className="topbar">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Files"
+            aria-pressed={panelOpen}
+            onClick={() => setPanelOpen(!panelOpen)}
           >
             <PanelLeft size={16} />
           </button>
-          <span className="topbar-path">{known ? active : ""}</span>
-          <a href={collabHref} className="pill" data-on={collab ? "" : undefined}>
-            {collab ? "collab: on" : "collab: off"}
-          </a>
-          <ThemeToggle />
-        </header>
-        <div className="content">
-          {panel ? (
-            <p className="panel">
-              {panel}
-              {error === "offline" && (
-                <button type="button" className="link-button" onClick={() => void loadTree()}>
-                  Retry
-                </button>
-              )}
-            </p>
-          ) : (
-            sync && (
-              <MdxEditor
-                sync={sync}
-                components={components}
-                syntax={syntax}
-                media={media}
-                files={fileProvider}
-                editable={writable}
-                onChange={onChange}
-              />
-            )
-          )}
-        </div>
-      </main>
+          <span className="path">{active}</span>
+        </>
+      ),
+      end: (
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Search files and actions"
+          onClick={() => openPaletteRef.current()}
+        >
+          <Search size={16} />
+          <kbd>{META_KEY}K</kbd>
+        </button>
+      ),
+    }),
+    [panelOpen, active],
+  );
+
+  const collabHref = `${collab ? location.pathname : "?collab"}${location.hash}`;
+
+  // items are snapshotted when the palette opens (the editor mode lives on
+  // the ref) and kept while it fades out
+  openPaletteRef.current = () => {
+    const fileItems: PaletteItem[] = [];
+    for (const file of files) {
+      fileItems.push({
+        id: file.path,
+        label: file.title,
+        icon: FileText,
+        detail: file.path,
+        run: () => openFile(file.path),
+      });
+    }
+    const actions: PaletteItem[] = [
+      {
+        id: "files",
+        label: panelOpen ? "Hide file list" : "Show file list",
+        icon: panelOpen ? PanelLeftClose : PanelLeft,
+        run: () => setPanelOpen(!panelOpen),
+      },
+    ];
+    if (known) {
+      const source = editorRef.current?.getMode() === "source";
+      actions.push(
+        {
+          id: "mode",
+          label: source ? "Switch to visual editor" : "Switch to MDX source",
+          icon: source ? Eye : Code,
+          run: () => editorRef.current?.setMode(source ? "visual" : "source"),
+        },
+        {
+          id: "copy",
+          label: "Copy file path",
+          icon: Copy,
+          detail: active,
+          run: () => void navigator.clipboard.writeText(active),
+        },
+      );
+    }
+    actions.push({
+      id: "collab",
+      label: collab ? "Turn off collaboration" : "Turn on collaboration",
+      icon: Users,
+      run: () => location.assign(collabHref),
+    });
+    const themes: PaletteItem[] = [];
+    let current = "";
+    for (const [option, label, icon] of THEMES) {
+      if (theme === option) current = label;
+      themes.push({
+        id: option,
+        label,
+        icon,
+        checked: theme === option,
+        run: () => setTheme(option),
+      });
+    }
+    actions.push({ id: "theme", label: "Theme", icon: SunMoon, detail: current, items: themes });
+    setGroups([
+      { label: "Files", items: fileItems },
+      { label: "Actions", items: actions },
+    ]);
+    setPaletteOpen(true);
+  };
+
+  let message: string | null = null;
+  if (error === "denied") message = "Access denied: this token cannot open the workspace.";
+  else if (error === "offline") message = "The studio server is not reachable.";
+  else if (response && files.length === 0) message = `No .md or .mdx files under ${response.root}.`;
+
+  return (
+    <div className="studio" ref={rootRef} data-files={panelOpen ? "" : undefined}>
+      {message ? (
+        <p className="message">{message}</p>
+      ) : (
+        sync && (
+          <MdxEditor
+            ref={editorRef}
+            variant="page"
+            header={header}
+            sync={sync}
+            components={components}
+            syntax={syntax}
+            media={media}
+            files={fileProvider}
+            editable={writable}
+            onChange={onChange}
+          />
+        )
+      )}
+      {response && (
+        <FilePanel
+          root={response.root}
+          nodes={response.tree}
+          active={active}
+          hidden={!panelOpen}
+          onSelect={openFile}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
+      <Palette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        groups={groups}
+        container={rootRef}
+      />
     </div>
   );
 }

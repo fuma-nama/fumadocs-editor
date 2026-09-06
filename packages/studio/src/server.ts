@@ -12,9 +12,9 @@ import {
 import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
 import { editorSync } from "@fumadocs-editor/core/vite";
 import type { SyncScope } from "@fumadocs-editor/core/node";
-import { TREE_ENDPOINT, type TreeResponse } from "../app/protocol";
+import { TREE_ENDPOINT, TREE_EVENT, type TreeResponse } from "../app/protocol";
 import type { StudioOptions } from "./load-config";
-import { readTree } from "./tree";
+import { openWorkspace } from "./tree";
 
 const studioDir = path.resolve(import.meta.dirname, "..");
 const appDir = path.join(studioDir, "app");
@@ -28,6 +28,7 @@ const PINNED = [
   "@fumadocs-editor/studio",
   "@fumadocs-editor/ui",
   "@fumadocs-editor/core",
+  "@base-ui/react",
   "react",
   "react-dom",
 ];
@@ -46,6 +47,11 @@ const OPTIMIZE = [
   "@fumadocs-editor/core/extensions",
   "@fumadocs-editor/core/sync",
   "@fumadocs-editor/core/collab",
+  "@base-ui/react/autocomplete",
+  "@base-ui/react/collapsible",
+  "@base-ui/react/dialog",
+  "@base-ui/react/scroll-area",
+  "lucide-react",
   "react",
   "react/jsx-runtime",
   "react/jsx-dev-runtime",
@@ -57,6 +63,8 @@ const CONFIG_ID = "virtual:fumadocs-studio-config";
 const STYLES_ID = "virtual:fumadocs-studio-styles";
 const EMPTY_CONFIG_ID = "\0fumadocs-studio-config";
 const RESOLVED_STYLES_ID = "\0fumadocs-studio-styles";
+/** editors write in bursts; read a changed file once it settles */
+const SETTLE_MS = 100;
 
 function optimizeInclude(): string[] {
   const include: string[] = [];
@@ -87,6 +95,7 @@ const ALLOW_ALL: SyncScope = { write: true };
 
 function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions): Plugin {
   const { authenticate } = server;
+  const workspace = openWorkspace(contentRoot);
 
   const authorize = async (request: IncomingMessage) => {
     const header = request.headers[AUTH_HEADER];
@@ -113,7 +122,7 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
       return response.end();
     }
     const read = scope.read ?? true;
-    const tree = await readTree(contentRoot, typeof read === "function" ? read : () => read);
+    const tree = (await workspace).tree(typeof read === "function" ? read : () => read);
     response.setHeader("content-type", "application/json");
     response.setHeader("cache-control", "no-store");
     response.end(JSON.stringify({ root: path.basename(contentRoot), tree } satisfies TreeResponse));
@@ -135,6 +144,26 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
       }
     },
     configureServer(vite) {
+      // the documents are not modules, so Vite's watcher only feeds the index
+      vite.watcher.add(contentRoot);
+      const pending = new Map<string, NodeJS.Timeout>();
+      let ping: NodeJS.Timeout | undefined;
+      vite.watcher.on("all", (event, file) => {
+        clearTimeout(pending.get(file));
+        pending.set(
+          file,
+          setTimeout(() => {
+            pending.delete(file);
+            workspace
+              .then((ws) => ws.update(event, file))
+              .then((changed) => {
+                if (!changed) return;
+                clearTimeout(ping);
+                ping = setTimeout(() => vite.hot.send(TREE_EVENT), SETTLE_MS);
+              });
+          }, SETTLE_MS),
+        );
+      });
       vite.middlewares.use(TREE_ENDPOINT, (request, response) => {
         serveTree(request, response).catch((error: unknown) => {
           response.statusCode = 500;
@@ -155,13 +184,7 @@ export async function startStudio(options: StudioOptions): Promise<ViteDevServer
     // the project's, never this package's: it may be an npx cache
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
     plugins: [studioPlugin(options), editorSync({ ...sync, root: contentRoot })],
-    server: {
-      port,
-      host,
-      open,
-      // the documents are runtime data owned by the sync server, not modules
-      watch: { ignored: [path.join(contentRoot, "**")] },
-    },
+    server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },
   } satisfies InlineConfig);
   const vite = await createServer(mergeConfig(config, userConfig));

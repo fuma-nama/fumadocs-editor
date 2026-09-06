@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { frontmatterTitle, type TreeNode } from "../app/protocol";
-import { buildTree, readTree } from "../src/tree";
+import { buildTree, openWorkspace, type WorkspaceIndex } from "../src/tree";
 
 const outline = (nodes: TreeNode[]): unknown[] =>
   nodes.map((node) =>
@@ -14,8 +14,15 @@ const outline = (nodes: TreeNode[]): unknown[] =>
         : node.title,
   );
 
-const tree = (files: string[], metas: Parameters<typeof buildTree>[0]["metas"] = {}, titles = {}) =>
-  outline(buildTree({ files, metas, titles }));
+const tree = (
+  files: string[],
+  metas: Record<string, WorkspaceIndex["metas"] extends Map<string, infer M> ? M : never> = {},
+  titles: Record<string, string> = {},
+) => {
+  const index: WorkspaceIndex = { files: new Map(), metas: new Map(Object.entries(metas)) };
+  for (const file of files) index.files.set(file, titles[file]);
+  return outline(buildTree(index));
+};
 
 describe("buildTree", () => {
   test("default order: index first, then by name, folders mixed in", () => {
@@ -77,7 +84,7 @@ describe("buildTree", () => {
         docs: { pages: ["y", "---Deep---", "...deep"] },
       }),
     ).toEqual([{ docs: ["y", "--- Deep", { deep: ["z"] }, "x"] }]);
-    expect(buildTree({ files: [], metas: {}, titles: {} })).toEqual([]);
+    expect(buildTree({ files: new Map(), metas: new Map() })).toEqual([]);
   });
 
   test("a listed key is consumed once", () => {
@@ -103,7 +110,7 @@ describe("frontmatterTitle", () => {
   });
 });
 
-describe("readTree", () => {
+describe("openWorkspace", () => {
   let root: string;
   beforeAll(async () => {
     root = await mkdtemp(path.join(tmpdir(), "fde-studio-tree-"));
@@ -122,14 +129,47 @@ describe("readTree", () => {
   afterAll(() => rm(root, { recursive: true, force: true }));
 
   test("lists readable markdown only, invalid meta ignored", async () => {
-    expect(outline(await readTree(root, () => true))).toEqual([
+    const workspace = await openWorkspace(root);
+    expect(outline(workspace.tree(() => true))).toEqual([
       { guides: ["a"] },
       "Home",
       { private: ["Secret"] },
     ]);
-    expect(outline(await readTree(root, (p) => !p.startsWith("private/")))).toEqual([
+    expect(outline(workspace.tree((p) => !p.startsWith("private/")))).toEqual([
       { guides: ["a"] },
       "Home",
     ]);
+  });
+
+  test("update follows the filesystem", async () => {
+    const workspace = await openWorkspace(root);
+    const all = () => outline(workspace.tree(() => true));
+    const at = (relative: string) => path.join(root, relative);
+
+    await writeFile(at("new.mdx"), "---\ntitle: New\n---\n");
+    expect(await workspace.update("add", at("new.mdx"))).toBe(true);
+    expect(all()).toContain("New");
+    // same title: nothing to announce
+    expect(await workspace.update("change", at("new.mdx"))).toBe(false);
+    await writeFile(at("new.mdx"), "---\ntitle: Renamed\n---\n");
+    expect(await workspace.update("change", at("new.mdx"))).toBe(true);
+    expect(all()).toContain("Renamed");
+    await unlink(at("new.mdx"));
+    expect(await workspace.update("unlink", at("new.mdx"))).toBe(true);
+    expect(all()).not.toContain("Renamed");
+
+    await writeFile(at("meta.json"), JSON.stringify({ pages: ["private", "..."] }));
+    expect(await workspace.update("change", at("meta.json"))).toBe(true);
+    expect(all()[0]).toEqual({ private: ["Secret"] });
+
+    // a directory moved in arrives as one addDir; moved out as one unlinkDir
+    await rename(at("private"), at("public"));
+    expect(await workspace.update("unlinkDir", at("private"))).toBe(true);
+    expect(await workspace.update("addDir", at("public"))).toBe(true);
+    expect(all()).toEqual(["Home", { guides: ["a"] }, { public: ["Secret"] }]);
+
+    expect(await workspace.update("add", at("notes.txt"))).toBe(false);
+    expect(await workspace.update("add", at("guides/.hidden/x.mdx"))).toBe(false);
+    expect(await workspace.update("add", path.join(root, "..", "outside.mdx"))).toBe(false);
   });
 });

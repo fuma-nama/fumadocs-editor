@@ -16,6 +16,20 @@ import { MdxEditor } from "@fumadocs-editor/ui";
 
 <auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorSync" />
 
+## Page variant
+
+`variant="page"` makes the editor the page: no frame, the header row with
+the sync status and mode tabs stays at the top, and the document scrolls in
+a column centered on the viewport. `header` puts your own controls in that
+row. Studio is built on it.
+
+<include meta='title="page.tsx"'>../examples/page-variant.tsx</include>
+
+Two custom properties on an ancestor tune the column: `--fde-page-width`
+(default `52rem`) and `--fde-page-inset`, the space at the start the column
+keeps clear of, for a panel floating there. The column stays centered while
+there is room and moves right of the inset when there is not.
+
 ## Ref
 
 <auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorRef" />

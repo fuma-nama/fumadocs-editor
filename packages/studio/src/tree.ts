@@ -1,14 +1,25 @@
+import type { Dirent } from "node:fs";
 import { open, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { frontmatterTitle, type MetaJson, type TreeNode } from "../app/protocol";
 
-export interface TreeInput {
-  /** root-relative posix paths of the markdown files */
-  files: string[];
+/** what the tree is built from */
+export interface WorkspaceIndex {
+  /** root-relative posix path of every markdown file, to its frontmatter title */
+  files: Map<string, string | undefined>;
   /** `meta.json` per directory, keyed by root-relative path (`""` = root) */
-  metas: Record<string, MetaJson | undefined>;
-  /** frontmatter title per file path */
-  titles: Record<string, string | undefined>;
+  metas: Map<string, MetaJson>;
+}
+
+export interface Workspace {
+  /** the tree of the files `canRead` allows */
+  tree(canRead: (path: string) => boolean): TreeNode[];
+  /**
+   * Apply a watcher event (chokidar's `add` / `change` / `unlink` /
+   * `addDir` / `unlinkDir`) for `absolute`: re-reads what it names and
+   * reports whether the tree changed. Paths outside the root are ignored.
+   */
+  update(event: string, absolute: string): Promise<boolean>;
 }
 
 interface Dir {
@@ -24,6 +35,7 @@ const LINK = /^\[.*\]\(.*\)$/;
 /** a dot segment or `node_modules` anywhere in the relative path */
 const HIDDEN = /(?:^|\/)(?:\.[^/]*|node_modules)(?:\/|$)/;
 const HEAD_BYTES = 4096;
+const READ_CONCURRENCY = 32;
 
 const byName = (a: string, b: string) =>
   Number(a !== "index") - Number(b !== "index") || a.localeCompare(b);
@@ -35,7 +47,10 @@ const byName = (a: string, b: string) =>
  * Unknown keys are dropped; keys `pages` does not mention are still appended
  * at the end. Without `pages`: `index` first, then by name.
  */
-export function buildTree({ files, metas, titles }: TreeInput): TreeNode[] {
+export function buildTree(
+  { files, metas }: WorkspaceIndex,
+  canRead: (path: string) => boolean = () => true,
+): TreeNode[] {
   const dirs = new Map<string, Dir>();
   const dirOf = (dir: string): Dir => {
     let entry = dirs.get(dir);
@@ -50,7 +65,8 @@ export function buildTree({ files, metas, titles }: TreeInput): TreeNode[] {
     return entry;
   };
   dirOf("");
-  for (const file of files) {
+  for (const file of files.keys()) {
+    if (!canRead(file)) continue;
     const slash = file.lastIndexOf("/");
     dirOf(slash < 0 ? "" : file.slice(0, slash)).files.set(
       file.slice(slash + 1).replace(MARKDOWN, ""),
@@ -63,13 +79,13 @@ export function buildTree({ files, metas, titles }: TreeInput): TreeNode[] {
     // a folder and a file may share a key (`guides.mdx` beside `guides/`)
     const items = new Map<string, TreeNode>();
     for (const [key, file] of entry.files) {
-      items.set(key, { type: "file", name: key, path: file, title: titles[file] ?? key });
+      items.set(key, { type: "file", name: key, path: file, title: files.get(file) ?? key });
     }
     for (const name of entry.dirs) {
       const childPath = dir ? `${dir}/${name}` : name;
       const children = build(childPath);
       if (children.length === 0) continue;
-      const title = metas[childPath]?.title;
+      const title = metas.get(childPath)?.title;
       items.set(`${name}/`, {
         type: "folder",
         name,
@@ -79,7 +95,7 @@ export function buildTree({ files, metas, titles }: TreeInput): TreeNode[] {
       });
     }
 
-    const pages = metas[dir]?.pages;
+    const pages = metas.get(dir)?.pages;
     const ordered: TreeNode[] = [];
     let restAt = -1;
     let restDescending = false;
@@ -127,53 +143,100 @@ async function readHead(file: string): Promise<string> {
   }
 }
 
+/** runs `fn` over `items`, at most `limit` at a time; resolves true if any call did */
+async function someLimit<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<boolean>,
+): Promise<boolean> {
+  let next = 0;
+  let any = false;
+  const worker = async () => {
+    while (next < items.length) if (await fn(items[next++])) any = true;
+  };
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(limit, items.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return any;
+}
+
 /**
- * The tree of `root`: markdown files the scope may read, `meta.json` per
- * directory (invalid JSON counts as none), titles from each file's head.
+ * Scans `root` once, then stays current through {@link Workspace.update}.
+ * Markdown files carry their frontmatter title (from a head read), each
+ * `meta.json` its parsed content (invalid JSON counts as none); dot
+ * segments and `node_modules` are skipped.
  */
-export async function readTree(
-  root: string,
-  canRead: (path: string) => boolean,
-): Promise<TreeNode[]> {
+export async function openWorkspace(root: string): Promise<Workspace> {
   root = path.resolve(root);
-  const entries = await readdir(root, { recursive: true, withFileTypes: true });
-  const files: string[] = [];
-  const metaFiles: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const relative = path
-      .relative(root, path.join(entry.parentPath, entry.name))
-      .split(path.sep)
-      .join("/");
-    if (HIDDEN.test(relative)) continue;
-    if (entry.name === "meta.json") metaFiles.push(relative);
-    else if (MARKDOWN.test(entry.name) && canRead(relative)) files.push(relative);
-  }
-  const metas: TreeInput["metas"] = {};
-  const titles: TreeInput["titles"] = {};
-  const reads: Promise<void>[] = [];
-  for (const file of metaFiles) {
-    reads.push(
-      readFile(path.join(root, file), "utf8").then(
-        (json) => {
-          try {
-            metas[path.posix.dirname(file).replace(/^\.$/, "")] = JSON.parse(json);
-          } catch {}
-        },
-        () => {},
-      ),
-    );
-  }
-  for (const file of files) {
-    reads.push(
-      readHead(path.join(root, file)).then(
-        (head) => {
-          titles[file] = frontmatterTitle(head);
-        },
-        () => {},
-      ),
-    );
-  }
-  await Promise.all(reads);
-  return buildTree({ files, metas, titles });
+  const index: WorkspaceIndex = { files: new Map(), metas: new Map() };
+
+  /** re-read one file; a missing one is dropped */
+  const refresh = async (relative: string): Promise<boolean> => {
+    const name = relative.slice(relative.lastIndexOf("/") + 1);
+    if (name === "meta.json") {
+      const dir = relative.slice(0, -"/meta.json".length);
+      let meta: unknown;
+      try {
+        meta = JSON.parse(await readFile(path.join(root, relative), "utf8"));
+      } catch {}
+      if (meta && typeof meta === "object") index.metas.set(dir, meta as MetaJson);
+      else index.metas.delete(dir);
+      return true;
+    }
+    if (!MARKDOWN.test(name)) return false;
+    let title: string | undefined;
+    try {
+      title = frontmatterTitle(await readHead(path.join(root, relative)));
+    } catch {
+      return index.files.delete(relative);
+    }
+    if (index.files.has(relative) && index.files.get(relative) === title) return false;
+    index.files.set(relative, title);
+    return true;
+  };
+
+  const scan = async (dir: string): Promise<boolean> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(path.join(root, dir), { recursive: true, withFileTypes: true });
+    } catch {
+      return false;
+    }
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const relative = path
+        .relative(root, path.join(entry.parentPath, entry.name))
+        .split(path.sep)
+        .join("/");
+      if (!HIDDEN.test(relative)) files.push(relative);
+    }
+    return someLimit(files, READ_CONCURRENCY, refresh);
+  };
+
+  const drop = (prefix: string): boolean => {
+    let any = false;
+    for (const file of index.files.keys()) {
+      if (file.startsWith(prefix)) any = index.files.delete(file);
+    }
+    for (const dir of index.metas.keys()) {
+      if (dir.startsWith(prefix)) any = index.metas.delete(dir);
+    }
+    return any;
+  };
+
+  await scan("");
+
+  return {
+    tree: (canRead) => buildTree(index, canRead),
+    update(event, absolute) {
+      if (!absolute.startsWith(root + path.sep)) return Promise.resolve(false);
+      const relative = path.relative(root, absolute).split(path.sep).join("/");
+      if (HIDDEN.test(relative)) return Promise.resolve(false);
+      if (event === "unlinkDir") return Promise.resolve(drop(`${relative}/`));
+      // a moved-in directory: its files may arrive without events of their own
+      if (event === "addDir") return scan(relative);
+      return refresh(relative);
+    },
+  };
 }

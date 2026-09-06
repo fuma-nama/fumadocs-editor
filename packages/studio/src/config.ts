@@ -23,7 +23,7 @@ export interface StudioConfig {
   components?: UiComponentSpec[];
   /** parse-level dialects, e.g. `{ math: true }` */
   syntax?: SyntaxOptions;
-  /** initial colour theme; the toggle in the header persists the choice */
+  /** initial colour theme; the palette's theme actions persist the choice */
   theme?: EditorTheme;
   /**
    * Uploads and display URLs. Default: the studio server stores uploads
@@ -32,7 +32,7 @@ export interface StudioConfig {
   media?: MediaProvider | false;
   /**
    * Collaborative editing for every tab. Off by default; `?collab` in the
-   * URL turns it on for one tab.
+   * URL (or the palette's action) turns it on for one tab.
    */
   collab?: boolean | { user?: CollabUser };
   /**
