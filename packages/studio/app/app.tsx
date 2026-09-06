@@ -55,14 +55,24 @@ function collectFiles(nodes: TreeNode[], into: FileNode[] = []): FileNode[] {
   return into;
 }
 
+/** the tree with `path` retitled; the same array when nothing changed */
 function retitle(nodes: TreeNode[], path: string, title: string): TreeNode[] {
-  return nodes.map((node) => {
-    if (node.type === "file") return node.path === path ? { ...node, title } : node;
-    if (node.type === "folder" && path.startsWith(`${node.path}/`)) {
-      return { ...node, children: retitle(node.children, path, title) };
-    }
-    return node;
-  });
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    let next: TreeNode;
+    if (node.type === "file" && node.path === path) {
+      if (node.title === title) return nodes;
+      next = { ...node, title };
+    } else if (node.type === "folder" && path.startsWith(`${node.path}/`)) {
+      const children = retitle(node.children, path, title);
+      if (children === node.children) return nodes;
+      next = { ...node, children };
+    } else continue;
+    const out = nodes.slice();
+    out[i] = next;
+    return out;
+  }
+  return nodes;
 }
 
 /** `to` relative to the directory of `from`, the way a document references it */
@@ -195,7 +205,8 @@ export function Studio() {
       active.slice(active.lastIndexOf("/") + 1).replace(/\.mdx?$/, "");
     setResponse((current) => {
       if (!current) return current;
-      return { ...current, tree: retitle(current.tree, active, title) };
+      const tree = retitle(current.tree, active, title);
+      return tree === current.tree ? current : { ...current, tree };
     });
   };
 

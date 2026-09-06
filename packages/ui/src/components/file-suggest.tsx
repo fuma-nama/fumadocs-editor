@@ -4,10 +4,12 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
+import type { RefObject } from "react";
 import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core/extensions";
 import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
 import type { FileProvider } from "./media";
+import type { EditorProviders } from "./providers";
 
 interface ActivePath {
   from: number;
@@ -30,13 +32,17 @@ function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): Ac
   return null;
 }
 
-export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProvider): Extension {
+export function fileSuggest(
+  specs: Map<string, UiComponentSpec>,
+  providers: RefObject<EditorProviders>,
+): Extension {
   return Extension.create({
     name: "fdeFileSuggest",
     addProseMirrorPlugins() {
       const editor = this.editor;
       const key = new PluginKey("fdeFileSuggest");
-      let paths: string[] | null = null;
+      let listed: FileProvider | undefined; // the provider `paths` came from
+      let paths: string[] = [];
       let renderer: ReactRenderer<unknown, PopupProps> | null = null;
       let active: ActivePath | null = null;
       let items: string[] = [];
@@ -84,14 +90,17 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
           view: () => ({
             update: (view) => {
               active = activePath(view.state, specs);
-              if (!active) {
+              const { files } = providers.current;
+              if (!active || !files) {
                 dismissed = null;
                 hide();
                 return;
               }
-              if (paths == null) {
+              if (listed !== files) {
+                listed = files;
                 paths = [];
                 void files.list().then((list) => {
+                  if (editor.isDestroyed || listed !== files) return;
                   paths = list;
                   view.dispatch(view.state.tr.setMeta(key, "refresh"));
                 });
@@ -145,8 +154,9 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
   });
 }
 
-export function linkSuggest(files: FileProvider): Extension {
-  let paths: string[] | null = null;
+export function linkSuggest(providers: RefObject<EditorProviders>): Extension {
+  let listed: FileProvider | undefined;
+  let paths: string[] = [];
 
   const insert = (path: string) => (editor: Editor, range: Range) => {
     const name = path.replace(/^\.\//, "").replace(/\.mdx?$/, "");
@@ -173,6 +183,7 @@ export function linkSuggest(files: FileProvider): Extension {
           editor: this.editor,
           char: "[[",
           allow: ({ state, range }) => {
+            if (!providers.current.files) return false;
             const $pos = state.doc.resolve(range.from);
             if (!$pos.parent.type.allowsMarkType(state.schema.marks.link)) return false;
             // attribute regions serialize to plain strings: no links there
@@ -182,7 +193,12 @@ export function linkSuggest(files: FileProvider): Extension {
             return true;
           },
           items: async ({ query }) => {
-            paths ??= await files.list();
+            const { files } = providers.current;
+            if (!files) return [];
+            if (listed !== files) {
+              listed = files;
+              paths = await files.list();
+            }
             const q = query.toLowerCase();
             const matches = q ? paths.filter((path) => path.toLowerCase().includes(q)) : paths;
             return matches.map((path) => ({

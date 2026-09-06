@@ -236,7 +236,7 @@ test("the live editor's schema matches the server authority's", () => {
       history: false,
     }),
     codeBlockExtension(),
-    imageExtension(undefined),
+    imageExtension({ current: {} }),
     ...componentExtensions(specs),
     ...mathExtensions(true),
   ]);

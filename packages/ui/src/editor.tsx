@@ -436,6 +436,11 @@ const EditorView = memo(function EditorView({
   onChangeRef.current = onChange;
 
   const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
+  const onReady = useCallback((editor: Editor, serialize: SerializeFn) => {
+    editorRef.current = editor;
+    serializeRef.current = serialize;
+    setStage("live");
+  }, []);
 
   // `generation` bumps on server re-seed (restart); Y history cannot merge.
   const [collabRuntime, setCollabRuntime] = useState<EditorCollab | null>(null);
@@ -633,6 +638,8 @@ const EditorView = memo(function EditorView({
   }
 
   const providers = useMemo(() => ({ media, files }), [media, files]);
+  const providersRef = useRef(providers);
+  providersRef.current = providers;
 
   const page = variant === "page";
   let rootClass = stylex.props(styles.root, page && styles.page).className!;
@@ -683,17 +690,12 @@ const EditorView = memo(function EditorView({
                   doc={parsed.doc}
                   components={components}
                   specs={specMap}
+                  providers={providersRef}
                   syntax={syntax}
                   snapshotRef={snapshotRef}
                   onChangeRef={onChangeRef}
                   hidden={stage !== "live"}
-                  media={media}
-                  files={files}
-                  onReady={(editor, serialize) => {
-                    editorRef.current = editor;
-                    serializeRef.current = serialize;
-                    setStage("live");
-                  }}
+                  onReady={onReady}
                 />
               </Suspense>
             )}
@@ -723,7 +725,7 @@ const EditorView = memo(function EditorView({
               >
                 {staticFallback ??
                   (parsed ? (
-                    <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
+                    <StaticMdx doc={parsed.doc} specs={specMap} />
                   ) : (
                     <div className={`ProseMirror ${contentClass.root}`} aria-hidden />
                   ))}
@@ -771,8 +773,13 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
   const [status, setStatus] = useState<SessionStatus>("synced");
   const viewRef = useRef<MdxEditorRef | null>(null);
   const sessionRef = useRef<FileSession | null>(null);
-  const latest = useRef({ sync, props });
-  latest.current = { sync, props };
+  const latest = useRef({ sync, props, ref });
+  latest.current = { sync, props, ref };
+  // stable: a fresh callback would re-render the memoized view on every host render
+  const attach = useCallback((value: MdxEditorRef | null) => {
+    viewRef.current = value;
+    assignRef(latest.current.ref, value);
+  }, []);
 
   useEffect(() => {
     let open = true;
@@ -874,10 +881,7 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
       onChange={onChange}
       sync={indicator}
       collab={link.collab}
-      ref={(value) => {
-        viewRef.current = value;
-        assignRef(ref, value);
-      }}
+      ref={attach}
     />
   );
 }

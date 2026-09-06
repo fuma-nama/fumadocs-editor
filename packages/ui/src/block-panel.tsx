@@ -25,6 +25,7 @@ import {
   entryParentFolder,
   entryToggleTarget,
   focusAt,
+  handleBlock,
   moveBlocks,
   outdentEntry,
   parentBlock,
@@ -80,14 +81,15 @@ export interface ActiveComponent {
   attributes: MdxAttribute[];
 }
 
+/** the ⋯ panel's open state; closes when there is no block to act on */
 export function useBlockMenuOpen(
   editor: Editor,
-  pos: number | undefined,
+  block: boolean,
 ): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (pos == null) setOpen(false);
-  }, [pos]);
+    if (!block) setOpen(false);
+  }, [block]);
   useEffect(() => {
     const onTransaction = ({ transaction }: { transaction: Transaction }) => {
       if (transaction.getMeta(OPEN_COMPONENT_MENU)) setOpen(true);
@@ -100,11 +102,11 @@ export function useBlockMenuOpen(
   return [open, setOpen];
 }
 
+/** the ⋯ menu for the blocks the selection sits in; a component chip when it is one */
 export function BlockMenu({
   editor,
   specs,
   active,
-  range,
   open,
   onOpenChange,
   container,
@@ -116,7 +118,6 @@ export function BlockMenu({
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   active: ActiveComponent | null;
-  range: BlockRange | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: HTMLElement | undefined;
@@ -127,8 +128,6 @@ export function BlockMenu({
   touch?: boolean;
 }) {
   const spec = active ? specs.get(active.type) : undefined;
-  const pos = active ? active.pos : range?.from;
-  if (pos == null) return null;
   const label = spec ? (spec.label ?? spec.name) : null;
   const close = () => onOpenChange(false);
 
@@ -164,7 +163,11 @@ export function BlockMenu({
             {active && spec ? (
               <BlockPanel editor={editor} specs={specs} active={active} onDone={close} />
             ) : (
-              range && <BlockActions editor={editor} range={range} onDone={close} />
+              <BlockActions
+                editor={editor}
+                range={() => handleBlock(editor.state.selection)}
+                onDone={close}
+              />
             )}
           </Popover.Popup>
         </Popover.Positioner>
@@ -283,17 +286,16 @@ function blockLabel(node: PMNode): string {
 
 export function BlockActions({
   editor,
-  range: at,
+  range,
   onDone,
   itemLook,
 }: {
   editor: Editor;
-  /** a node view passes a getter: an edit above it shifts the range without a re-render */
-  range: BlockRange | (() => BlockRange | null | undefined);
+  /** read when an action runs: an edit above shifts the range without a re-render */
+  range: () => BlockRange | null | undefined;
   onDone: () => void;
   itemLook?: stylex.StyleXStyles;
 }) {
-  const range = () => (typeof at === "function" ? at() : at);
   const current = range();
   const parent = current ? parentBlock(editor.state.doc, current.from) : null;
   return (

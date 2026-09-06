@@ -5,16 +5,11 @@ import type { JSONContent } from "@tiptap/core";
 import { type MdxAttribute } from "@fumadocs-editor/core";
 import { componentRegions } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
-import {
-  Component as ReactComponent,
-  createContext,
-  useContext,
-  Fragment,
-  type ReactNode,
-} from "react";
+import { Component as ReactComponent, Fragment, memo, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
-import { resolveSrc, type MediaProvider } from "./components/media";
+import { resolveSrc } from "./components/media";
+import { useEditorProviders } from "./components/providers";
 import { content, contentClass } from "./styles/content";
 import { consts } from "./styles/consts.stylex";
 import { chrome } from "./styles/shared";
@@ -26,10 +21,8 @@ import { chrome } from "./styles/shared";
 
 type SpecMap = Map<string, UiComponentSpec>;
 
-const MediaContext = createContext<MediaProvider | undefined>(undefined);
-
 function StaticImg({ node }: { node: JSONContent }) {
-  const media = useContext(MediaContext);
+  const { media } = useEditorProviders();
   return (
     <img
       className={contentClass.image}
@@ -229,23 +222,18 @@ function Region({
   index: number;
 }) {
   const { region, placeholder } = componentRegions(parent, specs)[index];
-  const sx = stylex.props(content.region, kind === "block" && content.regionBlock, styles.wrapper);
+  const sx = stylex.props(content.region, kind === "block" && content.regionBlock);
   const own = parent.regions?.[region];
   const empty = !hasText(node);
   return (
-    <Shell type={node.type!}>
-      <div
-        data-node-view-wrapper=""
-        className={own ? `${sx.className} ${own}` : sx.className}
-        data-region={region}
-        data-empty={empty || undefined}
-        data-placeholder={empty && placeholder ? placeholder : undefined}
-      >
-        <ContentHole>
-          {renderChildren(node.content, specs) ?? (kind === "inline" ? <br /> : null)}
-        </ContentHole>
-      </div>
-    </Shell>
+    <div
+      className={own ? `${sx.className} ${own}` : sx.className}
+      data-region={region}
+      data-empty={empty || undefined}
+      data-placeholder={empty && placeholder ? placeholder : undefined}
+    >
+      {renderChildren(node.content, specs) ?? (kind === "inline" ? <br /> : null)}
+    </div>
   );
 }
 
@@ -485,28 +473,24 @@ function renderNode(
   }
 }
 
-export function StaticMdx({
+export const StaticMdx = memo(function StaticMdx({
   doc,
   specs,
-  media,
 }: {
   doc: JSONContent;
   specs: SpecMap;
-  media?: MediaProvider;
 }) {
   return (
-    <MediaContext.Provider value={media}>
-      <div
-        className={`ProseMirror ${stylex.props(content.root, styles.root).className}`}
-        aria-label="Loading editor"
-      >
-        {renderChildren(doc.content, specs)}
-        {doc.content?.at(-1)?.type !== "paragraph" && (
-          <p className={contentClass.paragraph}>
-            <br />
-          </p>
-        )}
-      </div>
-    </MediaContext.Provider>
+    <div
+      className={`ProseMirror ${stylex.props(content.root, styles.root).className}`}
+      aria-label="Loading editor"
+    >
+      {renderChildren(doc.content, specs)}
+      {doc.content?.at(-1)?.type !== "paragraph" && (
+        <p className={contentClass.paragraph}>
+          <br />
+        </p>
+      )}
+    </div>
   );
-}
+});

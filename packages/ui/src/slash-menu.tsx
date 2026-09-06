@@ -24,14 +24,14 @@ import {
   ImageIcon,
   Table2,
 } from "lucide-react";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
 import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
-import type { MediaProvider } from "./components/media";
+import type { EditorProviders } from "./components/providers";
 
 const muted = tokens.mutedForeground;
 
@@ -123,8 +123,9 @@ const MATH_ITEMS: SlashItem[] = [
   ),
 ];
 
-function imageItem(media: MediaProvider | undefined): SlashItem {
+function imageItem(providers: RefObject<EditorProviders>): SlashItem {
   return block("Image", <ImageIcon size={15} />, (e, r) => {
+    const { media } = providers.current;
     if (media) {
       const input = document.createElement("input");
       input.type = "file";
@@ -290,10 +291,10 @@ export function suggestionRender(): {
 
 export function insertItems(
   specs: Map<string, UiComponentSpec>,
-  media?: MediaProvider,
+  providers: RefObject<EditorProviders>,
   math?: boolean,
 ): SlashItem[] {
-  return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(media), ...componentItems(specs)];
+  return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(providers), ...componentItems(specs)];
 }
 
 export function entryItems(
@@ -325,10 +326,10 @@ export function entryItems(
 
 export function slashMenu(
   specMap: Map<string, UiComponentSpec>,
-  media?: MediaProvider,
+  providers: RefObject<EditorProviders>,
   math?: boolean,
 ): Extension {
-  const all = insertItems(specMap, media, math);
+  const all = insertItems(specMap, providers, math);
 
   return Extension.create({
     name: "fdeSlashMenu",

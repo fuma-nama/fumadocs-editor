@@ -13,7 +13,7 @@ import {
 import { createLowlight } from "lowlight";
 import { Popover } from "@base-ui/react/popover";
 import { Switch } from "@base-ui/react/switch";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
 import { chrome } from "../styles/shared";
@@ -21,7 +21,7 @@ import { BlockActions } from "../block-panel";
 import { content, contentClass } from "../styles/content";
 import { isRinged, nodeViewOptions } from "./node-view-options";
 import { Picker } from "./picker";
-import { buildCodeMeta, parseCodeMeta } from "./code-meta";
+import { buildCodeMeta, parseCodeMeta, type CodeMeta } from "./code-meta";
 import { MermaidDiagram } from "./mermaid";
 import { useEditorPortal } from "../utils/portal";
 
@@ -247,8 +247,8 @@ function MetaSettings({
 }: {
   editor: Editor;
   getPos: () => number | undefined;
-  meta: ReturnType<typeof parseCodeMeta>;
-  onChange: (next: ReturnType<typeof parseCodeMeta>) => void;
+  meta: CodeMeta;
+  onChange: (next: CodeMeta) => void;
 }) {
   const { anchorRef, container } = useEditorPortal();
   const [open, setOpen] = useState(false);
@@ -322,16 +322,72 @@ function MetaSettings({
   );
 }
 
+// the chrome sits out keystrokes in the code: only its attributes reach it
+const Header = memo(function Header({
+  editor,
+  getPos,
+  language,
+  meta,
+  updateAttributes,
+}: {
+  editor: Editor;
+  getPos: () => number | undefined;
+  language: string | null;
+  meta: CodeMeta;
+  updateAttributes: NodeViewProps["updateAttributes"];
+}) {
+  return (
+    <div
+      {...stylex.props(chrome.static, content.codeHeader)}
+      contentEditable={false}
+      data-fde-row=""
+    >
+      <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+      <input
+        {...stylex.props(chrome.input, styles.titleInput)}
+        value={meta.title}
+        placeholder="Title…"
+        spellCheck={false}
+        tabIndex={-1}
+        onChange={(event) =>
+          updateAttributes({ meta: buildCodeMeta({ ...meta, title: event.target.value }) })
+        }
+      />
+      <MetaSettings
+        editor={editor}
+        getPos={getPos}
+        meta={meta}
+        onChange={(next) => updateAttributes({ meta: buildCodeMeta(next) })}
+      />
+      <LanguageSelect
+        value={language ?? ""}
+        onChange={(value) => updateAttributes({ language: value })}
+      />
+      {!meta.noCopy && (
+        <CopyButton
+          getText={() => {
+            const pos = getPos();
+            return (pos != null && editor.state.doc.nodeAt(pos)?.textContent) || "";
+          }}
+        />
+      )}
+    </div>
+  );
+});
+
 function CodeBlockView(props: NodeViewProps) {
   const { node, editor, getPos, updateAttributes } = props;
   const language = (node.attrs.language as string | null) ?? null;
-  const meta = parseCodeMeta(node.attrs.meta as string | null);
+  const raw = (node.attrs.meta as string | null) ?? null;
+  const meta = useMemo(() => parseCodeMeta(raw), [raw]);
   useEffect(() => ensureGrammars(editor), [editor]);
 
+  const text = node.textContent;
   let gutter: string | null = null;
   if (meta.lineNumbers !== false) {
     const start = typeof meta.lineNumbers === "number" ? meta.lineNumbers : 1;
-    const count = node.textContent.split("\n").length;
+    let count = 1;
+    for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) count++;
     const rows: string[] = [];
     for (let i = 0; i < count; i++) rows.push(String(start + i));
     gutter = rows.join("\n");
@@ -344,34 +400,13 @@ function CodeBlockView(props: NodeViewProps) {
       data-selected={isRinged(props) || undefined}
       {...stylex.props(content.codeBlock)}
     >
-      <div
-        {...stylex.props(chrome.static, content.codeHeader)}
-        contentEditable={false}
-        data-fde-row=""
-      >
-        <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
-        <input
-          {...stylex.props(chrome.input, styles.titleInput)}
-          value={meta.title}
-          placeholder="Title…"
-          spellCheck={false}
-          tabIndex={-1}
-          onChange={(event) =>
-            updateAttributes({ meta: buildCodeMeta({ ...meta, title: event.target.value }) })
-          }
-        />
-        <MetaSettings
-          editor={editor}
-          getPos={getPos}
-          meta={meta}
-          onChange={(next) => updateAttributes({ meta: buildCodeMeta(next) })}
-        />
-        <LanguageSelect
-          value={language ?? ""}
-          onChange={(value) => updateAttributes({ language: value })}
-        />
-        {!meta.noCopy && <CopyButton getText={() => node.textContent} />}
-      </div>
+      <Header
+        editor={editor}
+        getPos={getPos}
+        language={language}
+        meta={meta}
+        updateAttributes={updateAttributes}
+      />
       <div {...stylex.props(styles.body)}>
         {gutter != null && (
           <pre
@@ -388,7 +423,7 @@ function CodeBlockView(props: NodeViewProps) {
           </pre>
         </div>
       </div>
-      {normalize(language) === "mermaid" && <MermaidDiagram code={node.textContent} />}
+      {normalize(language) === "mermaid" && <MermaidDiagram code={text} />}
     </NodeViewWrapper>
   );
 }

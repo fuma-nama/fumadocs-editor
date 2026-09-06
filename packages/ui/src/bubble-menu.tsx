@@ -39,11 +39,10 @@ import {
   Upload,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
-import type { MediaProvider } from "./components/media";
 import { BlockMenu, useBlockMenuOpen, type ActiveComponent } from "./block-panel";
 import { DragHandle } from "./drag-handle";
 import { updateAtomAttributes } from "./components/attributes";
-import { handleBlock, movableIn, type BlockRange } from "./components/keymap";
+import { handleBlock, movableIn } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
 import { chrome } from "./styles/shared";
@@ -261,8 +260,8 @@ export interface BubbleState {
   table: boolean;
   atom: { kind: "image"; pos: number } | null;
   active: ActiveComponent | null;
-  /** the run of blocks the joystick and ⋯ serve */
-  range: BlockRange | null;
+  /** the selection sits in a movable run: the joystick and ⋯ read it when they act */
+  block: boolean;
 }
 
 export function bubbleState(state: EditorState): BubbleState {
@@ -296,7 +295,7 @@ export function bubbleState(state: EditorState): BubbleState {
           attributes: node.attrs.attributes as MdxAttribute[],
         }
       : null,
-    range,
+    block: range != null,
   };
 }
 
@@ -518,7 +517,8 @@ function TableControl({
   );
 }
 
-function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }) {
+function ImagePanel({ editor }: { editor: Editor }) {
+  const { media } = useEditorProviders();
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -577,26 +577,23 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
 export function EditorBubble({
   editor,
   specs,
-  media,
   touch,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
-  media?: MediaProvider;
   touch: boolean;
 }) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
-  // Portal target has three constraints: the menu hides on editor blur
-  // unless focus lands inside the bubble's parent (plugin checks
-  // `element.parentNode.contains(relatedTarget)`), the bubble is
-  // positioned with a transform (would skew a popup measured inside it),
-  // and the container must sit in [data-fde-root] for theme and
-  // ::selection. The plugin appends the bubble to `view.dom.parentElement`,
-  // which satisfies all three. Resolved from the editor, never through
-  // refs (a ref-timing miss fell back to a body portal).
-  // an object ref, not a callback: BubbleMenu assigns its ref during render,
-  // where a state-setter callback would be a cross-component setState. The
-  // element is created eagerly and never replaced, so mount effects see it.
+  // Cmd-. shows the bubble at a resting caret, past `shouldShow`
+  const [forced, setForced] = useState(false);
+  // Portal target: the menu hides on editor blur unless focus lands inside
+  // the bubble's parent, the bubble is positioned with a transform (would
+  // skew a popup measured inside it), and the container must sit in
+  // [data-fde-root] for theme and ::selection. The plugin appends the bubble
+  // to `view.dom.parentElement`, which satisfies all three. Resolved from the
+  // editor, never through refs (a ref-timing miss fell back to a body portal).
+  // An object ref, not a callback: BubbleMenu assigns its ref during render,
+  // where a state-setter callback would be a cross-component setState.
   const menuRef = useRef<HTMLDivElement>(null);
   const wrapper = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
@@ -606,6 +603,8 @@ export function EditorBubble({
       const bubble = bubbleState(current.state);
       return {
         ...bubble,
+        // the plugin hides the element; nothing is rendered into it meanwhile
+        shown: touch || summoned(current.state),
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
@@ -627,8 +626,7 @@ export function EditorBubble({
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
 
-  const target = state?.range ?? null;
-  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target?.from);
+  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, state?.block === true);
 
   useEffect(() => {
     const dom = editor.view.dom;
@@ -636,6 +634,7 @@ export function EditorBubble({
       if (event.key !== "." || !(event.metaKey || event.ctrlKey)) return;
       event.preventDefault();
       editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "show"));
+      setForced(true);
       setPanelOpen(!panelOpen);
     };
     dom.addEventListener("keydown", onKeyDown);
@@ -665,7 +664,10 @@ export function EditorBubble({
       placement: touch ? ("bottom" as const) : ("bottom-start" as const),
       // past the selection and caret handles, which hang below the line
       offset: touch ? 20 : 6,
-      onHide: () => setPanelOpen(false),
+      onHide: () => {
+        setPanelOpen(false);
+        setForced(false);
+      },
       onShow: () => {
         menuRef.current!.style.transition = "none";
       },
@@ -698,6 +700,7 @@ export function EditorBubble({
     return { getBoundingClientRect: () => rect };
   }, [editor, touch]);
 
+  const visible = state && (state.shown || forced);
   return (
     <BubbleMenu
       ref={menuRef}
@@ -708,7 +711,7 @@ export function EditorBubble({
       getReferencedVirtualElement={getReferencedVirtualElement}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
-      {state?.format && (
+      {visible && state.format && (
         <>
           <BlockTypePicker
             editor={editor}
@@ -747,18 +750,15 @@ export function EditorBubble({
           {state.table && <TableControl editor={editor} container={wrapper} />}
         </>
       )}
-      {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
-      {state && target && (
+      {visible && state.atom?.kind === "image" && <ImagePanel editor={editor} />}
+      {visible && state.block && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
-          {!touch && (
-            <DragHandle editor={editor} range={target} look={chrome.iconButton} size={20} />
-          )}
+          {!touch && <DragHandle editor={editor} look={chrome.iconButton} size={20} />}
           <BlockMenu
             editor={editor}
             specs={specs}
             active={state.active}
-            range={target}
             open={panelOpen}
             onOpenChange={setPanelOpen}
             container={wrapper}
@@ -769,7 +769,7 @@ export function EditorBubble({
           />
         </>
       )}
-      {state && touch && (
+      {visible && touch && (
         <>
           <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>

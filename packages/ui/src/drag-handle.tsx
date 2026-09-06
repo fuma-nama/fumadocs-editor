@@ -3,7 +3,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, type CSSProperties } from "react";
 import type { Editor } from "@tiptap/react";
 import { setLifted, startPointerDrag } from "./components/structure";
-import type { BlockRange } from "./components/keymap";
+import { handleBlock } from "./components/keymap";
 import { joystick as marker } from "./styles/markers.stylex";
 import { consts } from "./styles/consts.stylex";
 import { tokens } from "./styles/tokens.stylex";
@@ -72,14 +72,13 @@ const styles = stylex.create({
   },
 });
 
+/** Drags the run of blocks the selection sits in, read when the pointer acts */
 export function DragHandle({
   editor,
-  range,
   look,
   size,
 }: {
   editor: Editor;
-  range: BlockRange;
   look: stylex.StyleXStyles;
   size: number;
 }) {
@@ -88,13 +87,11 @@ export function DragHandle({
   const ball = useRef<HTMLSpanElement>(null);
   const radius = size * 0.4;
 
-  // The block lights up while the pointer is over the joystick or holds it,
-  // so what a drag would move is never a guess. Native listeners: the
-  // toolbar is re-attached to the DOM by its plugin, and React's synthesized
-  // enter/leave never reaches it there.
+  // Native listeners: the toolbar is re-attached to the DOM by its plugin,
+  // and React's synthesized enter/leave never reaches it there.
   useEffect(() => {
     const el = button.current!;
-    const enter = () => setLifted(editor.view, range);
+    const enter = () => setLifted(editor.view, handleBlock(editor.state.selection));
     const leave = () => setLifted(editor.view, null);
     el.addEventListener("pointerenter", enter);
     el.addEventListener("pointerleave", leave);
@@ -103,7 +100,7 @@ export function DragHandle({
       el.removeEventListener("pointerleave", leave);
       if (!editor.isDestroyed) setLifted(editor.view, null);
     };
-  }, [editor, range]);
+  }, [editor]);
 
   const tilt = (dx: number, dy: number) => {
     const dist = Math.hypot(dx, dy);
@@ -126,7 +123,8 @@ export function DragHandle({
       {...stylex.props(chrome.button, look, styles.button, marker)}
       style={{ "--fde-joy": `${size}px` } as CSSProperties}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
+        const range = event.button === 0 ? handleBlock(editor.state.selection) : null;
+        if (!range) return;
         // no mousedown follows, so focus stays in the editor
         event.preventDefault();
         // React's currentTarget is this button; the native event's is the

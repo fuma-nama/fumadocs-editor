@@ -18,6 +18,7 @@ import {
   type SessionStatus,
 } from "@fumadocs-editor/core/sync";
 import { FileText, Moon, Sun } from "lucide-react";
+import { FumadocsIcon } from "./logo";
 
 // static builds have no sync endpoint; never import from docs/ here. Vite
 // would treat the mirrored file as a module and reload the app on every save.
@@ -185,7 +186,10 @@ function Playground() {
     <main className="mx-auto max-w-[1080px] px-4 pt-6 pb-24 md:px-5 md:pt-12">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-xl font-semibold tracking-tight">fumadocs editor</h1>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <FumadocsIcon className="size-5" />
+            fumadocs editor
+          </h1>
           <p className="text-[13px] text-fd-muted-foreground">
             WYSIWYG MDX editing mirrored to <code className="font-mono text-[12px]">docs/</code>
           </p>

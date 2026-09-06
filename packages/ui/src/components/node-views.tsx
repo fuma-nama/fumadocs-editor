@@ -1,16 +1,13 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
-import { Extension, type Extensions, type Node } from "@tiptap/core";
+import { Extension, type Extensions, type NodeViewRenderer } from "@tiptap/core";
 import {
   MdxBlockRegion,
   MdxInlineRegion,
   componentNodeTypes,
-  type MdxAttribute,
-} from "@fumadocs-editor/core/extensions";
-import {
   componentRegions,
   isComponent,
-  type ComponentRegion,
+  type MdxAttribute,
 } from "@fumadocs-editor/core/extensions";
 import {
   NodeViewContent,
@@ -19,7 +16,9 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { memo } from "react";
 import type { UiComponentSpec } from "./spec";
 import { FallbackCard, RenderBoundary } from "../static-mdx";
 import { readLiterals, readStringProps, setLiteralProp, setStringProp } from "./attr-values";
@@ -32,73 +31,93 @@ import { content, contentClass } from "../styles/content";
 type SpecMap = Map<string, UiComponentSpec>;
 
 const hole = <NodeViewContent {...stylex.props(content.hole)} data-fde-hole="" />;
+const NO_ATTRIBUTES: MdxAttribute[] = [];
+
+// an edit inside a region rebuilds the component node but keeps its `attrs`
+// object, so the renderer sits out every keystroke that is not its own
+const Rendered = memo(function Rendered({
+  spec,
+  attributes,
+  selected,
+  updateAttributes,
+}: {
+  spec: UiComponentSpec;
+  attributes: MdxAttribute[];
+  selected: boolean;
+  updateAttributes: NodeViewProps["updateAttributes"];
+}) {
+  const Render = spec.render;
+  return (
+    <Render
+      props={readStringProps(attributes)}
+      literals={readLiterals(attributes)}
+      selected={selected}
+      setProp={(name, value) =>
+        updateAttributes({ attributes: setStringProp(attributes, name, value) })
+      }
+      setLiteral={(name, value) =>
+        updateAttributes({ attributes: setLiteralProp(attributes, name, value) })
+      }
+    >
+      {hole}
+    </Render>
+  );
+});
 
 function makeComponentView(specs: SpecMap) {
   return function ComponentNodeView(props: NodeViewProps) {
     const { node, updateAttributes, selected } = props;
     const spec = specs.get(node.type.name)!;
-    const attributes = (node.attrs.attributes ?? []) as MdxAttribute[];
-    const ringed = isRinged(props);
-
-    const Render = spec.render;
-    const setProp = (propName: string, value: string) =>
-      updateAttributes({ attributes: setStringProp(attributes, propName, value) });
-    const setLiteral = (propName: string, value: unknown) =>
-      updateAttributes({ attributes: setLiteralProp(attributes, propName, value) });
-
     return (
       <NodeViewWrapper
         {...stylex.props(content.nodeWrapper)}
         data-component={spec.name}
-        data-selected={ringed || undefined}
+        data-selected={isRinged(props) || undefined}
       >
         <RenderBoundary
           resetOn={node}
           fallback={<FallbackCard name={spec.name}>{hole}</FallbackCard>}
         >
-          <Render
-            props={readStringProps(attributes)}
-            literals={readLiterals(attributes)}
+          <Rendered
+            spec={spec}
+            attributes={(node.attrs.attributes as MdxAttribute[] | undefined) ?? NO_ATTRIBUTES}
             selected={selected}
-            setProp={setProp}
-            setLiteral={setLiteral}
-          >
-            {hole}
-          </Render>
+            updateAttributes={updateAttributes}
+          />
         </RenderBoundary>
       </NodeViewWrapper>
     );
   };
 }
 
-function makeRegionView(kind: "inline" | "block", specs: SpecMap) {
-  return function RegionView({ node, editor, getPos }: NodeViewProps) {
-    const empty = node.textContent.length === 0;
-    let region: ComponentRegion | undefined;
-    let className: string | undefined;
-    try {
-      const pos = getPos();
-      if (pos != null) {
-        const $pos = editor.state.doc.resolve(pos);
-        const spec = specs.get($pos.parent.type.name)!;
-        region = componentRegions(spec, specs)[$pos.index()];
-        className = spec.regions?.[region.region];
-      }
-    } catch {
-      /* getPos can throw mid-transaction; fall back to no placeholder */
-    }
-    const sx = stylex.props(content.region, kind === "block" && content.regionBlock);
-    return (
-      <NodeViewWrapper
-        as="div"
-        className={className ? `${sx.className} ${className}` : sx.className}
-        data-region={region?.region ?? ""}
-        data-empty={empty || undefined}
-        data-placeholder={empty && region?.placeholder ? region.placeholder : undefined}
-      >
-        <NodeViewContent as="div" />
-      </NodeViewWrapper>
-    );
+/** a plain node view: the region is its own content element, no React tree per region */
+function makeRegionView(kind: "inline" | "block", specs: SpecMap): NodeViewRenderer {
+  const base = stylex.props(content.region, kind === "block" && content.regionBlock).className!;
+  return ({ node, editor, getPos }) => {
+    const dom = document.createElement("div");
+    const pos = getPos();
+    const $pos = pos == null ? null : editor.state.doc.resolve(pos);
+    const spec = $pos ? specs.get($pos.parent.type.name) : undefined;
+    const region = spec ? componentRegions(spec, specs)[$pos!.index()] : undefined;
+    const own = region && spec!.regions?.[region.region];
+    dom.className = own ? `${base} ${own}` : base;
+    dom.dataset.region = region?.region ?? "";
+    const sync = (current: PMNode) => {
+      const empty = current.textContent.length === 0;
+      dom.toggleAttribute("data-empty", empty);
+      if (empty && region?.placeholder) dom.dataset.placeholder = region.placeholder;
+      else delete dom.dataset.placeholder;
+    };
+    sync(node);
+    return {
+      dom,
+      contentDOM: dom,
+      update(next) {
+        if (next.type !== node.type) return false;
+        sync(next);
+        return true;
+      },
+    };
   };
 }
 
@@ -141,8 +160,8 @@ const activeComponent = Extension.create({
 
 export function componentExtensions(specs: SpecMap): Extensions {
   const ComponentView = makeComponentView(specs);
-  const InlineRegionView = makeRegionView("inline", specs);
-  const BlockRegionView = makeRegionView("block", specs);
+  const inlineRegion = makeRegionView("inline", specs);
+  const blockRegion = makeRegionView("block", specs);
 
   const extensions: Extensions = [];
   for (const type of componentNodeTypes(specs.values())) {
@@ -159,12 +178,8 @@ export function componentExtensions(specs: SpecMap): Extensions {
     );
   }
   extensions.push(
-    MdxInlineRegion.extend({
-      addNodeView: () => ReactNodeViewRenderer(InlineRegionView, nodeViewOptions),
-    }),
-    MdxBlockRegion.extend({
-      addNodeView: () => ReactNodeViewRenderer(BlockRegionView, nodeViewOptions),
-    }),
+    MdxInlineRegion.extend({ addNodeView: () => inlineRegion }),
+    MdxBlockRegion.extend({ addNodeView: () => blockRegion }),
     ...componentKeymap(specs),
     structureGuard(specs),
     caretPolicy,
@@ -172,5 +187,3 @@ export function componentExtensions(specs: SpecMap): Extensions {
   );
   return extensions;
 }
-
-export type { Node };

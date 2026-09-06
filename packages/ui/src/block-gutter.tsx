@@ -5,8 +5,7 @@ import { useLayoutEffect, useRef } from "react";
 import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { bubbleState } from "./bubble-menu";
-import { isList, isTable } from "./components/keymap";
+import { handleBlock, isList, isTable } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
 
 const GUTTER_BUTTON = 28;
@@ -60,19 +59,28 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
     selector: ({ editor: current }) => {
       if (!current) return null;
       const { selection, doc } = current.state;
-      const { range } = bubbleState(current.state);
+      const range = handleBlock(selection);
       if (!range) return null;
       const node = doc.nodeAt(range.from)!;
       // desktop: only blocks without chrome of their own to grab; touch: every block
       const handled = node.type.spec.code || isTable(node.type);
       if (!handled && (!touch || (node.isTextblock && node.content.size === 0))) return null;
-      // the row the finger last touched: a long selection's joystick stays on
+      // the textblock the caret is in: a long selection's joystick stays on
       // screen, and clear of the system's copy bar above the selection's start
-      const head =
+      const $head = doc.resolve(
         selection instanceof TextSelection
           ? Math.min(Math.max(selection.head, range.from), range.to)
-          : range.from;
-      return { from: range.from, to: range.to, head };
+          : range.from,
+      );
+      let row = range.from;
+      for (let depth = $head.depth; depth > 0; depth--) {
+        if ($head.node(depth).isTextblock) {
+          row = $head.before(depth);
+          break;
+        }
+      }
+      // a selected inline run sits in its textblock: that is the box to place beside
+      return { from: node.isInline ? row : range.from, row };
     },
   });
   const ref = useRef<HTMLDivElement>(null);
@@ -92,15 +100,8 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
         return;
       }
-      const $head = doc.resolve(target.head);
-      let row = dom instanceof HTMLElement ? dom : null;
-      for (let depth = $head.depth; depth > 0; depth--) {
-        if (!$head.node(depth).isTextblock) continue;
-        const block = editor.view.nodeDOM($head.before(depth));
-        if (block instanceof HTMLElement) row = block;
-        break;
-      }
-      if (!row) return;
+      const row = editor.view.nodeDOM(target.row);
+      if (!(row instanceof HTMLElement)) return;
       const rect = gutterRow(row);
       // beside the dragged block's own edge; an item's marker or checkbox
       // renders in the list's padding, outside the item's box
@@ -122,7 +123,7 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
   if (!target) return null;
   return (
     <div ref={ref} {...stylex.props(styles.gutter)}>
-      <DragHandle editor={editor} range={target} look={styles.button} size={18} />
+      <DragHandle editor={editor} look={styles.button} size={18} />
     </div>
   );
 }
