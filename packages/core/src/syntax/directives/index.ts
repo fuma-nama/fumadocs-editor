@@ -1,4 +1,5 @@
 import type { ComponentSpec } from "../../components/spec";
+import { emptyComponent } from "../../components/structure";
 
 /*
  * remark-directive: `:::type[Title]` admonitions, gated by
@@ -48,15 +49,8 @@ export const admonitionSpec: ComponentSpec = {
       inline: true,
     },
   ],
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: {
-      name: DIRECTIVE_ADMONITION,
-      attributes: [{ type: "mdxJsxAttribute", name: "type", value: "note" }],
-    },
-    content: [
-      { type: "mdxInlineRegion", attrs: { region: "title" } },
-      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
-    ],
-  }),
+  insert: (specs) =>
+    emptyComponent(admonitionSpec, specs, [
+      { type: "mdxJsxAttribute", name: "type", value: "note" },
+    ]),
 };

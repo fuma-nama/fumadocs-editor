@@ -1,6 +1,6 @@
 {
   "name": "@fumadocs-editor/ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MDX editor for Fumadocs: React component with Base UI chrome",
   "keywords": [
     "editor",
@@ -42,7 +42,6 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@fumadocs-editor/core": "workspace:*",
-    "@fumadocs-editor/sync": "workspace:*",
     "@stylexjs/stylex": "0.19.0",
     "@tiptap/core": "^3.31.0",
     "@tiptap/extension-bubble-menu": "^3.31.0",

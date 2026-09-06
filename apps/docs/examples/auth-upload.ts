@@ -1,4 +1,4 @@
-import { AUTH_HEADER, UPLOAD_ENDPOINT } from "@fumadocs-editor/sync";
+import { AUTH_HEADER, UPLOAD_ENDPOINT } from "@fumadocs-editor/core/sync";
 import type { MediaProvider } from "@fumadocs-editor/ui";
 
 declare function getAccessToken(): Promise<string>;

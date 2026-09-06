@@ -6,20 +6,21 @@ import {
   parseMdxToDoc,
   serializeDocToMdx,
 } from "@fumadocs-editor/core";
-import { componentKeymap, type SpecMap } from "../src/components/keymap";
+import { componentKeymap } from "../src/components/keymap";
 import { caretPolicy } from "../src/components/caret-policy";
 import { structureGuard } from "../src/components/structure";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
+import { specsByType } from "../src/components/spec";
 
 export const syntax = createSyntax(fumadocsUiComponents);
-export const specs: SpecMap = new Map(fumadocsUiComponents.map((spec) => [spec.name, spec]));
+export const specs = specsByType(fumadocsUiComponents);
 
 export function makeEditor(mdx: string) {
   const { doc, snapshot } = parseMdxToDoc(mdx, syntax);
   const editor = new Editor({
     element: document.createElement("div"),
     extensions: [
-      ...editorExtensions(),
+      ...editorExtensions({ components: fumadocsUiComponents }),
       ...componentKeymap(specs),
       structureGuard(specs),
       caretPolicy,

@@ -46,7 +46,7 @@ function collabEditor(ydoc: Y.Doc) {
   const editor = new Editor({
     element: document.createElement("div"),
     extensions: [
-      ...editorExtensions({ history: false }),
+      ...editorExtensions({ components: fumadocsUiComponents, history: false }),
       ...componentKeymap(specs),
       structureGuard(specs),
       caretPolicy,
@@ -226,7 +226,7 @@ test("local undo reverts only own edits, never a peer's", () => {
 test("the live editor's schema matches the server authority's", () => {
   // the sync server rebuilds PM nodes with core's spec-less schema; any node
   // or attribute the UI layer added would be dropped from every merge
-  const server = getSchema(editorExtensions());
+  const server = getSchema(editorExtensions({ components: fumadocsUiComponents }));
   const client = getSchema([
     ...editorExtensions({
       componentNodes: false,
@@ -236,8 +236,8 @@ test("the live editor's schema matches the server authority's", () => {
       history: false,
     }),
     codeBlockExtension(),
-    imageExtension(undefined),
-    ...componentExtensions(fumadocsUiComponents),
+    imageExtension({ current: {} }),
+    ...componentExtensions(specs),
     ...mathExtensions(true),
   ]);
   const attrSpec = (schema: typeof server, kind: "nodes" | "marks") => {

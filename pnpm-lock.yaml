@@ -32,9 +32,9 @@ importers:
       '@fumadocs-editor/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@fumadocs-editor/sync':
+      '@fumadocs-editor/studio':
         specifier: workspace:*
-        version: link:../../packages/sync
+        version: link:../../packages/studio
       '@fumadocs-editor/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -99,9 +99,6 @@ importers:
       '@fumadocs-editor/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@fumadocs-editor/sync':
-        specifier: workspace:*
-        version: link:../../packages/sync
       '@fumadocs-editor/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -115,6 +112,9 @@ importers:
         specifier: ^19.2.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@fumadocs-editor/studio':
+        specifier: workspace:*
+        version: link:../../packages/studio
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
@@ -172,6 +172,15 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.0
         version: 3.31.0
+      '@tiptap/y-tiptap':
+        specifier: 3.0.9
+        version: 3.0.9(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      chokidar:
+        specifier: ^5.0.0
+        version: 5.0.0
+      lib0:
+        specifier: ^0.2.117
+        version: 0.2.117
       mdast-util-directive:
         specifier: ^3.1.0
         version: 3.1.0
@@ -211,46 +220,6 @@ importers:
       micromark-extension-mdxjs:
         specifier: ^3.0.0
         version: 3.0.0
-    devDependencies:
-      '@repo/typescript-config':
-        specifier: workspace:*
-        version: link:../typescript-config
-      '@types/mdast':
-        specifier: ^4.0.4
-        version: 4.0.4
-      '@types/node':
-        specifier: ^26.4.0
-        version: 26.4.0
-      tsdown:
-        specifier: ^0.22.14
-        version: 0.22.14(typescript@7.0.2)
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@types/node@26.4.0)(jsdom@30.0.1)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
-
-  packages/sync:
-    dependencies:
-      '@fumadocs-editor/core':
-        specifier: workspace:*
-        version: link:../core
-      '@tiptap/core':
-        specifier: ^3.31.0
-        version: 3.31.0(@tiptap/pm@3.31.0)
-      '@tiptap/pm':
-        specifier: ^3.31.0
-        version: 3.31.0
-      '@tiptap/y-tiptap':
-        specifier: 3.0.9
-        version: 3.0.9(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
-      chokidar:
-        specifier: ^5.0.0
-        version: 5.0.0
-      lib0:
-        specifier: ^0.2.117
-        version: 0.2.117
       ws:
         specifier: ^8.19.0
         version: 8.21.3
@@ -264,6 +233,9 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
@@ -283,6 +255,58 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.4.0)(jsdom@30.0.1)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
 
+  packages/studio:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/jetbrains-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fumadocs-editor/core':
+        specifier: workspace:*
+        version: link:../core
+      '@fumadocs-editor/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: ^1.23.0
+        version: 1.38.0(react@19.2.8)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.8(react@19.2.8)
+      vite:
+        specifier: ^8.2.2
+        version: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0)
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^26.4.0
+        version: 26.4.0
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.5
+        version: 19.2.5(@types/react@19.2.18)
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.4.0)(jsdom@30.0.1)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
+
   packages/typescript-config: {}
 
   packages/ui:
@@ -293,9 +317,6 @@ importers:
       '@fumadocs-editor/core':
         specifier: workspace:*
         version: link:../core
-      '@fumadocs-editor/sync':
-        specifier: workspace:*
-        version: link:../sync
       '@stylexjs/stylex':
         specifier: 0.19.0
         version: 0.19.0

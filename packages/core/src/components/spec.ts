@@ -76,8 +76,8 @@ export interface ComponentSpec {
   itemsAttribute?: { attribute: string; childRegion: string; placeholder?: string };
   /** non-region attributes, edited via the props panel */
   props?: PropField[];
-  /** slash-menu default fragment */
-  insert?: () => JSONContent;
+  /** slash-menu default fragment; build it with `emptyComponent` */
+  insert?: (specs: ReadonlyMap<string, ComponentSpec>) => JSONContent;
 }
 
 /**
@@ -158,8 +158,3 @@ export function componentSpecData(spec: ComponentSpec): ComponentSpec {
     props,
   };
 }
-
-/** The three shared node type names produced for registered components. */
-export const COMPONENT_NODE = "mdxComponent";
-export const INLINE_REGION_NODE = "mdxInlineRegion";
-export const BLOCK_REGION_NODE = "mdxBlockRegion";

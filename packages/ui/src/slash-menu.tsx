@@ -24,20 +24,18 @@ import {
   ImageIcon,
   Table2,
 } from "lucide-react";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
 import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
-import type { MediaProvider } from "./components/media";
+import type { EditorProviders } from "./components/providers";
 
 const muted = tokens.mutedForeground;
 
 const styles = stylex.create({
-  /** placed by hand under the caret, in the editor frame so it scrolls with
-   * the text */
   popup: { position: "absolute", maxHeight: "18rem", width: "13rem", overflowY: "auto" },
   empty: {
     margin: 0,
@@ -67,7 +65,6 @@ export interface SlashItem {
   title: string;
   group: string;
   icon?: ReactNode;
-  /** file paths render in the code face */
   mono?: boolean;
   run: (editor: Editor, range: Range) => void;
 }
@@ -111,8 +108,6 @@ const BLOCKS: SlashItem[] = [
   ),
 ];
 
-/** offered only while the math dialect is on: the nodes have no MDX form
- * otherwise */
 const MATH_ITEMS: SlashItem[] = [
   block("Math block", <Sigma size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).setNode("mathBlock").run(),
@@ -128,10 +123,9 @@ const MATH_ITEMS: SlashItem[] = [
   ),
 ];
 
-/** Image: pick + upload with a provider, otherwise a source-less node the
- * bubble fills in. */
-function imageItem(media: MediaProvider | undefined): SlashItem {
+function imageItem(providers: RefObject<EditorProviders>): SlashItem {
   return block("Image", <ImageIcon size={15} />, (e, r) => {
+    const { media } = providers.current;
     if (media) {
       const input = document.createElement("input");
       input.type = "file";
@@ -153,18 +147,22 @@ function imageItem(media: MediaProvider | undefined): SlashItem {
   });
 }
 
-/** every spec with an insert, minus child-only specs (File, Card, Step, …) */
-function componentItems(specs: UiComponentSpec[]): SlashItem[] {
-  const childOnly = childOnlyNames(specs);
+function componentItems(specs: Map<string, UiComponentSpec>): SlashItem[] {
+  const childOnly = childOnlyNames(specs.values());
   const items: SlashItem[] = [];
-  for (const spec of specs) {
-    if (!spec.insert || childOnly.has(spec.name)) continue;
+  for (const spec of specs.values()) {
+    if (!spec.insert || childOnly.has(componentTypeName(spec))) continue;
     items.push({
       title: spec.label ?? spec.name,
       group: "Components",
       icon: spec.icon,
       run: (editor, range) => {
-        editor.chain().focus().deleteRange(range).insertContentAt(range.from, spec.insert!()).run();
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContentAt(range.from, spec.insert!(specs))
+          .run();
         focusAt(editor, range.from + 1);
       },
     });
@@ -179,14 +177,12 @@ export interface PopupProps {
   onSelect: (index: number) => void;
 }
 
-/** shared suggestion list: the slash menu and the file-path suggest */
 export function SlashPopup({ items, selected, rect, onSelect }: PopupProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     const base = el?.offsetParent?.getBoundingClientRect();
     if (!el || !base || !rect) return;
-    // kept inside the viewport as placed, then anchored to the frame
     const { width, height } = el.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     const top =
@@ -293,34 +289,28 @@ export function suggestionRender(): {
   };
 }
 
-/** the full insert list: block types plus registered top-level components */
 export function insertItems(
-  specs: UiComponentSpec[],
-  media?: MediaProvider,
+  specs: Map<string, UiComponentSpec>,
+  providers: RefObject<EditorProviders>,
   math?: boolean,
 ): SlashItem[] {
-  return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(media), ...componentItems(specs)];
+  return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(providers), ...componentItems(specs)];
 }
 
-/**
- * `/` at the start of an empty list-entry name offers the container's row
- * types instead (File, Folder): selecting one replaces the entry, so
- * Enter → `/` → Folder turns a fresh row into a folder.
- */
 export function entryItems(
   editor: Editor,
   specs: Map<string, UiComponentSpec>,
 ): SlashItem[] | null {
   const { $from } = editor.state.selection;
+  if ($from.parent.type.name !== INLINE_REGION_NODE) return null;
   const depth = listEntryDepth($from, specs);
   if (depth === -1) return null;
-  const container = $from.node(depth - 1);
-  const containerSpec = specs.get(container.attrs.name as string);
+  const containerSpec = specs.get($from.node(depth - 1).type.name)!;
   const children = insertableChildren(containerSpec, specs);
   if (children.length === 0) return null;
   return children.map((spec) => ({
     title: spec.label ?? spec.name,
-    group: containerSpec?.label ?? containerSpec?.name ?? "Rows",
+    group: containerSpec.label ?? containerSpec.name,
     icon: spec.icon,
     run: (current) => {
       const { $from: $at } = current.state.selection;
@@ -328,20 +318,18 @@ export function entryItems(
       if (at === -1) return;
       const start = $at.before(at);
       const end = start + $at.node(at).nodeSize;
-      current.chain().focus().insertContentAt({ from: start, to: end }, spec.insert!()).run();
+      current.chain().focus().insertContentAt({ from: start, to: end }, spec.insert!(specs)).run();
       focusAt(current, start + 1);
     },
   }));
 }
 
-/** `/` in a paragraph opens the insert menu: block types plus registered components. */
 export function slashMenu(
-  components: UiComponentSpec[],
   specMap: Map<string, UiComponentSpec>,
-  media?: MediaProvider,
+  providers: RefObject<EditorProviders>,
   math?: boolean,
 ): Extension {
-  const all = insertItems(components, media, math);
+  const all = insertItems(specMap, providers, math);
 
   return Extension.create({
     name: "fdeSlashMenu",
@@ -354,7 +342,6 @@ export function slashMenu(
           allow: ({ state, range }) => {
             const $pos = state.doc.resolve(range.from);
             if ($pos.parent.type.name === "paragraph") return true;
-            // an otherwise-empty list-entry name: offer the row types
             return (
               $pos.parent.type.name === INLINE_REGION_NODE &&
               $pos.parentOffset === 0 &&

@@ -42,6 +42,18 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "apps/playground", "exec", "vite", "preview", "--port", "4173"],
       "port": 4173
+    },
+    {
+      "name": "studio",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "playground", "studio", "--port", "5200", "--no-open"],
+      "port": 5200
+    },
+    {
+      "name": "studio-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "playground", "studio", "--port", "5201", "--no-open"],
+      "port": 5201
     }
   ]
 }

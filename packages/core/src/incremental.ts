@@ -1,5 +1,5 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { assembleMdx, tryNormalize } from "./serialize";
+import { assembleMdx, tryNormalize } from "./serializer";
 import type { DocSnapshot } from "./document";
 import { createSyntax, type Syntax } from "./components/spec";
 

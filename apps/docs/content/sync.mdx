@@ -5,8 +5,8 @@ description: Save to the file system with autosave and live merge
 ---
 
 On its own the editor is a text box: you pass MDX in, it hands MDX back.
-`@fumadocs-editor/sync` connects it to a directory of `.md` and `.mdx`
-files:
+The sync layer in `@fumadocs-editor/core` connects it to a directory of
+`.md` and `.mdx` files:
 
 - edits autosave to disk, with compare-and-swap writes so nothing is
   overwritten blindly
@@ -20,15 +20,6 @@ The files remain the source of truth. The editor is just another writer.
 ## Setup
 
 <Steps>
-<Step>
-
-### Install
-
-```bash
-npm install @fumadocs-editor/sync
-```
-
-</Step>
 <Step>
 
 ### Mount the dev server
@@ -96,12 +87,10 @@ with `sync.onStatus`.
 
 ### Merging disk changes
 
-Disk changes go through a block-level three-way merge, with the last synced
-document as the base. Two blocks are "the same" when the serializer would
-emit them byte-identically.
+Disk changes merge into the open document block by block:
 
-- Blocks changed only on disk are applied as one non-undoable transaction.
-  Your caret stays where it was.
+- Blocks changed only on disk are applied in place. Your caret stays where
+  it was.
 - A block changed on **both** sides is a conflict. Your version is kept,
   writes pause, and a chip offers **keep mine** (overwrite disk) or **take
   disk** (drop the local edit).
@@ -109,7 +98,7 @@ emit them byte-identically.
 ## The dev server
 
 The plugin mounts three endpoints. Their paths are exported as constants
-from `@fumadocs-editor/sync`.
+from `@fumadocs-editor/core/sync`.
 
 | Endpoint         | Constant          | Purpose                                              |
 | ---------------- | ----------------- | ---------------------------------------------------- |
@@ -129,14 +118,14 @@ plain handlers:
 
 ### Options
 
-<auto-type-table path="../../../packages/sync/src/node.ts" name="SyncServerOptions" />
+<auto-type-table path="../../../packages/core/src/sync/node.ts" name="SyncServerOptions" />
 
 ## Custom backends
 
 The dev server is one implementation of `SyncTransport`. A database, a CMS
 or a browser file-system handle needs the same four calls:
 
-<auto-type-table path="../../../packages/sync/src/transport.ts" name="SyncTransport" />
+<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="SyncTransport" />
 
 - Documents are addressed by root-relative posix paths.
 - `version` is an opaque compare-and-swap token. `write` must fail with the

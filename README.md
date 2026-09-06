@@ -1,14 +1,14 @@
 # fumadocs-editor
 
-A WYSIWYG editor for Fumadocs MDX. Documents render as an editable page
-(prose, code, tables, MDX components) and serialize losslessly: untouched
-blocks come back byte-for-byte.
+A WYSIWYG editor for Fumadocs MDX.
+
+> [!WARNING]
+> **Experimental.** This project is still in early stage, breaking changes expected for future v1 release.
 
 | Package                                  |                                   |
 | ---------------------------------------- | --------------------------------- |
 | [`@fumadocs-editor/ui`](packages/ui)     | React editor                      |
 | [`@fumadocs-editor/core`](packages/core) | parse, serialize, component specs |
-| [`@fumadocs-editor/sync`](packages/sync) | FS mirror, collab, auth           |
 
 Docs: https://editor.fumadocs.dev.
 

@@ -1,4 +1,4 @@
-import { Node } from "@tiptap/core";
+import { Node, mergeAttributes } from "@tiptap/core";
 
 /**
  * JSON-safe mirror of mdast-util-mdx-jsx attribute nodes (estree data stripped),
@@ -64,8 +64,12 @@ function codeAtom(name: string, dataAttr: string) {
     draggable: false,
     addAttributes: () => ({ value: { default: "" } }),
     parseHTML: () => [{ tag: `pre[${dataAttr}]` }],
-    renderHTML({ node }) {
-      return ["pre", { [dataAttr]: "" }, ["code", {}, String(node.attrs.value)]];
+    renderHTML({ node, HTMLAttributes }) {
+      return [
+        "pre",
+        mergeAttributes(HTMLAttributes, { [dataAttr]: "" }),
+        ["code", {}, String(node.attrs.value)],
+      ];
     },
   });
 }
@@ -76,8 +80,24 @@ export const MdxFlowExpression = codeAtom("mdxFlowExpression", "data-mdx-express
 /** `import`/`export` statements */
 export const MdxjsEsm = codeAtom("mdxjsEsm", "data-mdx-esm");
 
-/** YAML frontmatter */
-export const Frontmatter = codeAtom("frontmatter", "data-mdx-frontmatter");
+/** YAML frontmatter, edited in place as code */
+export const Frontmatter = Node.create({
+  name: "frontmatter",
+  group: "block",
+  content: "text*",
+  marks: "",
+  code: true,
+  defining: true,
+  draggable: false,
+  parseHTML: () => [{ tag: "pre[data-mdx-frontmatter]", preserveWhitespace: "full" }],
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "pre",
+      mergeAttributes(HTMLAttributes, { "data-mdx-frontmatter": "" }),
+      ["code", {}, 0],
+    ];
+  },
+});
 
 /** Block-level source the converter doesn't model; preserved byte-for-byte. */
 export const VerbatimBlock = codeAtom("verbatim", "data-mdx-verbatim");

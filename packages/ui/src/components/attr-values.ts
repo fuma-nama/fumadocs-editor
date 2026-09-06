@@ -1,12 +1,5 @@
 import type { MdxAttribute, PropField } from "@fumadocs-editor/core";
 
-/*
- * Pure attribute-array helpers, no ProseMirror imports: the static paint
- * (static-mdx.tsx) reads props through these, and a PM value import here
- * would drag prosemirror-model/state into the eager chunk. Editor-coupled
- * attribute writes live in ./attributes.
- */
-
 export function readStringProps(attributes: MdxAttribute[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const attr of attributes) {
@@ -34,7 +27,6 @@ export function setStringProp(
   return next;
 }
 
-/** static values of expression props, keyed by prop name (parse-time extract) */
 export function readLiterals(attributes: MdxAttribute[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const attr of attributes) {
@@ -47,7 +39,6 @@ export function readLiterals(attributes: MdxAttribute[]): Record<string, unknown
 
 const IDENT = /^[A-Za-z_$][\w$]*$/;
 
-/** JS object-literal source for a JSON-safe value, fumadocs-style formatting */
 export function emitExpression(value: unknown, indent = 0): string {
   const pad = "  ".repeat(indent + 1);
   const close = "  ".repeat(indent);
@@ -67,7 +58,6 @@ export function emitExpression(value: unknown, indent = 0): string {
   return JSON.stringify(value);
 }
 
-/** write an expression prop from its literal value (source is derived) */
 export function setLiteralProp(
   attributes: MdxAttribute[],
   name: string,
@@ -86,7 +76,6 @@ export function setLiteralProp(
   return next;
 }
 
-/** The panel's view of one prop, as a string in the field's own notation. */
 export function readPropValue(attributes: MdxAttribute[], field: PropField): string {
   const attr = attributes.find((a) => a.type === "mdxJsxAttribute" && a.name === field.name);
   if (!attr || attr.type !== "mdxJsxAttribute") return "";
@@ -95,11 +84,6 @@ export function readPropValue(attributes: MdxAttribute[], field: PropField): str
   return attr.value.value;
 }
 
-/**
- * Write one prop back in author style: booleans become a bare attribute when
- * true and disappear when false; expressions keep their `{…}` value; strings
- * stay strings.
- */
 export function setPropValue(
   attributes: MdxAttribute[],
   field: PropField,

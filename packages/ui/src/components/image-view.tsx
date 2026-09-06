@@ -6,14 +6,14 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tip
 import type { Editor, Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { ImageIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { content } from "../styles/content";
 import { resolveSrc, type MediaProvider } from "./media";
-import { nodeViewOptions } from "./node-view-options";
+import { isRinged, nodeViewOptions } from "./node-view-options";
+import { useEditorProviders, type EditorProviders } from "./providers";
 
 const styles = stylex.create({
   wrapper: { display: "inline-block", maxWidth: "100%" },
-  /** empty-source chip: the node stays visible until a src is set */
   placeholder: {
     display: "inline-flex",
     maxWidth: "100%",
@@ -30,11 +30,9 @@ const styles = stylex.create({
     color: tokens.mutedForeground,
   },
   note: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  /** `content.atom`'s ring, driven by the node view's `selected` prop */
   selected: { outline: `2px solid ${tokens.ring}`, outlineOffset: 2 },
 });
 
-/** insert the files' images at `pos` after uploading them */
 export async function insertImages(
   editor: Editor,
   media: MediaProvider,
@@ -54,66 +52,65 @@ export async function insertImages(
   }
 }
 
-function makeImageView(media: MediaProvider | undefined) {
-  return function ImageView({ node, selected }: NodeViewProps) {
-    const src = (node.attrs.src as string) ?? "";
-    // the src that failed to load: the chip keeps the node visible and
-    // selectable, and a new src retries
-    const [broken, setBroken] = useState("");
-    const failed = src !== "" && broken === src;
-    return (
-      <NodeViewWrapper as="span" data-image="" {...stylex.props(styles.wrapper)}>
-        {src && !failed ? (
-          <img
-            src={resolveSrc(media, src)}
-            alt={(node.attrs.alt as string) ?? ""}
-            title={(node.attrs.title as string) ?? undefined}
-            draggable={false}
-            onError={() => setBroken(src)}
-            {...stylex.props(content.img, selected && styles.selected)}
-          />
-        ) : (
-          <span {...stylex.props(styles.placeholder, selected && styles.selected)}>
-            <ImageIcon size={14} />
-            <span {...stylex.props(styles.note)}>
-              {failed
-                ? `Image failed to load: ${src}`
-                : "No image yet. Set a source from the toolbar"}
-            </span>
+function ImageView(props: NodeViewProps) {
+  const { node } = props;
+  const { media } = useEditorProviders();
+  const selected = isRinged(props);
+  const src = (node.attrs.src as string) ?? "";
+  const [broken, setBroken] = useState("");
+  const failed = src !== "" && broken === src;
+  return (
+    <NodeViewWrapper as="span" data-image="" {...stylex.props(styles.wrapper)}>
+      {src && !failed ? (
+        <img
+          src={resolveSrc(media, src)}
+          alt={(node.attrs.alt as string) ?? ""}
+          title={(node.attrs.title as string) ?? undefined}
+          draggable={false}
+          onError={() => setBroken(src)}
+          {...stylex.props(content.img, selected && styles.selected)}
+        />
+      ) : (
+        <span {...stylex.props(styles.placeholder, selected && styles.selected)}>
+          <ImageIcon size={14} />
+          <span {...stylex.props(styles.note)}>
+            {failed
+              ? `Image failed to load: ${src}`
+              : "No image yet. Set a source from the toolbar"}
           </span>
-        )}
-      </NodeViewWrapper>
-    );
-  };
+        </span>
+      )}
+    </NodeViewWrapper>
+  );
 }
 
-/**
- * The image node with a live view (resolved src, empty-source placeholder)
- * plus paste/drop upload when a provider is available. Pasted or dropped
- * image files upload through the provider and land where they were dropped.
- */
-export function imageExtension(media: MediaProvider | undefined): Extension {
+function imageFiles(transfer: DataTransfer | null): File[] {
+  const files: File[] = [];
+  for (const file of transfer?.files ?? []) {
+    if (file.type.startsWith("image/")) files.push(file);
+  }
+  return files;
+}
+
+export function imageExtension(providers: RefObject<EditorProviders>): Extension {
   return Image.extend({
-    addNodeView() {
-      return ReactNodeViewRenderer(makeImageView(media), nodeViewOptions);
-    },
+    addNodeView: () => ReactNodeViewRenderer(ImageView, nodeViewOptions),
     addProseMirrorPlugins() {
       const editor = this.editor;
-      if (!media) return [];
-      const imageFiles = (transfer: DataTransfer | null) =>
-        [...(transfer?.files ?? [])].filter((file) => file.type.startsWith("image/"));
       return [
         new Plugin({
           props: {
             handlePaste(view, event) {
-              const files = imageFiles(event.clipboardData);
-              if (files.length === 0) return false;
+              const { media } = providers.current;
+              const files = media ? imageFiles(event.clipboardData) : [];
+              if (!media || files.length === 0) return false;
               void insertImages(editor, media, files, view.state.selection.from);
               return true;
             },
             handleDrop(view, event) {
-              const files = imageFiles(event.dataTransfer);
-              if (files.length === 0) return false;
+              const { media } = providers.current;
+              const files = media ? imageFiles(event.dataTransfer) : [];
+              if (!media || files.length === 0) return false;
               const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
               void insertImages(editor, media, files, at?.pos ?? view.state.selection.from);
               return true;

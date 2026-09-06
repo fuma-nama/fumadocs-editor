@@ -1,0 +1,122 @@
+---
+title: Studio
+icon: PenLine
+description: Edit a folder of MDX files without writing a host app
+---
+
+Studio is the editor as a command. It starts a dev server, opens the browser
+and turns a directory of `.md` and `.mdx` files into one editing surface: the
+document fills the window, the file list floats beside it, and `⌘K` finds
+files and actions:
+
+```bash
+npx @fumadocs-editor/studio
+```
+
+- edits autosave to disk; changes made on disk (a `git pull`, your IDE)
+  merge into the open document, see [Sync](/sync)
+- the file list follows the filesystem: files added, removed or retitled on
+  disk show up as it happens, in the `meta.json` order Fumadocs uses
+- `?collab` in the URL turns on [collaborative editing](/collab) for that
+  tab; the palette has the same switch
+
+Studio needs Node 24 or later. It browses and edits existing files; creating,
+renaming and deleting stay with your file manager for now.
+
+## Keyboard
+
+| Keys                             | Does                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `⌘K` / `Ctrl+K`                  | Search files by title or path; switch theme, collaboration or the MDX source view; copy the file path |
+| `⌘S`                             | Save now (autosave runs anyway)                                                                       |
+| `↑` `↓` `←` `→` in the file list | Move between files, close or open a folder                                                            |
+| `Esc` in the file list           | Close it. The button in the header opens it again; the choice is remembered                           |
+
+On wide screens the open file list gets its own column; on narrow ones it
+floats over the document.
+
+## Flags
+
+| Flag              |                                                                     |
+| ----------------- | ------------------------------------------------------------------- |
+| `--root <dir>`    | directory to edit. Default: `content/docs`, `content`, then the cwd |
+| `--config <file>` | config file. Default: `fumadocs-studio.config.{ts,mts,tsx,js,mjs}`  |
+| `--port <n>`      | port, default `5180`                                                |
+| `--host`          | listen on all addresses                                             |
+| `--no-open`       | do not open the browser                                             |
+
+## Configuration
+
+A `fumadocs-studio.config.ts` in the directory you run Studio from customises
+the editor. Paths are relative to the config file; flags win over it.
+
+<include meta='title="fumadocs-studio.config.ts"'>../examples/studio-config.ts</include>
+
+<auto-type-table path="../../../packages/studio/src/config.ts" name="StudioConfig" />
+
+`components`, `syntax`, `theme` and `media` are the
+[`MdxEditor` props](/editor) of the same name. Custom components follow the
+[authoring guide](/components); Studio ships the fumadocs-ui set,
+admonitions and files fences by default.
+
+### Node-only options
+
+The config module runs in Node to start the server **and** in the browser to
+configure the editor. Anything that only Node can import (`node:fs`, a JWT
+library, `@tailwindcss/vite`) therefore goes in a separate module referenced
+by `server`:
+
+<include meta='title="studio.server.ts"'>../examples/studio-server.ts</include>
+
+<Callout type="warn" title="Inline `server` objects must be isomorphic">
+  `server: {authenticate}` is fine when the function only looks at its arguments. The moment it
+  imports something Node-only, switch to the string form; otherwise the browser bundle fails on that
+  import.
+</Callout>
+
+<auto-type-table path="../../../packages/studio/src/config.ts" name="StudioServerConfig" />
+
+`authenticate`, `upload`, `evictAfterMs` and `helloTimeoutMs` are the
+[sync server options](/sync#options). Without `authenticate`, everyone who
+can reach the port can edit, the same trust as Vite's own dev server.
+
+### Styling custom renderers
+
+Renderers you register through `components` are plain React; Studio does not
+process their styles. `styles` injects stylesheets into the page, and
+`server.vite` adds the plugins that produce them:
+
+```css title="studio.css"
+@import "tailwindcss";
+```
+
+```ts title="studio.server.ts"
+export default defineServerConfig({ vite: { plugins: [tailwindcss()] } });
+```
+
+The editor's own chrome uses `--fde-*` tokens, so a stylesheet can restyle it
+too, as on any host page.
+
+## File list order
+
+Studio reads the subset of `meta.json` that orders pages:
+
+| Entry              |                                                |
+| ------------------ | ---------------------------------------------- |
+| `"index"`          | a page or folder by name                       |
+| `"---Guides---"`   | a separator                                    |
+| `"..."`, `"z...a"` | the remaining entries, ascending or descending |
+| `"...guides"`      | the folder of that name                        |
+| `"!draft"`         | listed anyway: an editor must reach every file |
+| `"[Text](url)"`    | skipped                                        |
+
+Entries `pages` does not mention are still appended at the end. Without
+`pages`, `index` comes first and the rest sorts by name. Folder titles come
+from `meta.title`, page titles from frontmatter.
+
+## Auth
+
+`auth` returns the credential every connection and request carries; by
+default the `?token=` query parameter, then localStorage `fde-token`. The
+server's `authenticate` decides what it may do, exactly as in [Auth](/auth).
+A scope with `write: false` opens the editor read-only.

@@ -1,4 +1,4 @@
-import type { SyncAuthenticate } from "@fumadocs-editor/sync/node";
+import type { SyncAuthenticate } from "@fumadocs-editor/core/node";
 
 declare function verifyToken(token: unknown): Promise<{ name: string; teams: string[] } | null>;
 

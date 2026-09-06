@@ -6,7 +6,15 @@ import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
 import type { DocSnapshot, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
 import { mathExtensions } from "./components/math";
@@ -16,13 +24,24 @@ import { BlockGutter } from "./block-gutter";
 import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
-import type { FileProvider, MediaProvider } from "./components/media";
+import type { EditorProviders } from "./components/providers";
 import type { EditorCollab } from "./collab";
 import { contentClass } from "./styles/content";
 import { contentStyles } from "./components/content-styles";
 import { settled as settledMarker } from "./styles/markers.stylex";
 
 const styles = stylex.create({ frame: { position: "relative" } });
+
+// file names, props and code everywhere: browser text assistance only
+// paints false positives and mutates DOM the schema has to heal
+const editorProps = {
+  attributes: {
+    class: contentClass.root,
+    spellcheck: "false",
+    autocorrect: "off",
+    autocapitalize: "off",
+  },
+};
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
 
@@ -45,43 +64,27 @@ export interface LiveEditorProps {
   doc: JSONContent;
   components: UiComponentSpec[];
   specs: Map<string, UiComponentSpec>;
+  /** read by the extensions when they act, so the editor outlives provider changes */
+  providers: RefObject<EditorProviders>;
   snapshotRef: RefObject<DocSnapshot | undefined>;
   onChangeRef: RefObject<((markdown: string) => void) | undefined>;
-  /** fires once the editor exists and its view is mounted */
   onReady: (editor: Editor, serialize: SerializeFn) => void;
-  /** kept in the tree but not shown until the shell swaps the static view out */
   hidden: boolean;
-  /** read-only rendering: no typing, no mutating chrome */
   editable: boolean;
-  media?: MediaProvider;
-  files?: FileProvider;
-  /** dialect switches; must match what the document was parsed with */
   syntax?: SyntaxOptions;
-  /**
-   * Already-started collab runtime (a separate chunk, loaded by the shell).
-   * The Y.Doc is then the source of truth: `doc` is ignored, local history
-   * yields to the Y undo manager, and `onReady` waits for the first sync.
-   */
   collab?: EditorCollab;
 }
 
-/**
- * Stage-1 hydration: the real TipTap editor. Mounted lazily by the shell
- * (idle or first intent), constructed after mount (`immediatelyRender:
- * false`) so the static paint never waits on ProseMirror, and never
- * re-rendered per transaction. Chrome subscribes via `useEditorState`.
- */
-export function LiveEditor({
+export const LiveEditor = memo(function LiveEditor({
   doc,
   components,
   specs,
+  providers,
   snapshotRef,
   onChangeRef,
   onReady,
   hidden,
   editable,
-  media,
-  files,
   syntax,
   collab,
 }: LiveEditorProps) {
@@ -96,22 +99,21 @@ export function LiveEditor({
       }),
       contentStyles,
       codeBlockExtension(),
-      imageExtension(media),
-      ...componentExtensions(components),
+      imageExtension(providers),
+      ...componentExtensions(specs),
       ...mathExtensions(syntax?.math === true),
-      slashMenu(components, specs, media, syntax?.math),
-      ...(files ? [fileSuggest(specs, files), linkSuggest(files)] : []),
+      slashMenu(specs, providers, syntax?.math),
+      fileSuggest(specs, providers),
+      linkSuggest(providers),
       ...(collab ? collab.extensions : []),
     ],
-    [components, media, files, specs, syntax, collab],
+    [providers, specs, syntax, collab],
   );
   const serialize = useMemo(
     () => createIncrementalSerializer(createSyntax(components, syntax)),
     [components, syntax],
   );
 
-  // unchanged blocks serialize from a per-node cache, so cost tracks the
-  // edited block; still debounced so bursts of keystrokes report once
   const serializeTimer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(serializeTimer.current), []);
 
@@ -123,19 +125,8 @@ export function LiveEditor({
     content: collab ? null : doc,
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
-    // file names, props and code everywhere: browser text assistance only
-    // paints false positives and mutates DOM the schema has to heal
-    editorProps: {
-      attributes: {
-        class: contentClass.root,
-        spellcheck: "false",
-        autocorrect: "off",
-        autocapitalize: "off",
-      },
-    },
+    editorProps,
     onCreate({ editor }) {
-      // hold the static → live swap until the shared doc has arrived, so the
-      // first visible state is the document and replayed input lands in it
       if (collab) {
         void collab.whenSynced.then(() => {
           if (!editor.isDestroyed) onReady(editor, serialize);
@@ -160,13 +151,10 @@ export function LiveEditor({
     },
   });
 
-  // `editable` is a live prop (scope data can arrive after mount)
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
-  // touch: the joystick sits beside the block, and the bubble drops below
-  // the caret
   const touch = useMediaQuery("(pointer: coarse)");
 
   // insert animations arm one painted frame after the editor shows: the
@@ -193,10 +181,10 @@ export function LiveEditor({
       <EditorContent editor={editor} />
       {editor && editable && (
         <>
-          {touch && <BlockGutter editor={editor} specs={specs} />}
-          <EditorBubble editor={editor} specs={specs} media={media} touch={touch} />
+          <BlockGutter editor={editor} touch={touch} />
+          <EditorBubble editor={editor} specs={specs} touch={touch} />
         </>
       )}
     </div>
   );
-}
+});

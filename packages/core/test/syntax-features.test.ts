@@ -34,10 +34,10 @@ const githubInfoSpec: ComponentSpec = {
 
 const syntax = createSyntax([tabsSpec, tabSpec, includeSpec, githubInfoSpec]);
 
-function find(node: JSONContent, type: string, region?: string): JSONContent | undefined {
-  if (node.type === type && (region == null || node.attrs?.region === region)) return node;
+function find(node: JSONContent, type: string): JSONContent | undefined {
+  if (node.type === type) return node;
   for (const child of node.content ?? []) {
-    const found = find(child, type, region);
+    const found = find(child, type);
     if (found) return found;
   }
   return undefined;
@@ -52,11 +52,13 @@ describe("itemsAttribute (Tabs)", () => {
 
   test("items become per-child label regions; the attr is dropped from editing", () => {
     const { doc } = parseMdxToDoc(source, syntax);
-    const tabs = find(doc, "mdxComponent")!;
-    const children = (tabs.content ?? []).filter((c) => c.type === "mdxComponent");
-    expect(children).toHaveLength(2);
-    expect(find(children[0], "mdxInlineRegion", "label")?.content?.[0].text).toBe("First");
-    expect(find(children[1], "mdxInlineRegion", "label")?.content?.[0].text).toBe("Second");
+    const tabs = find(doc, "Tabs")!;
+    const children = tabs.content!;
+    expect(children.map((c) => c.type)).toEqual(["Tab", "Tab"]);
+    // the derived label region comes first, then the Tab's own body region
+    expect(children[0].content![0].content?.[0].text).toBe("First");
+    expect(children[1].content![0].content?.[0].text).toBe("Second");
+    expect(children[1].content![1].type).toBe("mdxBlockRegion");
     const names = (tabs.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(names).not.toContain("items");
     expect(names).toContain("groupId");
@@ -70,9 +72,8 @@ describe("itemsAttribute (Tabs)", () => {
   test("an edited label rebuilds the items expression", () => {
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
     const edited = structuredClone(doc);
-    const tabs = find(edited, "mdxComponent")!;
-    const second = (tabs.content ?? []).filter((c) => c.type === "mdxComponent")[1];
-    find(second, "mdxInlineRegion", "label")!.content = [{ type: "text", text: "Renamed" }];
+    const second = find(edited, "Tabs")!.content![1];
+    second.content![0].content = [{ type: "text", text: "Renamed" }];
 
     const out = serializeDocToMdx(edited, snapshot, syntax);
     expect(out).toContain('items={["First", "Renamed"]}');
@@ -95,17 +96,14 @@ describe("itemsAttribute (Tabs)", () => {
 describe("contentRegion (include)", () => {
   test("the element text is the editable path region", () => {
     const { doc } = parseMdxToDoc("<include>./shared/setup.mdx</include>\n", syntax);
-    const component = find(doc, "mdxComponent")!;
-    expect(component.attrs?.name).toBe("include");
-    expect(find(component, "mdxInlineRegion", "path")?.content?.[0].text).toBe(
-      "./shared/setup.mdx",
-    );
+    const component = find(doc, "include")!;
+    expect(component.content![0].content?.[0].text).toBe("./shared/setup.mdx");
   });
 
   test("attributes survive alongside the path", () => {
     const source = '<include lang="tsx" cwd>./scripts/build.ts</include>\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
-    const component = find(doc, "mdxComponent")!;
+    const component = find(doc, "include")!;
     const names = (component.attrs!.attributes as { name?: string }[]).map((a) => a.name);
     expect(names).toEqual(["lang", "cwd"]);
     expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
@@ -114,16 +112,14 @@ describe("contentRegion (include)", () => {
   test("an edited path serializes back to the tight inline form", () => {
     const { doc, snapshot } = parseMdxToDoc("<include>./old.mdx</include>\n", syntax);
     const edited = structuredClone(doc);
-    find(edited, "mdxInlineRegion", "path")!.content = [{ type: "text", text: "./new.mdx" }];
+    find(edited, "include")!.content![0].content = [{ type: "text", text: "./new.mdx" }];
     expect(serializeDocToMdx(edited, snapshot, syntax)).toBe("<include>./new.mdx</include>\n");
   });
 
   test("the flow form parses too", () => {
     const { doc } = parseMdxToDoc("<include>\n  ./spread/over/lines.mdx\n</include>\n", syntax);
-    const component = find(doc, "mdxComponent")!;
-    expect(find(component, "mdxInlineRegion", "path")?.content?.[0].text?.trim()).toBe(
-      "./spread/over/lines.mdx",
-    );
+    const component = find(doc, "include")!;
+    expect(component.content![0].content?.[0].text?.trim()).toBe("./spread/over/lines.mdx");
   });
 });
 
@@ -159,8 +155,7 @@ describe("leaf components", () => {
   test("a props-only component parses with no regions and round-trips", () => {
     const source = '<GithubInfo owner="fuma-nama" repo="fumadocs" />\n';
     const { doc, snapshot } = parseMdxToDoc(source, syntax);
-    const component = find(doc, "mdxComponent")!;
-    expect(component.attrs?.name).toBe("GithubInfo");
+    const component = find(doc, "GithubInfo")!;
     expect(component.content ?? []).toHaveLength(0);
     expect(serializeDocToMdx(doc, snapshot, syntax)).toBe(source);
   });

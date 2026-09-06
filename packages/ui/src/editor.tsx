@@ -27,17 +27,16 @@ import type {
   SessionStatus,
   SyncTransport,
   WsTransport,
-} from "@fumadocs-editor/sync";
+} from "@fumadocs-editor/core/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
-import type { UiComponentSpec } from "./components/spec";
+import { specsByType, type UiComponentSpec } from "./components/spec";
 import { fumadocsUiComponents } from "./components/fumadocs-ui";
 import { chrome } from "./styles/shared";
 import { consts } from "./styles/consts.stylex";
 import { contentClass } from "./styles/content";
 import { useEditorTheme, type EditorTheme } from "./theme";
 
-// TipTap + PM + node views: own chunk, fetched at idle or first intent
 const LiveEditor = lazy(() => import("./live-editor").then((m) => ({ default: m.LiveEditor })));
 
 export interface MdxEditorRef {
@@ -57,7 +56,16 @@ export interface MdxEditorRef {
    * document. `FileSession` calls this after every write.
    */
   markSaved: (text: string) => void;
+  /** the visual editor or the MDX source */
+  getMode: () => EditorMode;
+  /**
+   * Switch between the visual editor and the MDX source. Source that fails
+   * to parse stays in source mode with the error shown.
+   */
+  setMode: (mode: EditorMode) => void;
 }
+
+export type EditorMode = "visual" | "source";
 
 /** presence identity shown at a user's caret on other clients */
 export interface CollabUser {
@@ -128,22 +136,26 @@ export interface MdxEditorProps {
    * chrome. Does not enforce auth; wire scope `writable` in yourself.
    */
   editable?: boolean;
+  /**
+   * `card` (default): a bordered box among other page content. `page`: the
+   * editor is the page: the header stays at the top while the document
+   * scrolls in a centered column (`--fde-page-width`, default 52rem) that
+   * keeps clear of `--fde-page-inset`, for a panel floating at the start.
+   */
+  variant?: "card" | "page";
+  /** extra controls in the header: `start` before the sync status, `end` after the mode tabs */
+  header?: { start?: ReactNode; end?: ReactNode };
   className?: string;
   ref?: Ref<MdxEditorRef>;
 }
 
-/** status beside the mode tabs; conflicts show a chip */
 interface SyncIndicatorProps {
   status: SessionStatus;
-  /** conflict resolution: overwrite the disk with the local document */
   onKeepMine?: () => void;
-  /** conflict resolution: drop local edits for the disk version */
   onTakeDisk?: () => void;
-  /** Cmd-S */
   onFlush?: () => void;
 }
 
-/** collab session; Yjs frames on the mirror websocket */
 export interface CollabLink {
   transport: WsTransport;
   path: string;
@@ -155,12 +167,6 @@ interface EditorViewProps extends Omit<MdxEditorProps, "sync"> {
   collab?: CollabLink;
 }
 
-type Mode = "visual" | "source";
-/**
- * static: first paint
- * mounting: TipTap constructing (input captured)
- * live: interactive, static view gone
- */
 type Stage = "static" | "mounting" | "live";
 
 const pulse = stylex.keyframes({ "50%": { opacity: 0.5 } });
@@ -184,10 +190,15 @@ const styles = stylex.create({
     lineHeight: 1.625,
     boxShadow: consts.shadowSm,
   },
+  page: {
+    minHeight: "100dvh",
+    borderWidth: 0,
+    borderRadius: 0,
+    boxShadow: "none",
+  },
   bar: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: "0.75rem",
     borderStartStartRadius: "inherit",
     borderStartEndRadius: "inherit",
@@ -198,6 +209,16 @@ const styles = stylex.create({
     paddingInline: "0.5rem",
     paddingBlock: "0.25rem",
   },
+  barPage: {
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    backgroundColor: `color-mix(in oklab, ${tokens.background} 85%, transparent)`,
+    backdropFilter: "blur(12px)",
+    paddingInline: "0.75rem",
+    paddingBlock: "0.375rem",
+  },
+  grow: { flex: 1, minWidth: 0 },
   tabs: {
     boxSizing: "border-box",
     display: "flex",
@@ -237,7 +258,6 @@ const styles = stylex.create({
   },
   status: {
     display: "flex",
-    minWidth: 0,
     alignItems: "center",
     gap: "0.5rem",
     paddingInlineStart: "0.375rem",
@@ -279,6 +299,17 @@ const styles = stylex.create({
     color: tokens.foreground,
   },
   body: { position: "relative" },
+  // centered in the viewport when there is room, else right of the inset
+  pageColumn: {
+    flex: 1,
+    maxWidth: "var(--fde-page-width, 52rem)",
+    marginInlineStart:
+      "max(calc((100% - var(--fde-page-width, 52rem)) / 2), var(--fde-page-inset, 0px))",
+    transition: {
+      default: `margin-inline-start 150ms ${consts.ease}`,
+      [consts.reduceMotion]: "none",
+    },
+  },
   staticView: { cursor: "text", outline: "none" },
   source: { display: "flex", flex: 1, flexDirection: "column" },
   sourceError: {
@@ -313,6 +344,7 @@ const styles = stylex.create({
       ":focus-visible": `inset 0 0 0 1px color-mix(in oklab, ${tokens.ring} 40%, transparent)`,
     },
   },
+  textareaPage: { resize: "none" },
 });
 
 const SYNC_LABEL: Record<SessionStatus, string> = {
@@ -324,10 +356,9 @@ const SYNC_LABEL: Record<SessionStatus, string> = {
   denied: "No access",
 };
 
-/** Status beside the mode tabs. */
 function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (
-    <div {...stylex.props(styles.status)}>
+    <div {...stylex.props(styles.grow, styles.status)}>
       <span aria-hidden {...stylex.props(styles.dot, styles[status])} />
       <span {...stylex.props(styles.label)}>{SYNC_LABEL[status]}</span>
       {status === "conflict" && (
@@ -352,7 +383,6 @@ function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   );
 }
 
-/** keep the previous reference while newly passed values stay equal by content */
 function useStableValue<T>(value: T, equal: (a: T, b: T) => boolean): T {
   const ref = useRef(value);
   if (value !== ref.current && !equal(value, ref.current)) ref.current = value;
@@ -380,21 +410,20 @@ const EditorView = memo(function EditorView({
   media,
   files,
   editable = true,
+  variant = "card",
+  header,
   className,
   ref,
 }: EditorViewProps) {
-  // hosts pass `components`/`syntax` as inline literals; stabilize by value
-  // so the parse cache / collab / extensions don't churn on identity
   const components = useStableValue(componentsProp ?? fumadocsUiComponents, sameSpecs);
   const syntax = useStableValue(syntaxProp, sameOptions);
-  const specMap = useMemo(() => new Map(components.map((spec) => [spec.name, spec])), [components]);
+  const specMap = useMemo(() => specsByType(components), [components]);
   const ambient = useEditorTheme();
-  // `theme` prop wins; otherwise inherit provider / next-themes / OS
   const scoped = theme === "system" ? ambient.resolvedTheme : theme;
 
   const [parsed, setParsed] = useState<ParsedDoc | null>(null);
   const [stage, setStage] = useState<Stage>("static");
-  const [mode, setMode] = useState<Mode>("visual");
+  const [mode, setMode] = useState<EditorMode>("visual");
   const [source, setSource] = useState("");
   const [sourceError, setSourceError] = useState<string | null>(null);
 
@@ -407,8 +436,12 @@ const EditorView = memo(function EditorView({
   onChangeRef.current = onChange;
 
   const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
+  const onReady = useCallback((editor: Editor, serialize: SerializeFn) => {
+    editorRef.current = editor;
+    serializeRef.current = serialize;
+    setStage("live");
+  }, []);
 
-  // yjs chunk: connect on mount so the doc is usually ready before hydrate.
   // `generation` bumps on server re-seed (restart); Y history cannot merge.
   const [collabRuntime, setCollabRuntime] = useState<EditorCollab | null>(null);
   const [generation, setGeneration] = useState(0);
@@ -436,7 +469,6 @@ const EditorView = memo(function EditorView({
     };
   }, [collabTransport, collabPath, components, syntax, generation]);
 
-  // parse is its own chunk; skip fetch while a host fallback is on screen
   useEffect(() => {
     if (parsed || sourceError || mode !== "visual") return;
     if (staticFallback && stage === "static") return;
@@ -469,7 +501,6 @@ const EditorView = memo(function EditorView({
     syntax,
   ]);
 
-  // hydrate at idle so the first interaction is already live
   useEffect(() => {
     if (stage !== "static" || mode !== "visual") return;
     if (typeof requestIdleCallback === "function") {
@@ -517,29 +548,20 @@ const EditorView = memo(function EditorView({
   };
 
   const applyExternalMarkdown = async (text: string): Promise<number[]> => {
-    // raw source edits the whole file: any disk change is a whole-doc conflict
     if (mode === "source") return [-1];
 
     const editor = editorRef.current;
     const snapshot = snapshotRef.current;
     if (!editor || !snapshot) {
-      // nothing live yet: adopt the disk text
       const result = await parseDocCached(cacheKey, text, components, syntax);
       snapshotRef.current = result.snapshot;
       setParsed(result);
       return [];
     }
 
-    const [{ mergeRemote }, { tryNormalize }] = await Promise.all([
-      import("@fumadocs-editor/sync/merge"),
-      import("@fumadocs-editor/core/serialize"),
-    ]);
+    const { mergeRemote } = await import("@fumadocs-editor/core/serialize");
     const { doc } = editor.state;
-    const localNormalized: string[] = [];
-    for (let i = 0; i < doc.childCount; i++) {
-      localNormalized.push(tryNormalize(doc.child(i).toJSON(), snapshot.syntax) ?? "");
-    }
-    const result = mergeRemote({ base: snapshot, localNormalized, remoteText: text });
+    const result = mergeRemote({ base: snapshot, local: doc.toJSON(), remoteText: text });
 
     if (result.ops.length > 0) {
       const starts: number[] = [];
@@ -584,9 +606,16 @@ const EditorView = memo(function EditorView({
     });
   };
 
-  useImperativeHandle(ref, () => ({ getMarkdown, applyExternalMarkdown, setMarkdown, markSaved }));
+  useImperativeHandle(ref, () => ({
+    getMarkdown,
+    applyExternalMarkdown,
+    setMarkdown,
+    markSaved,
+    getMode: () => mode,
+    setMode: switchMode,
+  }));
 
-  function switchMode(next: Mode) {
+  function switchMode(next: EditorMode) {
     if (next === mode) return;
 
     if (next === "source") {
@@ -609,8 +638,11 @@ const EditorView = memo(function EditorView({
   }
 
   const providers = useMemo(() => ({ media, files }), [media, files]);
+  const providersRef = useRef(providers);
+  providersRef.current = providers;
 
-  let rootClass = stylex.props(styles.root).className!;
+  const page = variant === "page";
+  let rootClass = stylex.props(styles.root, page && styles.page).className!;
   if (scoped) rootClass += ` ${scoped}`;
   if (className) rootClass += ` ${className}`;
 
@@ -628,15 +660,15 @@ const EditorView = memo(function EditorView({
       >
         <Tabs.Root
           value={mode}
-          onValueChange={(value) => switchMode(value as Mode)}
-          {...stylex.props(styles.bar)}
+          onValueChange={(value) => switchMode(value as EditorMode)}
+          {...stylex.props(styles.bar, page && styles.barPage)}
         >
-          {sync ? <SyncIndicator {...sync} /> : <span />}
+          {header?.start}
+          {sync ? <SyncIndicator {...sync} /> : <span {...stylex.props(styles.grow)} />}
           <Tabs.List {...stylex.props(styles.tabs)}>
             <Tabs.Tab {...stylex.props(chrome.button, styles.tab)} value="visual">
               Visual
             </Tabs.Tab>
-            {/* raw source has no merge with a live shared doc */}
             <Tabs.Tab
               {...stylex.props(chrome.button, styles.tab)}
               value="source"
@@ -645,9 +677,10 @@ const EditorView = memo(function EditorView({
               MDX
             </Tabs.Tab>
           </Tabs.List>
+          {header?.end}
         </Tabs.Root>
         {mode === "visual" ? (
-          <div data-fde-overlay="" {...stylex.props(styles.body)}>
+          <div data-fde-overlay="" {...stylex.props(styles.body, page && styles.pageColumn)}>
             {stage !== "static" && parsed && (!collab || collabRuntime) && (
               <Suspense fallback={null}>
                 <LiveEditor
@@ -657,17 +690,12 @@ const EditorView = memo(function EditorView({
                   doc={parsed.doc}
                   components={components}
                   specs={specMap}
+                  providers={providersRef}
                   syntax={syntax}
                   snapshotRef={snapshotRef}
                   onChangeRef={onChangeRef}
                   hidden={stage !== "live"}
-                  media={media}
-                  files={files}
-                  onReady={(editor, serialize) => {
-                    editorRef.current = editor;
-                    serializeRef.current = serialize;
-                    setStage("live");
-                  }}
+                  onReady={onReady}
                 />
               </Suspense>
             )}
@@ -697,7 +725,7 @@ const EditorView = memo(function EditorView({
               >
                 {staticFallback ??
                   (parsed ? (
-                    <StaticMdx doc={parsed.doc} specs={specMap} media={media} />
+                    <StaticMdx doc={parsed.doc} specs={specMap} />
                   ) : (
                     <div className={`ProseMirror ${contentClass.root}`} aria-hidden />
                   ))}
@@ -705,10 +733,10 @@ const EditorView = memo(function EditorView({
             )}
           </div>
         ) : (
-          <div {...stylex.props(styles.source)}>
+          <div {...stylex.props(styles.source, page && styles.pageColumn)}>
             {sourceError != null && <div {...stylex.props(styles.sourceError)}>{sourceError}</div>}
             <textarea
-              {...stylex.props(chrome.input, styles.textarea)}
+              {...stylex.props(chrome.input, styles.textarea, page && styles.textareaPage)}
               value={source}
               readOnly={!editable}
               spellCheck={false}
@@ -724,7 +752,6 @@ const EditorView = memo(function EditorView({
   );
 });
 
-/** shared transport for editors that do not pass one */
 let sharedTransport: WsTransport | undefined;
 
 const GUEST_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
@@ -739,7 +766,6 @@ interface SyncLink {
   collab?: CollabLink;
 }
 
-/** Opens the file, owns FileSession or the collab link. Sync loads lazily. */
 function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEditorSync }) {
   const { path, transport: transportProp } = sync;
   const collabOn = Boolean(sync.collab);
@@ -747,8 +773,13 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
   const [status, setStatus] = useState<SessionStatus>("synced");
   const viewRef = useRef<MdxEditorRef | null>(null);
   const sessionRef = useRef<FileSession | null>(null);
-  const latest = useRef({ sync, props });
-  latest.current = { sync, props };
+  const latest = useRef({ sync, props, ref });
+  latest.current = { sync, props, ref };
+  // stable: a fresh callback would re-render the memoized view on every host render
+  const attach = useCallback((value: MdxEditorRef | null) => {
+    viewRef.current = value;
+    assignRef(latest.current.ref, value);
+  }, []);
 
   useEffect(() => {
     let open = true;
@@ -760,7 +791,7 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
       setStatus(next);
       latest.current.sync.onStatus?.(next);
     };
-    void import("@fumadocs-editor/sync").then((mod) => {
+    void import("@fumadocs-editor/core/sync").then((mod) => {
       if (!open) return;
       const transport = transportProp ?? (sharedTransport ??= mod.wsTransport());
       let read: Promise<ReadResult>;
@@ -769,14 +800,12 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
           throw new Error("collab needs the websocket transport");
         }
         const ws = transport as WsTransport;
-        // server is the authority: report connectivity only
         stopStatus = ws.onStatus((next) => report(next === "online" ? "synced" : next));
         read = ws.read(path);
       } else {
         session = mod.createFileSession({
           transport,
           path,
-          // view mounts after read; nothing to sync until then
           document: {
             getMarkdown: () => viewRef.current?.getMarkdown() ?? "",
             applyExternalMarkdown: async (text) =>
@@ -803,7 +832,6 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
             collab: collabOn ? { transport: transport as WsTransport, path, user } : undefined,
           });
         },
-        // offline or denied: unsynced editor, status already reported
         () => {
           if (open) setLink({ text: latest.current.props.defaultValue ?? "" });
         },
@@ -818,7 +846,6 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
     };
   }, [path, transportProp, collabOn]);
 
-  // flush pending autosave on leave
   useEffect(() => {
     const flush = () => void sessionRef.current?.flush();
     window.addEventListener("blur", flush);
@@ -854,10 +881,7 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
       onChange={onChange}
       sync={indicator}
       collab={link.collab}
-      ref={(value) => {
-        viewRef.current = value;
-        assignRef(ref, value);
-      }}
+      ref={attach}
     />
   );
 }

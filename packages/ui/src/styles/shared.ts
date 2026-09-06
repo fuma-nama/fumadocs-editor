@@ -2,22 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { consts } from "./consts.stylex";
 import { tokens } from "./tokens.stylex";
 
-/*
- * Chrome primitives shared by the toolbar, panels and pickers. Every
- * floating surface portals into the editor root (`useEditorPortal`) and is
- * fully self-styled. Compose with `stylex.props(chrome.popup, local.x)`:
- * later arguments win per property, so overrides never depend on
- * stylesheet order.
- *
- * Nothing here relies on a host reset: form controls compose `button` /
- * `input` first, sized boxes carry their own `boxSizing`.
- *
- * Hot-path chrome reacts instantly: no colour transitions on items or
- * buttons, no popup entrance animation.
- */
-
 export const chrome = stylex.create({
-  /** UA button reset */
   button: {
     boxSizing: "border-box",
     appearance: "none",
@@ -31,7 +16,6 @@ export const chrome = stylex.create({
     color: "inherit",
     textAlign: "start",
   },
-  /** UA input / textarea / select reset */
   input: {
     boxSizing: "border-box",
     appearance: "none",
@@ -44,17 +28,12 @@ export const chrome = stylex.create({
     letterSpacing: "inherit",
     color: "inherit",
   },
-  /** keyboard focus ring; `focus-visible` keeps it off mouse clicks */
   focusRing: {
     outline: "none",
     boxShadow: { default: null, ":focus-visible": consts.focusRing },
   },
-  /** non-editable chrome inside the document: never part of a text selection */
   static: { position: "relative", userSelect: "none" },
-  /** stacking for positioners and fixed surfaces */
   layer: { zIndex: 50 },
-  /* Padding scale: menus/lists keep p-1 (items px-2); form popovers
-   * override to p-2, the picker to p-0 and pads each section itself. */
   popup: {
     boxSizing: "border-box",
     zIndex: 50,
@@ -95,7 +74,6 @@ export const chrome = stylex.create({
       ":is([data-highlighted])": tokens.accent,
     },
   },
-  /** leading glyph cell of a menu item */
   itemIcon: {
     display: "inline-flex",
     width: "1rem",
@@ -103,8 +81,6 @@ export const chrome = stylex.create({
     justifyContent: "center",
     color: tokens.mutedForeground,
   },
-  /* the check sits at the item's end: a leading check would indent only
-   * the selected label and break the list's left alignment */
   itemIndicator: {
     marginInlineStart: "auto",
     display: "inline-flex",
@@ -112,8 +88,6 @@ export const chrome = stylex.create({
     paddingInlineStart: "0.5rem",
     color: tokens.foreground,
   },
-  /** icon toolbar button: pointer chrome, never in the tab order. Hover is
-   * the accent wash; a toggled mark is a solid primary tint. */
   iconButton: {
     boxSizing: "border-box",
     display: "inline-flex",
@@ -136,7 +110,6 @@ export const chrome = stylex.create({
     },
     opacity: { default: null, ":disabled": 0.4 },
   },
-  /** small text input used across the popover panels */
   field: {
     boxSizing: "border-box",
     height: "1.75rem",
@@ -155,7 +128,6 @@ export const chrome = stylex.create({
       color: `color-mix(in oklab, ${tokens.mutedForeground} 60%, transparent)`,
     },
   },
-  /** Base UI Switch skin; size overrides compose after it */
   switchRoot: {
     boxSizing: "border-box",
     position: "relative",
@@ -186,7 +158,6 @@ export const chrome = stylex.create({
     transition: { default: `translate 150ms ${consts.ease}`, [consts.reduceMotion]: "none" },
     translate: { default: null, ":is([data-checked])": "0.75rem" },
   },
-  /** dropdown trigger that looks like plain text until hovered */
   ghostSelect: {
     boxSizing: "border-box",
     display: "inline-flex",
@@ -209,7 +180,6 @@ export const chrome = stylex.create({
     pointerEvents: { default: null, ":is([data-disabled])": "none" },
     opacity: { default: null, ":is([data-disabled])": 0.4 },
   },
-  /** thin vertical rule between toolbar groups */
   divider: {
     marginInline: "0.125rem",
     height: "1rem",

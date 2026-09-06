@@ -8,7 +8,8 @@ import { Image } from "@tiptap/extension-image";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { mdxNodes } from "./mdx-nodes";
-import { mdxComponentNodes } from "../components/nodes";
+import { MdxBlockRegion, MdxInlineRegion, componentNodeTypes } from "../components/nodes";
+import type { ComponentSpec } from "../components/spec";
 import { mathNodes } from "../syntax/math/nodes";
 
 /** code fences keep their info string (` ```ts tab="cli" `) */
@@ -69,9 +70,12 @@ export const TableMdx = Table.extend({
 });
 
 export interface EditorExtensionsOptions {
+  /** Registered components; each becomes a node type ({@link componentNodeTypes}). */
+  components?: ComponentSpec[];
   /**
-   * Include the base (view-less) component nodes. Set `false` when the UI layer
-   * supplies its own node-view-backed versions to avoid duplicate schema names.
+   * Include the base (view-less) region and component nodes. Set `false` when
+   * the UI layer supplies its own node-view-backed versions to avoid duplicate
+   * schema names.
    * @defaultValue true
    */
   componentNodes?: boolean;
@@ -98,6 +102,7 @@ export interface EditorExtensionsOptions {
 }
 
 export function editorExtensions({
+  components = [],
   componentNodes = true,
   codeBlock = true,
   image = true,
@@ -128,12 +133,14 @@ export function editorExtensions({
     ...(image ? [Image.configure({ inline: true })] : []),
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableMdx,
+    // prosemirror-tables would otherwise turn a node-selected table into a
+    // CellSelection: the table then rings and moves like any other block
+    TableMdx.configure({ allowTableNodeSelection: true }),
     TableRow,
     TableHeader,
     TableCell,
     ...mdxNodes,
-    ...(componentNodes ? mdxComponentNodes : []),
+    ...(componentNodes ? [MdxInlineRegion, MdxBlockRegion, ...componentNodeTypes(components)] : []),
     ...(math ? mathNodes : []),
   ];
 }

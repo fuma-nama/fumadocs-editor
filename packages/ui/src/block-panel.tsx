@@ -10,20 +10,28 @@ import { Popover } from "@base-ui/react/popover";
 import {
   ArrowDown,
   ArrowUp,
+  BoxSelect,
   ChevronDown,
   IndentDecrease,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { isComponent } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import {
   childInsertContext,
+  deleteBlocks,
   entryParentFolder,
   entryToggleTarget,
   focusAt,
-  moveBlockAt,
+  handleBlock,
+  moveBlocks,
   outdentEntry,
+  parentBlock,
+  selectNode,
   toggleEntryType,
+  type BlockRange,
 } from "./components/keymap";
 import { PropControl } from "./attributes-panel";
 import { setComponentAttributes } from "./components/attributes";
@@ -68,22 +76,20 @@ const styles = stylex.create({
 
 export interface ActiveComponent {
   pos: number;
-  name: string;
+  /** node type name: the key into the specs map */
+  type: string;
   attributes: MdxAttribute[];
 }
 
-/**
- * The menu's open state: closed once its block is gone, opened by a click
- * on a leaf component (nothing in it to type into).
- */
+/** the ⋯ panel's open state; closes when there is no block to act on */
 export function useBlockMenuOpen(
   editor: Editor,
-  pos: number | undefined,
+  block: boolean,
 ): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (pos == null) setOpen(false);
-  }, [pos]);
+    if (!block) setOpen(false);
+  }, [block]);
   useEffect(() => {
     const onTransaction = ({ transaction }: { transaction: Transaction }) => {
       if (transaction.getMeta(OPEN_COMPONENT_MENU)) setOpen(true);
@@ -96,45 +102,32 @@ export function useBlockMenuOpen(
   return [open, setOpen];
 }
 
-/**
- * The block's menu behind one trigger: a component's chip (icon and name)
- * opens its panel, a plain block's ⋯ opens move and delete.
- */
+/** the ⋯ menu for the blocks the selection sits in; a component chip when it is one */
 export function BlockMenu({
   editor,
   specs,
   active,
-  block,
   open,
   onOpenChange,
   container,
-  side,
   align,
   chipCls,
   iconCls,
   touch,
-  compact,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   active: ActiveComponent | null;
-  block: { pos: number } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: HTMLElement | undefined;
-  side?: "top" | "bottom";
   align: "start" | "end";
-  /** the surface's chip and icon-button looks; each includes `chrome.button` */
   chipCls: string;
   iconCls: string;
   /** a touch surface: the popup must not raise the keyboard */
   touch?: boolean;
-  /** icon-only trigger, for a spot too small for the chip */
-  compact?: boolean;
 }) {
-  const spec = active ? specs.get(active.name) : undefined;
-  const pos = active ? active.pos : block?.pos;
-  if (pos == null) return null;
+  const spec = active ? specs.get(active.type) : undefined;
   const label = spec ? (spec.label ?? spec.name) : null;
   const close = () => onOpenChange(false);
 
@@ -142,9 +135,9 @@ export function BlockMenu({
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger
         aria-label={label ? `${label} options` : "Block options"}
-        className={label && !compact ? chipCls : iconCls}
+        className={label ? chipCls : iconCls}
       >
-        {label && !compact ? (
+        {label ? (
           <>
             <span {...stylex.props(styles.chipIcon)}>{spec!.icon}</span>
             {label}
@@ -157,7 +150,6 @@ export function BlockMenu({
       <Popover.Portal container={container}>
         <Popover.Positioner
           positionMethod="fixed"
-          side={side}
           sideOffset={6}
           align={align}
           {...stylex.props(chrome.layer)}
@@ -171,7 +163,11 @@ export function BlockMenu({
             {active && spec ? (
               <BlockPanel editor={editor} specs={specs} active={active} onDone={close} />
             ) : (
-              <BlockActions editor={editor} pos={pos} onDone={close} />
+              <BlockActions
+                editor={editor}
+                range={() => handleBlock(editor.state.selection)}
+                onDone={close}
+              />
             )}
           </Popover.Popup>
         </Popover.Positioner>
@@ -180,7 +176,6 @@ export function BlockMenu({
   );
 }
 
-/** Attributes and actions for one component. */
 function BlockPanel({
   editor,
   specs,
@@ -192,14 +187,10 @@ function BlockPanel({
   active: ActiveComponent;
   onDone: () => void;
 }) {
-  const spec = specs.get(active.name);
-  if (!spec) return null;
-
+  const spec = specs.get(active.type)!;
   const attributes = active.attributes;
   const fields = (spec.props ?? []).filter((field) => !field.inline);
   const inserts = childInsertContext(editor.state, active.pos, specs);
-  // row actions of a list entry (File ↔ Folder, out of its folder): Tab and
-  // Shift-Tab on a keyboard, labelled here for touch and discovery
   const { $from } = editor.state.selection;
   const toggle = entryToggleTarget($from, specs);
   const folder = entryParentFolder($from, specs);
@@ -238,9 +229,7 @@ function BlockPanel({
           type="button"
           {...stylex.props(chrome.button, chrome.item)}
           onClick={() => {
-            const content = child.insert?.();
-            if (!content) return;
-            editor.chain().insertContentAt(inserts.insertAt, content).run();
+            editor.chain().insertContentAt(inserts.insertAt, child.insert!(specs)).run();
             onDone();
             focusAt(editor, inserts.insertAt + 1);
           }}
@@ -277,21 +266,38 @@ function BlockPanel({
           <span>Move out of {folder.label ?? folder.name}</span>
         </button>
       )}
-      <BlockActions editor={editor} pos={active.pos} onDone={onDone} />
+      <BlockActions
+        editor={editor}
+        range={() => {
+          const node = editor.state.doc.nodeAt(active.pos);
+          return node && { from: active.pos, to: active.pos + node.nodeSize };
+        }}
+        onDone={onDone}
+      />
     </>
   );
 }
 
-/** move and delete: the tail of a component's panel, and all of a block's */
-function BlockActions({
+/** "bulletList" reads as "bullet list"; a component goes by its type name */
+function blockLabel(node: PMNode): string {
+  if (isComponent(node.type)) return node.type.name;
+  return node.type.name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
+}
+
+export function BlockActions({
   editor,
-  pos,
+  range,
   onDone,
+  itemLook,
 }: {
   editor: Editor;
-  pos: number;
+  /** read when an action runs: an edit above shifts the range without a re-render */
+  range: () => BlockRange | null | undefined;
   onDone: () => void;
+  itemLook?: stylex.StyleXStyles;
 }) {
+  const current = range();
+  const parent = current ? parentBlock(editor.state.doc, current.from) : null;
   return (
     <>
       {(
@@ -303,9 +309,10 @@ function BlockActions({
         <button
           key={label}
           type="button"
-          {...stylex.props(chrome.button, chrome.item)}
+          {...stylex.props(chrome.button, chrome.item, itemLook)}
           onClick={() => {
-            if (moveBlockAt(editor, pos, dir)) onDone();
+            const blocks = range();
+            if (blocks && moveBlocks(editor, blocks, dir)) onDone();
             editor.view.focus();
           }}
         >
@@ -313,13 +320,29 @@ function BlockActions({
           <span>{label}</span>
         </button>
       ))}
+      {parent && (
+        <button
+          type="button"
+          {...stylex.props(chrome.button, chrome.item, itemLook)}
+          onClick={() => {
+            const blocks = range();
+            const target = blocks && parentBlock(editor.state.doc, blocks.from);
+            if (target) selectNode(editor, target.from);
+            onDone();
+            editor.view.focus();
+          }}
+        >
+          <BoxSelect size={13} {...stylex.props(styles.actionIcon)} />
+          <span>Select {blockLabel(parent.node)}</span>
+        </button>
+      )}
       <button
         type="button"
-        {...stylex.props(chrome.button, chrome.item, styles.danger)}
+        {...stylex.props(chrome.button, chrome.item, styles.danger, itemLook)}
         onClick={() => {
-          const current = editor.state.doc.nodeAt(pos);
-          if (!current) return;
-          editor.commands.deleteRange({ from: pos, to: pos + current.nodeSize });
+          const blocks = range();
+          if (!blocks) return;
+          editor.view.dispatch(deleteBlocks(editor.state.tr, blocks).scrollIntoView());
           onDone();
           editor.view.focus();
         }}

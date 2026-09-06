@@ -1,6 +1,6 @@
 export { parseMdxToDoc } from "./document";
 export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
-export { createSyntax, componentSpecData } from "./components/spec";
+export { createSyntax } from "./components/spec";
 export type {
   ComponentSpec,
   Syntax,

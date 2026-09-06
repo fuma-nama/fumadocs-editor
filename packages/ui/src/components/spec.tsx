@@ -1,4 +1,5 @@
-import type { ComponentSpec } from "@fumadocs-editor/core";
+import { type ComponentSpec } from "@fumadocs-editor/core";
+import { componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { FC, ReactNode } from "react";
 
 export interface ComponentRenderProps {
@@ -35,4 +36,11 @@ export interface UiComponentSpec extends ComponentSpec {
    * them (its placeholder position follows `--fde-ph-x` / `--fde-ph-y`).
    */
   regions?: Record<string, string>;
+}
+
+/** Specs keyed by their node type name, so `specs.get(node.type.name)` resolves a node's spec. */
+export function specsByType(components: UiComponentSpec[]): Map<string, UiComponentSpec> {
+  const map = new Map<string, UiComponentSpec>();
+  for (const spec of components) map.set(componentTypeName(spec), spec);
+  return map;
 }

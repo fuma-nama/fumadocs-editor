@@ -1,4 +1,4 @@
-import type { SyncAuthenticate } from "@fumadocs-editor/sync/node";
+import type { SyncAuthenticate } from "@fumadocs-editor/core/node";
 
 // your session store; the sync server only cares about the resulting scope
 declare function verifySession(

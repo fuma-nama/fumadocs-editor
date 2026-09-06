@@ -21,6 +21,6 @@ description: Engine differences, platform caveats, current boundaries
 - A hard kill of the sync server can lose edits still inside its save
   debounce (under a second). An orderly shutdown flushes.
 - Edits typed **while the server was down** are discarded when it comes
-  back ([epoch reset](/collab#restarts)). Edits made while merely
+  back ([restarts](/collab#restarts)). Edits made while merely
   disconnected converge on reconnect.
 - The raw MDX tab is disabled during collab.

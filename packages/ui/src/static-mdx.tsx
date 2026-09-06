@@ -2,35 +2,27 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import type { JSONContent } from "@tiptap/core";
-import type { MdxAttribute } from "@fumadocs-editor/core/extensions";
+import { type MdxAttribute } from "@fumadocs-editor/core";
+import { componentRegions } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
-import {
-  Component as ReactComponent,
-  createContext,
-  useContext,
-  Fragment,
-  type ReactNode,
-} from "react";
+import { Component as ReactComponent, Fragment, memo, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
-import { resolveSrc, type MediaProvider } from "./components/media";
+import { resolveSrc } from "./components/media";
+import { useEditorProviders } from "./components/providers";
 import { content, contentClass } from "./styles/content";
 import { consts } from "./styles/consts.stylex";
 import { chrome } from "./styles/shared";
 
 /**
- * Stage-0 paint: the parsed PM document as plain React, no TipTap and no
- * ProseMirror. Same DOM shape and classes as the live editor
- * (`.react-renderer` / `data-node-view-*` shells) so the swap has no
- * visible shift.
+ * Same DOM shape and classes as the live editor (`.react-renderer` /
+ * `data-node-view-*` shells) so the swap has no visible shift.
  */
 
 type SpecMap = Map<string, UiComponentSpec>;
 
-const MediaContext = createContext<MediaProvider | undefined>(undefined);
-
 function StaticImg({ node }: { node: JSONContent }) {
-  const media = useContext(MediaContext);
+  const { media } = useEditorProviders();
   return (
     <img
       className={contentClass.image}
@@ -43,13 +35,6 @@ function StaticImg({ node }: { node: JSONContent }) {
 
 const noop = () => {};
 
-/**
- * Contains a throwing third-party renderer to its own component: the fallback
- * keeps that component's (still editable) regions visible while the document
- * and the rest of the editor stay intact. Colocated here, not its own module,
- * because both the static paint and the live node views need it and this file
- * is already eager; extracting a module on this path costs real bytes.
- */
 export class RenderBoundary extends ReactComponent<
   { resetOn?: unknown; fallback: ReactNode; children: ReactNode },
   { failed: boolean }
@@ -59,7 +44,6 @@ export class RenderBoundary extends ReactComponent<
     return { failed: true };
   }
   componentDidUpdate(prev: { resetOn?: unknown }) {
-    // a node update retries the renderer, so an attr fix heals the component
     if (this.state.failed && prev.resetOn !== this.props.resetOn) this.setState({ failed: false });
   }
   render() {
@@ -96,7 +80,6 @@ const styles = stylex.create({
   root: { whiteSpace: "pre-wrap" },
 });
 
-/** the generic dashed card: unregistered components and crashed renderers */
 export function FallbackCard({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div data-component-fallback="" {...stylex.props(styles.fallback)}>
@@ -183,34 +166,24 @@ function ContentHole({ children }: { children: ReactNode }) {
   );
 }
 
-function Component({ node, specs }: { node: JSONContent; specs: SpecMap }) {
-  const name = (node.attrs?.name as string | null) ?? null;
-  const spec = name ? specs.get(name) : undefined;
+function Component({
+  node,
+  spec,
+  specs,
+}: {
+  node: JSONContent;
+  spec: UiComponentSpec;
+  specs: SpecMap;
+}) {
   const attributes = (node.attrs?.attributes ?? []) as MdxAttribute[];
   const children = renderChildren(node.content, specs, spec);
 
-  if (!spec) {
-    return (
-      <Shell type="mdxComponent" className={contentClass.component}>
-        <div
-          data-node-view-wrapper=""
-          data-component={name ?? ""}
-          {...stylex.props(content.nodeWrapper, styles.wrapper)}
-        >
-          <FallbackCard name={name ?? ""}>
-            <ContentHole>{children}</ContentHole>
-          </FallbackCard>
-        </div>
-      </Shell>
-    );
-  }
-
   const Render = spec.render;
   return (
-    <Shell type="mdxComponent" className={contentClass.component}>
+    <Shell type={node.type!} className={contentClass.component}>
       <div
         data-node-view-wrapper=""
-        data-component={name}
+        data-component={spec.name}
         {...stylex.props(content.nodeWrapper, styles.wrapper)}
       >
         <RenderBoundary
@@ -240,29 +213,36 @@ function Region({
   specs,
   kind,
   parent,
+  index,
 }: {
   node: JSONContent;
   specs: SpecMap;
   kind: "inline" | "block";
-  parent?: UiComponentSpec;
+  parent: UiComponentSpec;
+  index: number;
 }) {
-  const region = (node.attrs?.region as string) ?? "";
-  const sx = stylex.props(content.region, kind === "block" && content.regionBlock, styles.wrapper);
-  const own = parent?.regions?.[region];
+  const { region, placeholder } = componentRegions(parent, specs)[index];
+  const sx = stylex.props(content.region, kind === "block" && content.regionBlock);
+  const own = parent.regions?.[region];
+  const empty = !hasText(node);
   return (
-    <Shell type={kind === "inline" ? "mdxInlineRegion" : "mdxBlockRegion"}>
-      <div
-        data-node-view-wrapper=""
-        className={own ? `${sx.className} ${own}` : sx.className}
-        data-region={region}
-      >
-        <ContentHole>{renderChildren(node.content, specs)}</ContentHole>
-      </div>
-    </Shell>
+    <div
+      className={own ? `${sx.className} ${own}` : sx.className}
+      data-region={region}
+      data-empty={empty || undefined}
+      data-placeholder={empty && placeholder ? placeholder : undefined}
+    >
+      {renderChildren(node.content, specs) ?? (kind === "inline" ? <br /> : null)}
+    </div>
   );
 }
 
-/** the code-block figure without its language picker or copy button */
+function hasText(node: JSONContent): boolean {
+  if (node.text) return true;
+  for (const child of node.content ?? []) if (hasText(child)) return true;
+  return false;
+}
+
 function StaticCodeBlock({ node }: { node: JSONContent }) {
   const language = (node.attrs?.language as string | null) ?? "";
   return (
@@ -296,13 +276,15 @@ function renderNode(
   parent?: UiComponentSpec,
 ): ReactNode {
   const children = () => renderChildren(node.content, specs);
+  const spec = specs.get(node.type!);
+  if (spec) return <Component key={key} node={node} spec={spec} specs={specs} />;
   switch (node.type) {
     case "text":
       return renderMarks(node, key);
     case "paragraph":
       return (
         <p key={key} className={contentClass.paragraph}>
-          {children()}
+          {children() ?? <br />}
         </p>
       );
     case "heading": {
@@ -315,7 +297,7 @@ function renderNode(
           data-anchor={(node.attrs?.anchor as string) ?? undefined}
           data-toc={(node.attrs?.toc as string) ?? undefined}
         >
-          {children()}
+          {children() ?? <br />}
         </Tag>
       );
     }
@@ -404,8 +386,6 @@ function renderNode(
       );
     case "codeBlock":
       return <StaticCodeBlock key={key} node={node} />;
-    // math paints as its TeX source: the live editor looks identical until
-    // the lazy KaTeX chunk arrives, so the hydration swap stays still
     case "mathInline":
       return (
         <span key={key} className="react-renderer node-mathInline">
@@ -428,12 +408,18 @@ function renderNode(
           </div>
         </Shell>
       );
-    case "mdxComponent":
-      return <Component key={key} node={node} specs={specs} />;
     case "mdxInlineRegion":
-      return <Region key={key} node={node} specs={specs} kind="inline" parent={parent} />;
     case "mdxBlockRegion":
-      return <Region key={key} node={node} specs={specs} kind="block" parent={parent} />;
+      return (
+        <Region
+          key={key}
+          node={node}
+          specs={specs}
+          kind={node.type === "mdxInlineRegion" ? "inline" : "block"}
+          parent={parent!}
+          index={key}
+        />
+      );
     case "mdxJsxFlowElement":
       return (
         <div
@@ -468,9 +454,14 @@ function renderNode(
           {String(node.attrs?.value ?? "")}
         </code>
       );
+    case "frontmatter":
+      return (
+        <pre key={key} className={contentClass.frontmatter}>
+          <code>{node.content?.[0]?.text ?? ""}</code>
+        </pre>
+      );
     case "mdxFlowExpression":
     case "mdxjsEsm":
-    case "frontmatter":
     case "verbatim":
       return (
         <pre key={key} className={contentClass[node.type]}>
@@ -482,23 +473,24 @@ function renderNode(
   }
 }
 
-export function StaticMdx({
+export const StaticMdx = memo(function StaticMdx({
   doc,
   specs,
-  media,
 }: {
   doc: JSONContent;
   specs: SpecMap;
-  media?: MediaProvider;
 }) {
   return (
-    <MediaContext.Provider value={media}>
-      <div
-        className={`ProseMirror ${stylex.props(content.root, styles.root).className}`}
-        aria-label="Loading editor"
-      >
-        {renderChildren(doc.content, specs)}
-      </div>
-    </MediaContext.Provider>
+    <div
+      className={`ProseMirror ${stylex.props(content.root, styles.root).className}`}
+      aria-label="Loading editor"
+    >
+      {renderChildren(doc.content, specs)}
+      {doc.content?.at(-1)?.type !== "paragraph" && (
+        <p className={contentClass.paragraph}>
+          <br />
+        </p>
+      )}
+    </div>
   );
-}
+});

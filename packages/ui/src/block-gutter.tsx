@@ -2,18 +2,15 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { useLayoutEffect, useRef } from "react";
+import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import type { UiComponentSpec } from "./components/spec";
-import { bubbleState } from "./bubble-menu";
+import { handleBlock, isList, isTable } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
 
-/** the joystick's side, in px */
 const GUTTER_BUTTON = 28;
 
 const styles = stylex.create({
-  /* in the gutter left of the block's first line, or in the spot the
-   * component reserves for it */
   gutter: {
     position: "absolute",
     top: 0,
@@ -34,7 +31,16 @@ const styles = stylex.create({
   },
 });
 
-/** the spot a component reserves for the joystick inside its own chrome */
+function gutterRow(dom: HTMLElement): DOMRect {
+  const row = dom.querySelector("[data-fde-row]");
+  if (row instanceof HTMLElement && row.closest(".react-renderer") === dom) {
+    return row.getBoundingClientRect();
+  }
+  const rect = dom.getBoundingClientRect();
+  const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
+  return new DOMRect(rect.left, rect.top, rect.width, Math.min(line, rect.height));
+}
+
 function controlsSlot(dom: HTMLElement): HTMLElement | null {
   const slot = dom.querySelector("[data-fde-controls]");
   const own = dom.querySelector("[data-component]");
@@ -47,54 +53,65 @@ function controlsSlot(dom: HTMLElement): HTMLElement | null {
     : null;
 }
 
-/**
- * The joystick of the caret's block on touch: in the spot the block
- * reserves for it, else in the gutter left of its first line (a nested
- * block's gutter would be its parent's chrome). An empty line has nothing
- * to drag and gets none. It lives here, not in the bubble: from a toolbar a
- * drag lifted the ghost far from the finger while the line sat under it.
- */
-export function BlockGutter({
-  editor,
-  specs,
-}: {
-  editor: Editor;
-  specs: Map<string, UiComponentSpec>;
-}) {
+export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean }) {
   const target = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const { active, block } = bubbleState(current.state, specs);
-      const pos = active?.pos ?? block?.pos;
-      if (pos == null) return null;
-      const node = current.state.doc.nodeAt(pos)!;
-      return node.isTextblock && node.content.size === 0 ? null : pos;
+      const { selection, doc } = current.state;
+      const range = handleBlock(selection);
+      if (!range) return null;
+      const node = doc.nodeAt(range.from)!;
+      // desktop: only blocks without chrome of their own to grab; touch: every block
+      const handled = node.type.spec.code || isTable(node.type);
+      if (!handled && (!touch || (node.isTextblock && node.content.size === 0))) return null;
+      // the textblock the caret is in: a long selection's joystick stays on
+      // screen, and clear of the system's copy bar above the selection's start
+      const $head = doc.resolve(
+        selection instanceof TextSelection
+          ? Math.min(Math.max(selection.head, range.from), range.to)
+          : range.from,
+      );
+      let row = range.from;
+      for (let depth = $head.depth; depth > 0; depth--) {
+        if ($head.node(depth).isTextblock) {
+          row = $head.before(depth);
+          break;
+        }
+      }
+      // a selected inline run sits in its textblock: that is the box to place beside
+      return { from: node.isInline ? row : range.from, row };
     },
   });
   const ref = useRef<HTMLDivElement>(null);
 
-  // re-placed whenever the document's layout changes under it (an edit
-  // above, a resize, an image loading); a transform, so nothing lays out
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || target == null) return;
+    if (!el || !target) return;
     const place = () => {
-      const dom = editor.view.nodeDOM(target);
       const frame = el.offsetParent;
-      if (!(dom instanceof HTMLElement) || !frame) return;
+      if (!frame) return;
+      const { doc } = editor.state;
       const base = frame.getBoundingClientRect();
-      const slot = controlsSlot(dom);
+      const dom = editor.view.nodeDOM(target.from);
+      const slot = dom instanceof HTMLElement ? controlsSlot(dom) : null;
       if (slot) {
         const at = slot.getBoundingClientRect();
         el.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
         return;
       }
-      const rect = dom.getBoundingClientRect();
-      const line = parseFloat(getComputedStyle(dom).lineHeight) || 24;
-      // centred on the block's first line, in the 24px gutter of the content's padding
-      const x = rect.left - base.left - (24 + GUTTER_BUTTON) / 2;
-      const y = rect.top - base.top + (Math.min(line, rect.height) - GUTTER_BUTTON) / 2;
+      const row = editor.view.nodeDOM(target.row);
+      if (!(row instanceof HTMLElement)) return;
+      const rect = gutterRow(row);
+      // beside the dragged block's own edge; an item's marker or checkbox
+      // renders in the list's padding, outside the item's box
+      let left = dom instanceof HTMLElement ? dom.getBoundingClientRect().left : rect.left;
+      if (dom instanceof HTMLElement && isList(doc.resolve(target.from).parent.type)) {
+        left -= parseFloat(getComputedStyle(dom.parentElement!).paddingInlineStart) || 0;
+      }
+      // centred on the row, in the 24px gutter of the content's padding
+      const x = left - base.left - (24 + GUTTER_BUTTON) / 2;
+      const y = rect.top - base.top + (rect.height - GUTTER_BUTTON) / 2;
       el.style.transform = `translate(${x}px, ${y}px)`;
     };
     place();
@@ -103,10 +120,10 @@ export function BlockGutter({
     return () => observer.disconnect();
   }, [editor, target]);
 
-  if (target == null) return null;
+  if (!target) return null;
   return (
     <div ref={ref} {...stylex.props(styles.gutter)}>
-      <DragHandle editor={editor} pos={target} specs={specs} look={styles.button} size={18} />
+      <DragHandle editor={editor} look={styles.button} size={18} />
     </div>
   );
 }

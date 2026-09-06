@@ -5,19 +5,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/check-size.mjs",
-    "types:check": "tsc --noEmit"
+    "types:check": "tsc --noEmit",
+    "studio": "fumadocs-studio"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fumadocs-editor/core": "workspace:*",
-    "@fumadocs-editor/sync": "workspace:*",
     "@fumadocs-editor/ui": "workspace:*",
     "lucide-react": "^1.23.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@fumadocs-editor/studio": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.18",

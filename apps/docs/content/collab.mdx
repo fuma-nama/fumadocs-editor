@@ -15,28 +15,23 @@ never enable collab never download it.
 
 ## How it works
 
-With collab on, the server holds the document:
+With collab on, the server owns the file:
 
-- Each open file has one Y.Doc on the server, and the server is the only
-  writer to disk. Client edits converge in the Y.Doc; the server serializes
-  them to the file, debounced and byte-preserving for untouched blocks.
-- Changes on disk (a `git pull` mid-session) go through the same
-  [block-level merge](/sync#merging-disk-changes) into the Y.Doc. When the
-  same block changed on both sides, the in-editor version wins and the disk
-  is rewritten. There is no conflict chip: the live document is shared, so
-  there is no local side to keep.
-- When the last client leaves, the server flushes immediately and evicts the
-  document after `evictAfterMs` (60 s by default).
-
-Parsing and serializing run on the server with your syntax. The first
-client to open a document sends the data half of its component specs;
-renderers stay in the browser.
+- Every open file has one shared document on the server, and the server is
+  the only writer to disk. Blocks nobody touched still serialize
+  byte-for-byte.
+- Changes on disk (a `git pull` mid-session) merge into the shared
+  document. When the same block changed on both sides, the editor wins and
+  the disk is rewritten. There is no conflict chip: the document is shared,
+  so there is no local side to keep.
+- When the last client leaves, the server flushes and drops the document
+  after `evictAfterMs` (60 s by default).
 
 ## What changes
 
 |                   | Sync                              | Collab                                     |
 | ----------------- | --------------------------------- | ------------------------------------------ |
-| Document lives in | your editor                       | the server's Y.Doc                         |
+| Document lives in | your editor                       | a shared document on the server            |
 | Writes to disk    | each client (compare-and-swap)    | the server only                            |
 | External edits    | merged client-side, conflict chip | merged server-side, editor wins            |
 | Undo              | full local history                | your own edits only                        |
@@ -50,19 +45,18 @@ any other disk change.
 
 ## Restarts
 
-There is no Yjs persistence. The file is the record.
-
-- Each document gets an epoch when it is first opened. A server restart, or
-  eviction followed by a reopen, re-seeds the document from the file under
-  a fresh epoch.
-- A client holding history from an old epoch discards its session and
-  rebuilds from the server. Replaying old state would duplicate the
-  document.
-
-Two windows where edits can be lost:
+There is no persistence beyond the file. A server restart, or eviction
+followed by a reopen, re-seeds the document from disk, and clients holding
+older state rebuild from the server. Two windows where edits can be lost:
 
 - A hard kill can lose edits still inside the save debounce (under a
   second). An orderly shutdown flushes.
-- Edits typed **while the server was down** are discarded by the epoch
-  reset. Edits made while merely disconnected (server up, network down) are
+- Edits typed **while the server was down** are discarded by the reset.
+  Edits made while merely disconnected (server up, network down) are
   buffered and converge on reconnect.
+
+## Your own session
+
+`createCollabSession` from `@fumadocs-editor/core/collab` is the collab
+counterpart of [`createFileSession`](/sync#your-own-session): it returns the
+shared document and awareness for a shell that is not React.

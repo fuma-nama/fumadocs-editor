@@ -52,6 +52,12 @@ editable source with a KaTeX preview. KaTeX loads lazily on the first
 formula. Delimiters are preserved (`$$x$$` stays `$$x$$`). An inline formula
 emptied out is dropped, since a bare `$$` would not re-parse.
 
+### Mermaid
+
+A `mermaid` code fence renders its diagram below the source, following the
+editor theme. Mermaid loads lazily on the first diagram. There is nothing
+to turn on: the fence is a normal code block.
+
 ### Files fences
 
 Register `filesFenceSpecs` to edit canonical ` ```files ` tree fences with

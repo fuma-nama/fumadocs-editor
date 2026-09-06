@@ -3,9 +3,7 @@ import { describe, expect, test } from "vitest";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { caret, caretPath, makeEditor, press } from "./helpers";
 
-const DOC = `---
-title: Test
----
+const DOC = `export const meta = {};
 
 # Heading
 
@@ -40,7 +38,7 @@ describe("caret policy", () => {
     let filesPos = -1;
     let files = editor.state.doc.firstChild!;
     editor.state.doc.descendants((node, pos) => {
-      if (node.attrs?.name === "Files") {
+      if (node.type.name === "Files") {
         filesPos = pos;
         files = node;
       }

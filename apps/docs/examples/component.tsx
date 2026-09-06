@@ -1,4 +1,4 @@
-import { MdxEditor, fumadocsUiComponents } from "@fumadocs-editor/ui";
+import { MdxEditor, emptyComponent, fumadocsUiComponents } from "@fumadocs-editor/ui";
 import type { ComponentRenderProps, UiComponentSpec } from "@fumadocs-editor/ui";
 
 //#region renderer
@@ -29,14 +29,7 @@ export const featureSpec: UiComponentSpec = {
   props: [{ name: "soon", label: "Coming soon", type: "boolean", default: false }],
   // regions render outside the renderer's tree; style them by name
   regions: { title: "font-medium" },
-  insert: () => ({
-    type: "mdxComponent",
-    attrs: { name: "Feature", attributes: [] },
-    content: [
-      { type: "mdxInlineRegion", attrs: { region: "title" } },
-      { type: "mdxBlockRegion", attrs: { region: "body" }, content: [{ type: "paragraph" }] },
-    ],
-  }),
+  insert: (specs) => emptyComponent(featureSpec, specs),
   render: Feature,
 };
 //#endregion

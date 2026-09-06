@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { editorSync } from "@fumadocs-editor/sync/vite";
+import { editorSync } from "@fumadocs-editor/core/vite";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,8 +50,8 @@ export default defineConfig({
     // vite hand them a second React instance (breaking hooks in node-view
     // renderers like Accordion). Force a single copy.
     dedupe: ["react", "react-dom"],
-    // core and sync are consumed from source so `pnpm dev` needs no build
-    // step for them; ui is its built package (StyleX compiles at build time
+    // core is consumed from source so `pnpm dev` needs no build step for it;
+    // ui is its built package (StyleX compiles at build time
     // and emits the stylesheet), rebuilt by `tsdown --watch` under `turbo dev`
     alias: [
       {
@@ -59,20 +59,8 @@ export default defineConfig({
         replacement: path.resolve(dir, "../../packages/core/src/index.ts"),
       },
       {
-        find: /^@fumadocs-editor\/core\/(parse|serialize|extensions)$/,
+        find: /^@fumadocs-editor\/core\/(parse|serialize|extensions|sync|collab)$/,
         replacement: path.resolve(dir, "../../packages/core/src/$1.ts"),
-      },
-      {
-        find: /^@fumadocs-editor\/sync\/merge$/,
-        replacement: path.resolve(dir, "../../packages/sync/src/merge.ts"),
-      },
-      {
-        find: /^@fumadocs-editor\/sync\/collab$/,
-        replacement: path.resolve(dir, "../../packages/sync/src/collab.ts"),
-      },
-      {
-        find: /^@fumadocs-editor\/sync$/,
-        replacement: path.resolve(dir, "../../packages/sync/src/index.ts"),
       },
     ],
   },

@@ -37,7 +37,6 @@ const styles = stylex.create({
   expression: { fontFamily: consts.mono },
 });
 
-/** A single labelled control for a component attribute. */
 export function PropControl({
   field,
   value,

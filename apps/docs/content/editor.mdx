@@ -16,6 +16,20 @@ import { MdxEditor } from "@fumadocs-editor/ui";
 
 <auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorSync" />
 
+## Page variant
+
+`variant="page"` makes the editor the page: no frame, the header row with
+the sync status and mode tabs stays at the top, and the document scrolls in
+a column centered on the viewport. `header` puts your own controls in that
+row. Studio is built on it.
+
+<include meta='title="page.tsx"'>../examples/page-variant.tsx</include>
+
+Two custom properties on an ancestor tune the column: `--fde-page-width`
+(default `52rem`) and `--fde-page-inset`, the space at the start the column
+keeps clear of, for a panel floating there. The column stays centered while
+there is room and moves right of the inset when there is not.
+
 ## Ref
 
 <auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorRef" />
@@ -28,18 +42,21 @@ The ref satisfies `SyncedDocument`, so it can be handed to
 The toolbar appears over selected text. A resting caret has no chrome, so
 formatting comes from the keyboard:
 
-| Keys                  | Does                                                                                  |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `⌘B` `⌘I` `⌘E` `⌘⇧S`  | Toggle bold, italic, code or strikethrough; with no selection, for what you type next |
-| `→` at the line's end | Stop the marks in force, so the next words come out plain                             |
-| `⌘.`                  | Open the block's menu (attributes, inserts, move, delete)                             |
-| `⌥↑` `⌥↓`             | Move the block                                                                        |
-| `Esc`                 | Select the component around the caret, then its parent                                |
-| `Tab` `⇧Tab`          | Next or previous region of a component                                                |
-| `⌘Enter`              | Insert the next sibling (a new Step, Tab, File) from anywhere inside one              |
+| Keys                  | Does                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `⌘B` `⌘I` `⌘E` `⌘⇧S`  | Toggle bold, italic, code or strikethrough; with no selection, for what you type next    |
+| `→` at the line's end | Stop the marks in force, so the next words come out plain                                |
+| `⌘.`                  | Open the block's menu (attributes, inserts, move, delete)                                |
+| `⌥↑` `⌥↓`             | Move the block                                                                           |
+| `Esc`                 | Select the component around the caret, then its parent                                   |
+| `⌘A`                  | Select the region, then the component around it, then its parent; plain select-all after |
+| `Tab` `⇧Tab`          | Next or previous region of a component                                                   |
+| `⌘Enter`              | Insert the next sibling (a new Step, Tab, File) from anywhere inside one                 |
 
 With a mouse, double-click a component's chrome (its icon, rail or padded
-edge) to select it; its menu and joystick follow.
+edge) to select it; its menu and joystick follow. Code blocks and tables
+have no chrome to double-click, so a joystick appears beside them while the
+caret is inside: click it to select the block, drag it to move it.
 
 On a touch screen there are no shortcuts, so the toolbar stays up while
 you type, below the caret or the selection and clear of the system's copy

@@ -1,16 +1,14 @@
 export { parseMdxToDoc } from "./document";
 export type { DocSnapshot, ParsedDoc, SnapshotBlock } from "./document";
-export { serializeDocToMdx } from "./serialize";
+export { serializeDocToMdx } from "./serializer";
 export { createIncrementalSerializer } from "./incremental";
+export { mergeRemote } from "./merge";
+export type { MergeOp, MergeResult } from "./merge";
 export { editorExtensions } from "./extensions/kit";
 export type { EditorExtensionsOptions } from "./extensions/kit";
 export type { MdxAttribute } from "./extensions/mdx-nodes";
-export {
-  createSyntax,
-  COMPONENT_NODE,
-  INLINE_REGION_NODE,
-  BLOCK_REGION_NODE,
-} from "./components/spec";
+export { createSyntax } from "./components/spec";
+export { emptyComponent } from "./components/structure";
 export type {
   ComponentSpec,
   Syntax,

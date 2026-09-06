@@ -16,16 +16,8 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
       },
       {
-        find: /^@fumadocs-editor\/core\/(parse|serialize|extensions)$/,
+        find: /^@fumadocs-editor\/core\/(parse|serialize|extensions|sync|collab)$/,
         replacement: fileURLToPath(new URL("../core/src/$1.ts", import.meta.url)),
-      },
-      {
-        find: /^@fumadocs-editor\/sync$/,
-        replacement: fileURLToPath(new URL("../sync/src/index.ts", import.meta.url)),
-      },
-      {
-        find: /^@fumadocs-editor\/sync\/merge$/,
-        replacement: fileURLToPath(new URL("../sync/src/merge.ts", import.meta.url)),
       },
     ],
   },

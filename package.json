@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "studio": "pnpm --filter playground studio",
     "lint": "oxlint",
     "lint:format": "oxfmt --check",
     "format": "oxfmt",
@@ -22,7 +23,7 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "packageManager": "pnpm@11.5.3"
 }

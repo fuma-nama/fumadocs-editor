@@ -12,7 +12,8 @@ import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import { type MdxAttribute } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core/extensions";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {
@@ -38,11 +39,10 @@ import {
   Upload,
 } from "lucide-react";
 import type { UiComponentSpec } from "./components/spec";
-import type { MediaProvider } from "./components/media";
 import { BlockMenu, useBlockMenuOpen, type ActiveComponent } from "./block-panel";
 import { DragHandle } from "./drag-handle";
-import { activeComponent, updateAtomAttributes } from "./components/attributes";
-import { handleBlock } from "./components/keymap";
+import { updateAtomAttributes } from "./components/attributes";
+import { handleBlock, movableIn } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorProviders } from "./components/providers";
 import { chrome } from "./styles/shared";
@@ -53,12 +53,6 @@ const muted = tokens.mutedForeground;
 const border = tokens.border;
 
 const styles = stylex.create({
-  /* The bubble is a popup surface laid out as a toolbar row: it hugs its
-   * controls and stays under the popovers it opens. A grid of max-content
-   * columns, not a flex row: a flex item shrinks to its content, and on a
-   * phone the row scrolls sideways instead. It glides to a new position
-   * (the plugin writes `top`/`left`), e.g. after a block is dragged; while
-   * hidden and re-shown the inline override lands it. */
   bubble: {
     zIndex: 40,
     minWidth: 0,
@@ -82,7 +76,6 @@ const styles = stylex.create({
     gap: "0.5rem",
     padding: "0.5rem",
   },
-  /** the path suggestions track the input's width */
   linkList: { maxHeight: "16rem", width: "var(--anchor-width)", overflowY: "auto" },
   mono: { fontFamily: consts.mono },
   muted: { color: muted },
@@ -90,22 +83,6 @@ const styles = stylex.create({
   imageRow: { display: "flex", alignItems: "center", gap: "0.375rem" },
   imageSrc: { width: "13rem" },
   imageAlt: { width: "9rem" },
-  yaml: {
-    minHeight: "6rem",
-    width: "18rem",
-    resize: "vertical",
-    borderRadius: "0.375rem",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: { default: border, ":focus-visible": tokens.ring },
-    backgroundColor: tokens.background,
-    padding: "0.5rem",
-    fontFamily: consts.mono,
-    fontSize: tokens.fieldSize,
-    lineHeight: 1.625,
-    color: tokens.foreground,
-    outline: "none",
-  },
   headingOptions: {
     display: "flex",
     flexDirection: "column",
@@ -131,7 +108,6 @@ const styles = stylex.create({
     color: tokens.foreground,
     outline: "none",
   },
-  /** the active component's chip: reads as a label until hovered */
   chip: {
     display: "inline-flex",
     height: "1.75rem",
@@ -156,7 +132,6 @@ const ghostSelectClass = stylex.props(chrome.button, chrome.ghostSelect).classNa
 const chipClass = stylex.props(chrome.button, styles.chip).className!;
 const iconClass = stylex.props(chrome.button, chrome.iconButton).className!;
 
-/** The turn-into list: every block a text selection can become. */
 export const TURN_INTO = [
   { value: "p", label: "Paragraph", icon: Pilcrow, run: (c: Chain) => c.setParagraph() },
   {
@@ -209,10 +184,6 @@ export function activeBlock(editor: Editor): string {
   return "p";
 }
 
-/**
- * The element type menu: every block a selection can become, with the
- * heading's anchor and TOC options under it.
- */
 export function BlockTypePicker({
   editor,
   block,
@@ -284,68 +255,67 @@ export function BlockTypePicker({
   );
 }
 
-/**
- * The one floating surface, under a selection. What it holds follows the
- * selection: text gets the formatting controls, a node-selected atom its
- * editor, and the block around the selection (the innermost component,
- * else the innermost plain block) its joystick and menu: never two
- * competing menus. With a pointer a resting caret has no chrome: the marks
- * it types with come from the shortcuts, and ArrowRight at the line's end
- * drops them. On touch the bubble stays up under the caret instead.
- */
 export interface BubbleState {
   format: boolean;
-  /** the caret sits inside a table: row/column controls apply */
   table: boolean;
-  /** a node-selected atom the bubble edits directly */
-  atom: { kind: "image" | "frontmatter"; pos: number } | null;
-  /** the innermost registered component around the caret */
+  atom: { kind: "image"; pos: number } | null;
   active: ActiveComponent | null;
-  /** the plain block the joystick and ⋯ serve when no component is */
-  block: { pos: number } | null;
+  /** the selection sits in a movable run: the joystick and ⋯ read it when they act */
+  block: boolean;
 }
 
-export function bubbleState(state: EditorState, specs: Map<string, UiComponentSpec>): BubbleState {
+export function bubbleState(state: EditorState): BubbleState {
   const selection = state.selection;
   const { $from } = selection;
-  let format = selection instanceof TextSelection && $from.parent.type.name !== "codeBlock";
+  let format = selection instanceof TextSelection && !$from.parent.type.spec.code;
   let table = false;
   for (let depth = $from.depth; depth > 0; depth--) {
-    const name = $from.node(depth).type.name;
-    if (name === INLINE_REGION_NODE) format = false;
-    else if (name === "table") table = true;
+    const { type } = $from.node(depth);
+    if (type.name === INLINE_REGION_NODE) format = false;
+    else if (type.spec.tableRole === "table") table = true;
   }
 
   let atom: BubbleState["atom"] = null;
-  if (selection instanceof NodeSelection) {
-    const name = selection.node.type.name;
-    if (name === "image" || name === "frontmatter") atom = { kind: name, pos: selection.from };
+  if (selection instanceof NodeSelection && selection.node.type.name === "image") {
+    atom = { kind: "image", pos: selection.from };
   }
 
-  const component = activeComponent(state);
-  const active = component && specs.has(component.name) ? component : null;
+  const range = handleBlock(selection);
+  const node = range && state.doc.nodeAt(range.from);
+  const component =
+    range && node && isComponent(node.type) && node.nodeSize === range.to - range.from;
   return {
     format,
     table: format && table,
     atom,
-    active,
-    block: active ? null : handleBlock(selection),
+    active: component
+      ? {
+          pos: range.from,
+          type: node.type.name,
+          attributes: node.attrs.attributes as MdxAttribute[],
+        }
+      : null,
+    block: range != null,
   };
 }
 
-/** what summons the bubble: selected text, or a node-selected component or atom */
-function summoned(state: EditorState, specs: Map<string, UiComponentSpec>): boolean {
+function summoned(state: EditorState): boolean {
   const selection = state.selection;
   if (selection instanceof NodeSelection) {
     const { node } = selection;
-    if (node.type.name === COMPONENT_NODE) return specs.has(node.attrs.name as string);
-    return node.type.name === "image" || node.type.name === "frontmatter";
+    if (isComponent(node.type)) return true;
+    // a code block's header holds its menu, the gutter its joystick
+    if (node.type.spec.code) return false;
+    return movableIn(node, selection.$from.parent);
   }
   // a selection of structural tokens only (a double-click at a region's
-  // end can produce one) renders nothing: it must not summon the bubble
+  // end can produce one) renders nothing: it must not summon the bubble.
+  // Neither does selected code: the block's header holds its menu, and its
+  // joystick sits in the gutter beside it
   return (
     selection instanceof TextSelection &&
     !selection.empty &&
+    !selection.$from.parent.type.spec.code &&
     state.doc.textBetween(selection.from, selection.to).length > 0
   );
 }
@@ -378,11 +348,6 @@ function MarkButton({
   );
 }
 
-/**
- * URL editor for the link mark; portalled into the bubble's parent. With a
- * FileProvider the input autocompletes workspace pages (how docs link to
- * each other) while staying free-form for external URLs.
- */
 function LinkControl({
   editor,
   href,
@@ -552,8 +517,8 @@ function TableControl({
   );
 }
 
-/** src / alt editor for a node-selected image, with provider upload. */
-function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }) {
+function ImagePanel({ editor }: { editor: Editor }) {
+  const { media } = useEditorProviders();
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -609,58 +574,37 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   );
 }
 
-/** raw YAML editor for the node-selected frontmatter block */
-function FrontmatterPanel({ editor }: { editor: Editor }) {
-  const value = (editor.getAttributes("frontmatter").value as string) ?? "";
-  return (
-    <textarea
-      {...stylex.props(chrome.input, styles.yaml)}
-      value={value}
-      spellCheck={false}
-      onChange={(event) =>
-        updateAtomAttributes(editor, "frontmatter", { value: event.target.value })
-      }
-    />
-  );
-}
-
 export function EditorBubble({
   editor,
   specs,
-  media,
   touch,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
-  media?: MediaProvider;
-  /**
-   * A touch screen: the bubble stays up while the editor has focus, sits
-   * below the caret or selection, clear of the system's copy menu above it,
-   * and leaves the joystick to the gutter.
-   */
   touch: boolean;
 }) {
   const [turnIntoOpen, setTurnIntoOpen] = useState(false);
-  // Portal target has three constraints: the menu hides on editor blur
-  // unless focus lands inside the bubble's parent (plugin checks
-  // `element.parentNode.contains(relatedTarget)`), the bubble is
-  // positioned with a transform (would skew a popup measured inside it),
-  // and the container must sit in [data-fde-root] for theme and
-  // ::selection. The plugin appends the bubble to `view.dom.parentElement`,
-  // which satisfies all three. Resolved from the editor, never through
-  // refs (a ref-timing miss fell back to a body portal).
-  // an object ref, not a callback: BubbleMenu assigns its ref during render,
-  // where a state-setter callback would be a cross-component setState. The
-  // element is created eagerly and never replaced, so mount effects see it.
+  // Cmd-. shows the bubble at a resting caret, past `shouldShow`
+  const [forced, setForced] = useState(false);
+  // Portal target: the menu hides on editor blur unless focus lands inside
+  // the bubble's parent, the bubble is positioned with a transform (would
+  // skew a popup measured inside it), and the container must sit in
+  // [data-fde-root] for theme and ::selection. The plugin appends the bubble
+  // to `view.dom.parentElement`, which satisfies all three. Resolved from the
+  // editor, never through refs (a ref-timing miss fell back to a body portal).
+  // An object ref, not a callback: BubbleMenu assigns its ref during render,
+  // where a state-setter callback would be a cross-component setState.
   const menuRef = useRef<HTMLDivElement>(null);
   const wrapper = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
-      const bubble = bubbleState(current.state, specs);
+      const bubble = bubbleState(current.state);
       return {
         ...bubble,
+        // the plugin hides the element; nothing is rendered into it meanwhile
+        shown: touch || summoned(current.state),
         bold: current.isActive("bold"),
         italic: current.isActive("italic"),
         strike: current.isActive("strike"),
@@ -672,8 +616,6 @@ export function EditorBubble({
         // caret on every keystroke
         atomAttrs: bubble.atom ? (current.state.doc.nodeAt(bubble.atom.pos)?.attrs ?? null) : null,
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
-        // touch only: two can() trial runs per transaction, for buttons a
-        // keyboard's shortcuts replace
         canUndo: touch && current.can().undo(),
         canRedo: touch && current.can().redo(),
       };
@@ -684,17 +626,15 @@ export function EditorBubble({
     if (!state?.format) setTurnIntoOpen(false);
   }, [state?.format]);
 
-  const target = state?.active?.pos ?? state?.block?.pos;
-  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, target);
+  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, state?.block === true);
 
-  // Mod-. opens the block's menu from a resting caret: the bubble is
-  // summoned first, and the popover's focus then keeps it up
   useEffect(() => {
     const dom = editor.view.dom;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "." || !(event.metaKey || event.ctrlKey)) return;
       event.preventDefault();
       editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "show"));
+      setForced(true);
       setPanelOpen(!panelOpen);
     };
     dom.addEventListener("keydown", onKeyDown);
@@ -724,8 +664,10 @@ export function EditorBubble({
       placement: touch ? ("bottom" as const) : ("bottom-start" as const),
       // past the selection and caret handles, which hang below the line
       offset: touch ? 20 : 6,
-      onHide: () => setPanelOpen(false),
-      // re-shown, it lands in place: the glide is for moves while visible
+      onHide: () => {
+        setPanelOpen(false);
+        setForced(false);
+      },
       onShow: () => {
         menuRef.current!.style.transition = "none";
       },
@@ -741,16 +683,14 @@ export function EditorBubble({
   );
   const shouldShow = useCallback(
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
-      // focus in one of its popovers (portalled into the wrapper) keeps it
-      if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
-      // touch has no shortcuts: the bubble stays up while the caret rests,
-      // so the marks it types with are a tap away
-      return touch ? view.hasFocus() : summoned(editorState, specs);
+      // focus in the bubble or a popover it portals into the wrapper keeps it
+      // open; chrome inside node views (a table cell, an add button) does not
+      const active = document.activeElement;
+      if (!view.hasFocus() && wrapper?.contains(active) && !view.dom.contains(active)) return true;
+      return touch ? view.hasFocus() : summoned(editorState);
     },
-    [wrapper, specs, touch],
+    [wrapper, touch],
   );
-  // a resting caret anchors the bubble on its whole line: centred under
-  // the line, moving only when the caret leaves it, not with every keystroke
   const getReferencedVirtualElement = useCallback(() => {
     const { selection } = editor.state;
     if (!touch || !selection.empty) return null;
@@ -760,6 +700,7 @@ export function EditorBubble({
     return { getBoundingClientRect: () => rect };
   }, [editor, touch]);
 
+  const visible = state && (state.shown || forced);
   return (
     <BubbleMenu
       ref={menuRef}
@@ -770,7 +711,7 @@ export function EditorBubble({
       getReferencedVirtualElement={getReferencedVirtualElement}
       {...stylex.props(chrome.popup, styles.bubble)}
     >
-      {state?.format && (
+      {visible && state.format && (
         <>
           <BlockTypePicker
             editor={editor}
@@ -809,25 +750,15 @@ export function EditorBubble({
           {state.table && <TableControl editor={editor} container={wrapper} />}
         </>
       )}
-      {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
-      {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
-      {state && target != null && (
+      {visible && state.atom?.kind === "image" && <ImagePanel editor={editor} />}
+      {visible && state.block && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}
-          {!touch && (
-            <DragHandle
-              editor={editor}
-              pos={target}
-              specs={specs}
-              look={chrome.iconButton}
-              size={20}
-            />
-          )}
+          {!touch && <DragHandle editor={editor} look={chrome.iconButton} size={20} />}
           <BlockMenu
             editor={editor}
             specs={specs}
             active={state.active}
-            block={state.block}
             open={panelOpen}
             onOpenChange={setPanelOpen}
             container={wrapper}
@@ -838,7 +769,7 @@ export function EditorBubble({
           />
         </>
       )}
-      {state && touch && (
+      {visible && touch && (
         <>
           <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Undo" disabled={!state.canUndo} onClick={() => run((c) => c.undo())}>

@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core";
-import type { SyncTransport } from "@fumadocs-editor/sync";
+import type { SyncTransport } from "@fumadocs-editor/core/sync";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
 import { setStringProp } from "../src/components/attr-values";
@@ -260,7 +260,7 @@ test("the boundary retries on the next node update: an attr fix heals the compon
 
     let pos = -1;
     editor.state.doc.descendants((node, at) => {
-      if (node.type.name === "mdxComponent") pos = at;
+      if (node.type.name === "Boom") pos = at;
       return pos === -1;
     });
     await act(async () => {

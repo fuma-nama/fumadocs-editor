@@ -3,25 +3,10 @@ import { consts } from "./consts.stylex";
 import { folder, settled } from "./markers.stylex";
 import { tokens } from "./tokens.stylex";
 
-/*
- * Document styles. TipTap renders the content DOM, so classes reach it
- * through one global attribute per node/mark type (`contentStyles` in the
- * live editor); the static paint applies the same classes directly.
- *
- * Every element resets what the UA gives it (margins, list padding, form
- * fonts): nothing relies on a host stylesheet.
- *
- * Vertical rhythm: every block carries `block` (a top margin except as a
- * first child) and each container sets the gap it wants via `--fde-gap`.
- */
-
 const muted = tokens.mutedForeground;
 const border = tokens.border;
 
-export const fadeIn = stylex.keyframes({ from: { opacity: 0 } });
-
 export const content = stylex.create({
-  /** the `.ProseMirror` element, live and static */
   root: {
     outline: "none",
     paddingTop: 20,
@@ -35,17 +20,7 @@ export const content = stylex.create({
     marginBottom: 0,
     marginInline: 0,
   },
-  /** block atoms (dividers, raw MDX, images) show a ring when node-selected;
-   * components draw their own */
-  atom: {
-    outline: {
-      default: null,
-      ":is(.ProseMirror-selectednode)": `2px solid ${tokens.ring}`,
-    },
-    outlineOffset: 2,
-  },
   paragraph: {
-    // the Placeholder extension's ghost hint on the current empty paragraph
     "::before": {
       content: { default: null, ":is([data-placeholder])": "attr(data-placeholder)" },
       float: "left",
@@ -53,18 +28,18 @@ export const content = stylex.create({
       pointerEvents: "none",
       color: muted,
       opacity: 0.5,
-      animationName: {
-        default: null,
-        [stylex.when.ancestor("[data-fde-settled]", settled)]: fadeIn,
-        [consts.reduceMotion]: "none",
+      transitionProperty: "opacity",
+      transitionDuration: {
+        default: "0s",
+        [stylex.when.ancestor("[data-fde-settled]", settled)]: "80ms",
+        [consts.reduceMotion]: "0s",
       },
-      animationDuration: "80ms",
-      animationTimingFunction: "ease-out",
+      transitionTimingFunction: "ease-out",
+      "@starting-style": { opacity: 0 },
     },
   },
   heading: {
     fontWeight: 600,
-    // heading suffixes (anchor, TOC flags) surface as chips, not body text
     opacity: { default: null, ':is([data-toc="only"])': 0.65 },
     "::after": {
       content: {
@@ -89,8 +64,6 @@ export const content = stylex.create({
   h2: { fontSize: "1.4em", lineHeight: 1.3, letterSpacing: "-0.01em" },
   h3: { fontSize: "1.15em" },
   h4: { fontSize: "1em" },
-  /* Neutral theme: `primary` is nearly the foreground, so the underline is
-   * what reads as a link. Visible always, full-strength on hover. */
   link: {
     color: tokens.primary,
     textDecorationLine: "underline",
@@ -112,7 +85,6 @@ export const content = stylex.create({
     fontSize: "0.875em",
     fontFamily: consts.mono,
   },
-  /* raw MDX blocks (expressions, ESM, frontmatter, verbatim) */
   pre: {
     boxSizing: "border-box",
     backgroundColor: tokens.card,
@@ -130,7 +102,6 @@ export const content = stylex.create({
   },
   frontmatter: { borderColor: tokens.ring },
   mdxCode: { borderStyle: "dashed", color: muted },
-  /* unregistered / raw JSX gets lightweight fallback chrome */
   mdxFlow: {
     position: "relative",
     borderWidth: 1,
@@ -198,8 +169,6 @@ export const content = stylex.create({
   },
   th: { backgroundColor: tokens.muted, fontWeight: 600 },
 
-  /* Code block: fumadocs `CodeBlock` figure chrome around the lowlight
-   * content; shared by the node view and the static paint. */
   codeBlock: {
     position: "relative",
     marginTop: "1rem",
@@ -214,6 +183,8 @@ export const content = stylex.create({
     fontSize: 14,
     lineHeight: "1.25rem",
     boxShadow: consts.shadowSm,
+    outline: { default: null, ":is([data-selected])": `2px solid ${tokens.ring}` },
+    outlineOffset: 2,
   },
   codeHeader: {
     boxSizing: "border-box",
@@ -242,8 +213,6 @@ export const content = stylex.create({
     lineHeight: 1.6,
   },
   codeCode: { display: "block", fontFamily: "inherit", fontSize: "inherit" },
-  /** the `lineNumbers` gutter: chrome outside the horizontal scroller,
-   * matching the code's metrics exactly so rows line up */
   codeLines: {
     boxSizing: "border-box",
     margin: 0,
@@ -261,8 +230,6 @@ export const content = stylex.create({
     userSelect: "none",
   },
 
-  /* Math (remark-math): editable TeX source; the node view adds the KaTeX
-   * preview and the active/rendered switching. */
   mathInline: { display: "inline" },
   mathInlineSrc: {
     position: "relative",
@@ -307,7 +274,6 @@ export const content = stylex.create({
     },
   },
 
-  /** the NodeViewWrapper of a component: the selection ring lives here */
   nodeWrapper: {
     position: "relative",
     isolation: "isolate",
@@ -322,9 +288,6 @@ export const content = stylex.create({
     },
     outlineOffset: { default: null, ":is([data-selected])": 2 },
   },
-  /** the `.react-renderer` wrapper of every component node view. Fresh
-   * inserts settle in once the editor is `settled`, so the hydration swap
-   * never animates. Entries nested in a folder indent along a guide rail. */
   component: {
     position: "relative",
     marginInlineStart: { default: null, [stylex.when.ancestor("[data-folder]", folder)]: "1rem" },
@@ -332,7 +295,7 @@ export const content = stylex.create({
       default: null,
       [stylex.when.ancestor("[data-folder]", folder)]: "0.5rem",
     },
-    borderInlineStartWidth: { default: null, [stylex.when.ancestor("[data-folder]", folder)]: 1 },
+    borderInlineStartWidth: { default: 0, [stylex.when.ancestor("[data-folder]", folder)]: 1 },
     borderInlineStartStyle: "solid",
     borderInlineStartColor: border,
     transition: {
@@ -346,8 +309,6 @@ export const content = stylex.create({
   /** a component's content hole dissolves so children become the
    * renderer's direct layout items (see base.css for the inner element) */
   hole: { display: "contents" },
-  /** an editable region; its placeholder is positioned by `--fde-ph-x/y`
-   * so a component can nudge it past its own chrome */
   region: {
     position: "relative",
     outline: "none",
@@ -359,17 +320,17 @@ export const content = stylex.create({
       color: muted,
       opacity: 0.6,
       pointerEvents: "none",
-      animationName: {
-        default: null,
-        [stylex.when.ancestor("[data-fde-settled]", settled)]: fadeIn,
-        [consts.reduceMotion]: "none",
+      transitionProperty: "opacity",
+      transitionDuration: {
+        default: "0s",
+        [stylex.when.ancestor("[data-fde-settled]", settled)]: "80ms",
+        [consts.reduceMotion]: "0s",
       },
-      animationDuration: "80ms",
-      animationTimingFunction: "ease-out",
+      transitionTimingFunction: "ease-out",
+      "@starting-style": { opacity: 0 },
     },
   },
   regionBlock: { "--fde-gap": "0.5em" },
-  /** the block a joystick would drag: lit while its handle is hovered or held */
   lifted: {
     borderRadius: 6,
     backgroundColor: `color-mix(in oklab, ${tokens.foreground} 8%, transparent)`,
@@ -379,7 +340,6 @@ export const content = stylex.create({
       [consts.reduceMotion]: "none",
     },
   },
-  /** drag preview line, placed by the drop-indicator plugin at the target */
   dropIndicator: {
     position: "absolute",
     top: 0,
@@ -391,16 +351,11 @@ export const content = stylex.create({
     pointerEvents: "none",
     willChange: "transform",
   },
-  /** the copy of a block riding under the pointer of a drag: translucent
-   * enough to read the target through, always under the line */
   dragGhost: {
     opacity: 0.6,
     boxShadow: consts.shadowLg,
     willChange: "transform",
   },
-  /* Peer carets (CollaborationCaret): 2px colored bar in the text flow
-   * (user color inline) with a name flag above. The flag is chrome: never
-   * selectable, never a pointer target. */
   caret: {
     position: "relative",
     marginInline: -1,
@@ -436,7 +391,6 @@ const HEADING = [
   cls(content.block, content.heading, content.h4),
 ];
 
-/** class per node / mark type; the static paint applies these directly */
 export const nodeClass = {
   paragraph: cls(content.block, content.paragraph),
   bulletList: cls(content.block, content.list, content.ul),
@@ -445,21 +399,21 @@ export const nodeClass = {
   taskList: cls(content.block, content.taskList),
   taskItem: cls(content.li, content.taskItem),
   blockquote: cls(content.block, content.blockquote),
-  horizontalRule: cls(content.hr, content.atom),
-  image: cls(content.img, content.atom),
+  horizontalRule: cls(content.hr),
+  image: cls(content.img),
   table: cls(content.table),
   tableHeader: cls(content.cell, content.th),
   tableCell: cls(content.cell),
   code: cls(content.code),
   link: cls(content.link),
-  mdxJsxFlowElement: cls(content.block, content.mdxFlow, content.atom),
+  mdxJsxFlowElement: cls(content.block, content.mdxFlow),
   mdxJsxTextElement: cls(content.mdxInline),
   mdxTextExpression: cls(content.code, content.mdxCode),
   verbatimInline: cls(content.code, content.mdxCode),
-  mdxFlowExpression: cls(content.block, content.pre, content.atom),
-  mdxjsEsm: cls(content.block, content.pre, content.atom),
-  verbatim: cls(content.block, content.pre, content.atom),
-  frontmatter: cls(content.block, content.pre, content.frontmatter, content.atom),
+  mdxFlowExpression: cls(content.block, content.pre),
+  mdxjsEsm: cls(content.block, content.pre),
+  verbatim: cls(content.block, content.pre),
+  frontmatter: cls(content.block, content.pre, content.frontmatter),
 };
 
 export const contentClass = {
@@ -468,7 +422,6 @@ export const contentClass = {
   root: cls(content.root),
   block: cls(content.block),
   component: cls(content.block, content.component),
-  atom: cls(content.atom),
   dropIndicator: cls(content.dropIndicator),
   lifted: cls(content.lifted),
   dragGhost: cls(content.dragGhost),

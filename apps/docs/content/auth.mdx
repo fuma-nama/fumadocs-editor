@@ -49,7 +49,7 @@ On the server, the payload arrives verbatim:
 
 ## Scopes
 
-<auto-type-table path="../../../packages/sync/src/node.ts" name="SyncScope" />
+<auto-type-table path="../../../packages/core/src/sync/node.ts" name="SyncScope" />
 
 A document is identified by its root-relative posix path, so `read` and
 `write` predicates are per-document permissions. Two rules:
@@ -73,11 +73,10 @@ A document is identified by its root-relative posix path, so `read` and
 | asset serving                | requires `read` on the asset path                      |
 | presence identity            | a scope `user` overrides the name the client claims    |
 
-A denied path is a per-request error; the connection stays open. A rejected
-hello closes the socket with a dedicated code: the client reports `denied`
-rather than `offline` and stops retrying. Nothing is processed before the
-hello passes `authenticate`, and a connection that never sends one times
-out.
+A denied path is a per-request error; the connection stays open. Rejected
+credentials close the connection: the client reports `denied` rather than
+`offline` and stops retrying. A connection that never authenticates is
+closed after `helloTimeoutMs`.
 
 ## Media uploads
 
@@ -94,7 +93,7 @@ Cookie setups skip the header; the cookie is already on the request.
 The reply to a read (and the collab handshake) carries the scope data your
 UI needs:
 
-<auto-type-table path="../../../packages/sync/src/transport.ts" name="ReadResult" />
+<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="ReadResult" />
 
 `sync.onOpen` hands it to you. See [Read-only](/read-only) for wiring
 `writable` into the editor.

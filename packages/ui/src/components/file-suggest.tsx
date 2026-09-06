@@ -4,48 +4,45 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
-import { COMPONENT_NODE, INLINE_REGION_NODE } from "@fumadocs-editor/core";
+import type { RefObject } from "react";
+import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core/extensions";
 import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
 import type { FileProvider } from "./media";
+import type { EditorProviders } from "./providers";
 
 interface ActivePath {
-  /** region content range (the path text) */
   from: number;
   to: number;
   query: string;
 }
 
-/** the caret sits inside a region a spec declares as a file path */
 function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): ActivePath | null {
   const { $from, empty } = state.selection;
   if (!empty) return null;
   for (let depth = $from.depth; depth > 1; depth--) {
     const node = $from.node(depth);
     if (node.type.name !== INLINE_REGION_NODE) continue;
-    const component = $from.node(depth - 1);
-    if (component.type.name !== COMPONENT_NODE) return null;
-    const spec = specs.get(component.attrs.name as string);
-    if (!spec || spec.filePathRegion !== node.attrs.region) return null;
+    const spec = specs.get($from.node(depth - 1).type.name)!;
+    const region = componentRegions(spec, specs)[$from.index(depth - 1)];
+    if (spec.filePathRegion !== region.region) return null;
     const from = $from.start(depth);
     return { from, to: from + node.content.size, query: node.textContent };
   }
   return null;
 }
 
-/**
- * In-place autocomplete for file-path regions (the include path): the region
- * itself is the input. While the caret is inside one, the host's FileProvider
- * suggests matching files below it; Enter or a click replaces the region
- * text. Free-form typing is untouched; the popup only appears on matches.
- */
-export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProvider): Extension {
+export function fileSuggest(
+  specs: Map<string, UiComponentSpec>,
+  providers: RefObject<EditorProviders>,
+): Extension {
   return Extension.create({
     name: "fdeFileSuggest",
     addProseMirrorPlugins() {
       const editor = this.editor;
       const key = new PluginKey("fdeFileSuggest");
-      let paths: string[] | null = null;
+      let listed: FileProvider | undefined; // the provider `paths` came from
+      let paths: string[] = [];
       let renderer: ReactRenderer<unknown, PopupProps> | null = null;
       let active: ActivePath | null = null;
       let items: string[] = [];
@@ -93,23 +90,24 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
           view: () => ({
             update: (view) => {
               active = activePath(view.state, specs);
-              if (!active) {
+              const { files } = providers.current;
+              if (!active || !files) {
                 dismissed = null;
                 hide();
                 return;
               }
-              if (paths == null) {
+              if (listed !== files) {
+                listed = files;
                 paths = [];
                 void files.list().then((list) => {
+                  if (editor.isDestroyed || listed !== files) return;
                   paths = list;
-                  // re-enter update with the loaded list
                   view.dispatch(view.state.tr.setMeta(key, "refresh"));
                 });
               }
               if (dismissed !== null && dismissed !== active.query) dismissed = null;
               const query = active.query.toLowerCase();
               items = paths.filter((path) => path.toLowerCase().includes(query));
-              // the exact path is already written: nothing left to suggest
               if (items.length === 1 && items[0] === active.query) items = [];
               if (items.length === 0 || dismissed !== null) {
                 hide();
@@ -156,13 +154,9 @@ export function fileSuggest(specs: Map<string, UiComponentSpec>, files: FileProv
   });
 }
 
-/**
- * Obsidian-style page links: typing `[[` in text opens the same suggestion
- * popup over the FileProvider's pages; picking one inserts a link whose text
- * is the page name. No select-then-toggle needed.
- */
-export function linkSuggest(files: FileProvider): Extension {
-  let paths: string[] | null = null;
+export function linkSuggest(providers: RefObject<EditorProviders>): Extension {
+  let listed: FileProvider | undefined;
+  let paths: string[] = [];
 
   const insert = (path: string) => (editor: Editor, range: Range) => {
     const name = path.replace(/^\.\//, "").replace(/\.mdx?$/, "");
@@ -189,6 +183,7 @@ export function linkSuggest(files: FileProvider): Extension {
           editor: this.editor,
           char: "[[",
           allow: ({ state, range }) => {
+            if (!providers.current.files) return false;
             const $pos = state.doc.resolve(range.from);
             if (!$pos.parent.type.allowsMarkType(state.schema.marks.link)) return false;
             // attribute regions serialize to plain strings: no links there
@@ -198,7 +193,12 @@ export function linkSuggest(files: FileProvider): Extension {
             return true;
           },
           items: async ({ query }) => {
-            paths ??= await files.list();
+            const { files } = providers.current;
+            if (!files) return [];
+            if (listed !== files) {
+              listed = files;
+              paths = await files.list();
+            }
             const q = query.toLowerCase();
             const matches = q ? paths.filter((path) => path.toLowerCase().includes(q)) : paths;
             return matches.map((path) => ({

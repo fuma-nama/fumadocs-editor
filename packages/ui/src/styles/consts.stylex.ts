@@ -6,7 +6,6 @@ import * as stylex from "@stylexjs/stylex";
  * module boundaries there).
  */
 export const consts = stylex.defineConsts({
-  /** keyboard focus ring: an offset ring in the background colour */
   focusRing:
     "0 0 0 2px var(--fde-background), 0 0 0 4px color-mix(in oklab, var(--fde-ring) 70%, transparent)",
   ease: "cubic-bezier(0.4, 0, 0.2, 1)",
@@ -14,6 +13,5 @@ export const consts = stylex.defineConsts({
   shadowMd: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
   shadowLg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
   mono: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)",
-  /** every transition and animation is off under this query */
   reduceMotion: "@media (prefers-reduced-motion: reduce)",
 });

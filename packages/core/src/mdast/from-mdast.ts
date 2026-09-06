@@ -17,6 +17,14 @@ import type {
 } from "mdast-util-mdx-jsx";
 import type { MdxAttribute } from "../extensions/mdx-nodes";
 import type { Syntax, ComponentSpec } from "../components/spec";
+import {
+  BLOCK_REGION_NODE,
+  INLINE_REGION_NODE,
+  childNames,
+  childOnly,
+  componentRegions,
+  componentTypeName,
+} from "../components/structure";
 import { DIRECTIVE_ADMONITION } from "../syntax/directives";
 import { admonitionAsJsx } from "../syntax/directives/parse";
 import { inlineMathToNode, mathToNode } from "../syntax/math/parse";
@@ -329,9 +337,8 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
       // `<include>./x.mdx</include>` as a paragraph around a text element)
       // is the component, not prose around it
       const only = node.children.length === 1 ? node.children[0] : undefined;
-      if (only?.type === "mdxJsxTextElement" && only.name != null) {
-        const spec = ctx.syntax.components.get(only.name);
-        const component = spec ? componentToNode(only, spec, ctx) : null;
+      if (only?.type === "mdxJsxTextElement") {
+        const component = blockComponentToNode(only, ctx);
         if (component) return component;
       }
       return { type: "paragraph", content: phrasingToInline(node.children, [], ctx) };
@@ -378,8 +385,7 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "table":
       return tableToNode(node, ctx);
     case "mdxJsxFlowElement": {
-      const spec = node.name ? ctx.syntax.components.get(node.name) : undefined;
-      const component = spec ? componentToNode(node, spec, ctx) : null;
+      const component = blockComponentToNode(node, ctx);
       if (component) return component;
       return {
         type: "mdxJsxFlowElement",
@@ -399,7 +405,10 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "mdxjsEsm":
       return { type: "mdxjsEsm", attrs: { value: node.value } };
     case "yaml":
-      return { type: "frontmatter", attrs: { value: node.value } };
+      return {
+        type: "frontmatter",
+        content: node.value ? [{ type: "text", text: node.value }] : [],
+      };
     default:
       // definition, footnoteDefinition, html, ...
       return { type: "verbatim", attrs: { value: sliceSource(node, ctx) } };
@@ -462,44 +471,68 @@ export function parseStringArray(expression: string): string[] | null {
 }
 
 /**
- * Convert a registered component's JSX element into structured region nodes.
- * Returns null when the element can't be edited structurally (e.g. an items
- * expression that isn't a literal string array). The caller keeps it generic.
+ * A registered element as a component node where a block is expected; null
+ * (kept generic) for unregistered names and for child-only components, which
+ * the schema admits only inside their parent.
+ */
+function blockComponentToNode(node: JsxElement, ctx: FromMdastContext): JSONContent | null {
+  const spec = node.name != null ? ctx.syntax.components.get(node.name) : undefined;
+  if (!spec || childOnly(spec, ctx.syntax.components)) return null;
+  return componentToNode(node, spec, ctx);
+}
+
+function stringAttribute(node: JsxElement, name: string): string {
+  const attr = node.attributes.find(
+    (candidate) => candidate.type === "mdxJsxAttribute" && candidate.name === name,
+  );
+  return attr && typeof attr.value === "string" ? attr.value : "";
+}
+
+function inlineRegion(text: string): JSONContent {
+  return { type: INLINE_REGION_NODE, content: text ? [{ type: "text", text }] : undefined };
+}
+
+/**
+ * Convert a registered component's JSX element into its node: regions in
+ * `componentRegions` order, then child components. `label` fills the region
+ * a parent's `itemsAttribute` derives. Returns null when the element can't be
+ * edited structurally (e.g. an items expression that isn't a literal string
+ * array). The caller keeps it generic.
  */
 function componentToNode(
   node: JsxElement,
   spec: ComponentSpec,
   ctx: FromMdastContext,
+  label = "",
 ): JSONContent | null {
-  const regions: JSONContent[] = [];
+  const specs = ctx.syntax.components;
+  const content: JSONContent[] = [];
+  // attributes edited as region text are dropped from the stored attributes
+  // and re-emitted from the regions on save
+  const consumed: string[] = [];
 
-  for (const { attribute, region } of spec.attributeRegions ?? []) {
-    const attr = node.attributes.find(
-      (candidate) => candidate.type === "mdxJsxAttribute" && candidate.name === attribute,
-    );
-    const text = attr && typeof attr.value === "string" ? attr.value : "";
-    regions.push({
-      type: "mdxInlineRegion",
-      attrs: { region },
-      content: text ? [{ type: "text", text }] : undefined,
-    });
+  for (const region of componentRegions(spec, specs)) {
+    if (region.derived) {
+      content.push(inlineRegion(label));
+    } else if (region.attribute) {
+      content.push(inlineRegion(stringAttribute(node, region.attribute)));
+    } else if (region.kind === "inline") {
+      content.push(inlineRegion(mdastText(node.children as Parameters<typeof mdastText>[0])));
+    } else {
+      const blocks = mixedChildrenToBlocks(node.children, ctx);
+      const folded = region.fromAttribute ? stringAttribute(node, region.fromAttribute) : "";
+      if (folded) {
+        consumed.push(region.fromAttribute!);
+        blocks.unshift({ type: "paragraph", content: [{ type: "text", text: folded }] });
+      }
+      content.push({
+        type: BLOCK_REGION_NODE,
+        content: blocks.length > 0 ? blocks : [{ type: "paragraph" }],
+      });
+    }
   }
 
-  // an attribute folded into the body region (Card `description`) is edited as
-  // body text, so it's dropped from the stored attributes and re-emitted as
-  // children on save
-  let folded: string | undefined;
-  /** attribute dropped on parse because it's derived from child regions */
-  let derived: string | undefined;
-
-  if (spec.contentRegion) {
-    const text = mdastText(node.children as Parameters<typeof mdastText>[0]);
-    regions.push({
-      type: "mdxInlineRegion",
-      attrs: { region: spec.contentRegion.region },
-      content: text ? [{ type: "text", text }] : undefined,
-    });
-  } else if (spec.childComponent) {
+  if (spec.childComponent) {
     let items: string[] | null = null;
     if (spec.itemsAttribute) {
       const attr = node.attributes.find(
@@ -511,53 +544,24 @@ function componentToNode(
         // values) makes the labels uneditable: keep the whole element generic
         if (items == null) return null;
       }
-      derived = spec.itemsAttribute.attribute;
+      consumed.push(spec.itemsAttribute.attribute);
     }
 
-    const names = Array.isArray(spec.childComponent) ? spec.childComponent : [spec.childComponent];
-    let index = 0;
-    for (const child of collectChildElements(node.children, names)) {
-      const childSpec = child.name != null ? ctx.syntax.components.get(child.name) : undefined;
-      if (!childSpec) continue;
-      const childNode = componentToNode(child, childSpec, ctx);
+    const children = collectChildElements(node.children, childNames(spec));
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const childNode = componentToNode(child, specs.get(child.name!)!, ctx, items?.[i] ?? "");
       if (childNode == null) return null;
-      if (spec.itemsAttribute) {
-        const label = items?.[index] ?? "";
-        (childNode.content ??= []).unshift({
-          type: "mdxInlineRegion",
-          attrs: { region: spec.itemsAttribute.childRegion },
-          content: label ? [{ type: "text", text: label }] : undefined,
-        });
-      }
-      regions.push(childNode);
-      index += 1;
+      content.push(childNode);
     }
-  } else if (spec.childrenRegion) {
-    const content = mixedChildrenToBlocks(node.children, ctx);
-    const fold = spec.childrenRegion.fromAttribute;
-    if (fold) {
-      const attr = node.attributes.find(
-        (candidate) => candidate.type === "mdxJsxAttribute" && candidate.name === fold,
-      );
-      const text = attr && typeof attr.value === "string" ? attr.value : "";
-      if (text) {
-        folded = fold;
-        content.unshift({ type: "paragraph", content: [{ type: "text", text }] });
-      }
-    }
-    regions.push({
-      type: "mdxBlockRegion",
-      attrs: { region: spec.childrenRegion.region },
-      content: content.length > 0 ? content : undefined,
-    });
   }
 
   const attributes = cleanAttributes(node.attributes).filter(
-    (a) => !(a.type === "mdxJsxAttribute" && (a.name === folded || a.name === derived)),
+    (a) => !(a.type === "mdxJsxAttribute" && consumed.includes(a.name)),
   );
   return {
-    type: "mdxComponent",
-    attrs: { name: spec.name, attributes },
-    content: regions.length > 0 ? regions : undefined,
+    type: componentTypeName(spec),
+    attrs: { attributes },
+    content: content.length > 0 ? content : undefined,
   };
 }

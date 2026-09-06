@@ -8,7 +8,7 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { TypeTable } from "fumadocs-ui/components/type-table";
-import { PenLine } from "lucide-react";
+import { FumadocsIcon } from "./src/logo";
 import { EditorDemo } from "./src/demo";
 
 const docs = defineDocs({
@@ -40,7 +40,7 @@ export default defineConfig({
     nav: {
       title: (
         <>
-          <PenLine className="size-4" />
+          <FumadocsIcon className="size-5" />
           Fumadocs Editor
         </>
       ),
@@ -56,6 +56,7 @@ export default defineConfig({
             href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@0,100..900;1,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
             rel="stylesheet"
           />
+          <link rel="icon" href="/icon.png" type="image/png" />
         </>
       );
     },
