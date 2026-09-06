@@ -6,7 +6,7 @@ import type { Duplex } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
 import { WebSocketServer, type WebSocket } from "ws";
-import type { ComponentSpec, SyntaxOptions } from "@fumadocs-editor/core/parse";
+import type { ComponentSpec, SyntaxOptions } from "../components/spec";
 import { createDocAuthority } from "./authority";
 import { AUTH_HEADER, CLOSE_DENIED, type SyncUser } from "./transport";
 

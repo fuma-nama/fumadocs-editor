@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import type { JSONContent } from "@tiptap/core";
-import { parseMdxToDoc } from "@fumadocs-editor/core/parse";
-import { serializeDocToMdx, tryNormalize } from "@fumadocs-editor/core/serialize";
-import { createSyntax } from "@fumadocs-editor/core";
+import { parseMdxToDoc } from "../src/document";
+import { serializeDocToMdx } from "../src/serializer";
+import { createSyntax } from "../src/components/spec";
 import { mergeRemote, type MergeOp } from "../src/merge";
 
 const syntax = createSyntax();
@@ -15,12 +15,6 @@ Para two.
 
 Para three.
 `;
-
-function normalized(doc: JSONContent): string[] {
-  const out: string[] = [];
-  for (const node of doc.content ?? []) out.push(tryNormalize(node, syntax) ?? "");
-  return out;
-}
 
 /** reference implementation of the op contract, over plain JSON children */
 function apply(children: JSONContent[], ops: MergeOp[]): JSONContent[] {
@@ -57,7 +51,7 @@ describe("mergeRemote", () => {
 
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(base.doc),
+      local: base.doc,
       remoteText,
     });
 
@@ -75,7 +69,7 @@ describe("mergeRemote", () => {
 
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(local),
+      local: local,
       remoteText,
     });
 
@@ -95,7 +89,7 @@ describe("mergeRemote", () => {
 
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(local),
+      local: local,
       remoteText,
     });
 
@@ -114,7 +108,7 @@ describe("mergeRemote", () => {
 
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(local),
+      local: local,
       remoteText,
     });
 
@@ -135,7 +129,7 @@ describe("mergeRemote", () => {
 
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(local),
+      local: local,
       remoteText,
     });
 
@@ -149,7 +143,7 @@ describe("mergeRemote", () => {
     const base = parseMdxToDoc(baseText, syntax);
     const result = mergeRemote({
       base: base.snapshot,
-      localNormalized: normalized(base.doc),
+      local: base.doc,
       remoteText: baseText,
     });
     expect(result.ops).toEqual([]);

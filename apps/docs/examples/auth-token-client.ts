@@ -1,4 +1,4 @@
-import { wsTransport } from "@fumadocs-editor/sync";
+import { wsTransport } from "@fumadocs-editor/core/sync";
 
 declare function getAccessToken(): Promise<string>;
 

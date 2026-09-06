@@ -8,7 +8,6 @@ blocks come back byte-for-byte.
 | ---------------------------------------- | --------------------------------- |
 | [`@fumadocs-editor/ui`](packages/ui)     | React editor                      |
 | [`@fumadocs-editor/core`](packages/core) | parse, serialize, component specs |
-| [`@fumadocs-editor/sync`](packages/sync) | FS mirror, collab, auth           |
 
 Docs: https://editor.fumadocs.dev.
 

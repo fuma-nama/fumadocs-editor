@@ -4,13 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { JSONContent } from "@tiptap/core";
 import {
-  componentTypeName,
   createSyntax,
   filesFenceSpecs,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
+import { componentTypeName } from "../src/components/structure";
 
 const [FILES, FOLDER, FILE] = filesFenceSpecs.map(componentTypeName);
 

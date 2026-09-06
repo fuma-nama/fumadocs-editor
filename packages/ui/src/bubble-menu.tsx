@@ -12,7 +12,8 @@ import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { NodeSelection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { INLINE_REGION_NODE, isComponent, type MdxAttribute } from "@fumadocs-editor/core";
+import { type MdxAttribute } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core/extensions";
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { Popover } from "@base-ui/react/popover";
 import {

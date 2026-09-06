@@ -14,15 +14,14 @@ import { getSchema, type JSONContent } from "@tiptap/core";
 import type { Schema, Node as PMNode } from "@tiptap/pm/model";
 import {
   createSyntax,
-  parseMdxToDoc,
   type ComponentSpec,
-  type DocSnapshot,
   type Syntax,
   type SyntaxOptions,
-} from "@fumadocs-editor/core/parse";
-import { serializeDocToMdx, tryNormalize } from "@fumadocs-editor/core/serialize";
-import { editorExtensions } from "@fumadocs-editor/core/extensions";
-import { mergeRemote, type MergeOp } from "./merge";
+} from "../components/spec";
+import { parseMdxToDoc, type DocSnapshot } from "../document";
+import { serializeDocToMdx } from "../serializer";
+import { editorExtensions } from "../extensions/kit";
+import { mergeRemote, type MergeOp } from "../merge";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
 import type { FileState, SyncUser } from "./transport";
 
@@ -143,17 +142,10 @@ export function createDocAuthority<C>({
   /** merge a new disk state into the Y.Doc; same-block conflicts keep Y */
   const applyDisk = (doc: DocState<C>, state: FileState) => {
     if (state.version === doc.diskVersion) return;
-    const pmDoc = docNode(doc);
-    const children: JSONContent[] = [];
-    const localNormalized: string[] = [];
-    pmDoc.forEach((child) => {
-      const json = child.toJSON() as JSONContent;
-      children.push(json);
-      localNormalized.push(tryNormalize(json, doc.syntax) ?? "");
-    });
+    const local = docNode(doc).toJSON() as JSONContent;
     let result;
     try {
-      result = mergeRemote({ base: doc.snapshot, localNormalized, remoteText: state.text });
+      result = mergeRemote({ base: doc.snapshot, local, remoteText: state.text });
     } catch {
       // unparseable disk text (an IDE mid-save, a bad merge): the Y.Doc stays
       // the authority and the next save rewrites the file
@@ -161,7 +153,7 @@ export function createDocAuthority<C>({
       return;
     }
     if (result.ops.length > 0) {
-      const target = applyOps(children, result.ops);
+      const target = applyOps(local.content ?? [], result.ops);
       const next = doc.schema.nodeFromJSON({ type: "doc", content: target });
       doc.ydoc.transact(
         () =>

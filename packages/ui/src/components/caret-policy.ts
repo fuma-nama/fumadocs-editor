@@ -4,7 +4,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core/extensions";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
 export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";

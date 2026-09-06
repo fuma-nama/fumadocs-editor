@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { createFileSession, type FileSession } from "../src/session";
-import type { FileState, SyncTransport } from "../src/transport";
+import { createFileSession, type FileSession } from "../../src/sync/session";
+import type { FileState, SyncTransport } from "../../src/sync/transport";
 import { createHash } from "node:crypto";
 
 const hashText = (text: string) => createHash("sha1").update(text).digest("hex");

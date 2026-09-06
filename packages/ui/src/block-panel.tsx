@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { isComponent } from "@fumadocs-editor/core";
+import { isComponent } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import {
   childInsertContext,

@@ -1,13 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { getSchema } from "@tiptap/core";
 import { Fragment } from "@tiptap/pm/model";
-import {
-  createSyntax,
-  editorExtensions,
-  emptyComponent,
-  isComponent,
-  type ComponentSpec,
-} from "../src";
+import { createSyntax, editorExtensions, emptyComponent, type ComponentSpec } from "../src";
+import { isComponent } from "../src/components/structure";
 
 const components: ComponentSpec[] = [
   {

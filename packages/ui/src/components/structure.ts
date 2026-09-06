@@ -10,7 +10,11 @@ import {
 } from "@tiptap/pm/state";
 import { Fragment, type Node as PMNode, type ResolvedPos, type Slice } from "@tiptap/pm/model";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
-import { BLOCK_REGION_NODE, INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core";
+import {
+  BLOCK_REGION_NODE,
+  INLINE_REGION_NODE,
+  isComponent,
+} from "@fumadocs-editor/core/extensions";
 import { FRONTMATTER_NODE, deleteBlocks, movableIn, type BlockRange, type SpecMap } from "./keymap";
 import { contentClass } from "../styles/content";
 

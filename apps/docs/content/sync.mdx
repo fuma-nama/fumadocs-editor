@@ -109,7 +109,7 @@ emit them byte-identically.
 ## The dev server
 
 The plugin mounts three endpoints. Their paths are exported as constants
-from `@fumadocs-editor/sync`.
+from `@fumadocs-editor/core/sync`.
 
 | Endpoint         | Constant          | Purpose                                              |
 | ---------------- | ----------------- | ---------------------------------------------------- |
@@ -129,14 +129,14 @@ plain handlers:
 
 ### Options
 
-<auto-type-table path="../../../packages/sync/src/node.ts" name="SyncServerOptions" />
+<auto-type-table path="../../../packages/core/src/sync/node.ts" name="SyncServerOptions" />
 
 ## Custom backends
 
 The dev server is one implementation of `SyncTransport`. A database, a CMS
 or a browser file-system handle needs the same four calls:
 
-<auto-type-table path="../../../packages/sync/src/transport.ts" name="SyncTransport" />
+<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="SyncTransport" />
 
 - Documents are addressed by root-relative posix paths.
 - `version` is an opaque compare-and-swap token. `write` must fail with the

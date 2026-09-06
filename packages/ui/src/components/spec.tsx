@@ -1,4 +1,5 @@
-import { componentTypeName, type ComponentSpec } from "@fumadocs-editor/core";
+import { type ComponentSpec } from "@fumadocs-editor/core";
+import { componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { FC, ReactNode } from "react";
 
 export interface ComponentRenderProps {

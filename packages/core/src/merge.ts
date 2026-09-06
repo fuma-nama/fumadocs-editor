@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
-import { parseMdxToDoc, type DocSnapshot, type ParsedDoc } from "@fumadocs-editor/core/parse";
-import { blockNormalized, matchBlocks } from "@fumadocs-editor/core/serialize";
+import { parseMdxToDoc, type DocSnapshot, type ParsedDoc } from "./document";
+import { blockNormalized, matchBlocks, tryNormalize } from "./serializer";
 
 /**
  * An edit to the live document's top-level children. All indices refer to
@@ -34,7 +34,7 @@ export interface MergeResult {
  * what `serializeDocToMdx` would emit verbatim vs rewrite.
  *
  * - base:   the last-synced `DocSnapshot`
- * - local:  the live doc, one normalized text per top-level child
+ * - local:  the live document as JSON
  * - remote: the new disk text
  *
  * Remote-only changes become `ops`; blocks touched on both sides become
@@ -42,11 +42,15 @@ export interface MergeResult {
  */
 export function mergeRemote(options: {
   base: DocSnapshot;
-  localNormalized: string[];
+  local: JSONContent;
   remoteText: string;
 }): MergeResult {
-  const { base, localNormalized, remoteText } = options;
+  const { base, local, remoteText } = options;
   const remote = parseMdxToDoc(remoteText, base.syntax);
+  const localNormalized: string[] = [];
+  for (const child of local.content ?? []) {
+    localNormalized.push(tryNormalize(child, base.syntax) ?? "");
+  }
   const remoteNodes = remote.doc.content ?? [];
 
   const baseNorm = base.blocks.map((block) => blockNormalized(block, base.syntax));

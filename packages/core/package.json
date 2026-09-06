@@ -1,14 +1,17 @@
 {
   "name": "@fumadocs-editor/core",
   "version": "0.0.0",
-  "description": "Headless MDX editor engine for Fumadocs: TipTap schema + lossless MDX round-trip",
+  "description": "Headless MDX editor engine for Fumadocs: TipTap schema, lossless MDX round-trip, file sync and collaboration",
   "keywords": [
+    "collaboration",
     "editor",
     "fumadocs",
     "markdown",
     "mdx",
     "prosemirror",
-    "tiptap"
+    "sync",
+    "tiptap",
+    "yjs"
   ],
   "homepage": "https://github.com/fuma-nama/fumadocs-editor",
   "license": "MIT",
@@ -28,6 +31,10 @@
     "./parse": "./dist/parse.js",
     "./serialize": "./dist/serialize.js",
     "./extensions": "./dist/extensions.js",
+    "./sync": "./dist/sync.js",
+    "./collab": "./dist/collab.js",
+    "./node": "./dist/node.js",
+    "./vite": "./dist/vite.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -51,6 +58,9 @@
     "@tiptap/extensions": "^3.31.0",
     "@tiptap/pm": "^3.31.0",
     "@tiptap/starter-kit": "^3.31.0",
+    "@tiptap/y-tiptap": "3.0.9",
+    "chokidar": "^5.0.0",
+    "lib0": "^0.2.117",
     "mdast-util-directive": "^3.1.0",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-frontmatter": "^2.0.1",
@@ -63,14 +73,27 @@
     "micromark-extension-frontmatter": "^2.0.0",
     "micromark-extension-gfm": "^3.0.0",
     "micromark-extension-math": "^3.1.0",
-    "micromark-extension-mdxjs": "^3.0.0"
+    "micromark-extension-mdxjs": "^3.0.0",
+    "ws": "^8.19.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.4.0",
+    "@types/ws": "^8.18.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "peerDependencies": {
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }

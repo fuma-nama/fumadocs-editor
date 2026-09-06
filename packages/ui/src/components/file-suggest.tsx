@@ -4,7 +4,7 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
-import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core/extensions";
 import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
 import type { FileProvider } from "./media";

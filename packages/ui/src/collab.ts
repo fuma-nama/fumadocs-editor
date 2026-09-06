@@ -2,7 +2,7 @@ import { Collaboration } from "@tiptap/extension-collaboration";
 import { CollaborationCaret } from "@tiptap/extension-collaboration-caret";
 import type { Extensions } from "@tiptap/core";
 import type { SyntaxOptions } from "@fumadocs-editor/core/parse";
-import { createCollabSession } from "@fumadocs-editor/sync/collab";
+import { createCollabSession } from "@fumadocs-editor/core/collab";
 import type { CollabLink } from "./editor";
 import type { UiComponentSpec } from "./components/spec";
 import * as stylex from "@stylexjs/stylex";

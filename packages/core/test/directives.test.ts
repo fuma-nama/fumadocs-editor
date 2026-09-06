@@ -6,12 +6,12 @@ import type { JSONContent } from "@tiptap/core";
 import {
   ADMONITION_TYPES,
   admonitionSpec,
-  componentTypeName,
   createSyntax,
   parseMdxToDoc,
   serializeDocToMdx,
   type ComponentSpec,
 } from "../src";
+import { componentTypeName } from "../src/components/structure";
 
 const ADMONITION = componentTypeName(admonitionSpec);
 

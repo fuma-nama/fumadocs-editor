@@ -25,7 +25,7 @@ import {
   Table2,
 } from "lucide-react";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core";
+import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";

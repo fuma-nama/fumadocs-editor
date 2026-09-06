@@ -4,9 +4,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as Y from "yjs";
-import { createSyncServer, type SyncServer } from "../src/node";
-import { wsTransport, type WsTransport } from "../src/client";
-import { createCollabSession, type CollabSession } from "../src/collab";
+import { createSyncServer, type SyncServer } from "../../src/sync/node";
+import { wsTransport, type WsTransport } from "../../src/sync/client";
+import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 
 let root: string;
 let http: Server;

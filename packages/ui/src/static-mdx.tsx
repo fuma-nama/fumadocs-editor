@@ -2,7 +2,8 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import type { JSONContent } from "@tiptap/core";
-import { componentRegions, type MdxAttribute } from "@fumadocs-editor/core";
+import { type MdxAttribute } from "@fumadocs-editor/core";
+import { componentRegions } from "@fumadocs-editor/core/extensions";
 import { SquareCode } from "lucide-react";
 import {
   Component as ReactComponent,

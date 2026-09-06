@@ -16,7 +16,7 @@ import {
   UPLOAD_ENDPOINT,
   wsTransport,
   type SessionStatus,
-} from "@fumadocs-editor/sync";
+} from "@fumadocs-editor/core/sync";
 import { FileText, Moon, Sun } from "lucide-react";
 
 // static builds have no sync endpoint; never import from docs/ here. Vite

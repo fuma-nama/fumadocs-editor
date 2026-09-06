@@ -27,7 +27,7 @@ import type {
   SessionStatus,
   SyncTransport,
   WsTransport,
-} from "@fumadocs-editor/sync";
+} from "@fumadocs-editor/core/sync";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { ProvidersContext } from "./components/providers";
 import { specsByType, type UiComponentSpec } from "./components/spec";
@@ -509,16 +509,9 @@ const EditorView = memo(function EditorView({
       return [];
     }
 
-    const [{ mergeRemote }, { tryNormalize }] = await Promise.all([
-      import("@fumadocs-editor/sync/merge"),
-      import("@fumadocs-editor/core/serialize"),
-    ]);
+    const { mergeRemote } = await import("@fumadocs-editor/core/serialize");
     const { doc } = editor.state;
-    const localNormalized: string[] = [];
-    for (let i = 0; i < doc.childCount; i++) {
-      localNormalized.push(tryNormalize(doc.child(i).toJSON(), snapshot.syntax) ?? "");
-    }
-    const result = mergeRemote({ base: snapshot, localNormalized, remoteText: text });
+    const result = mergeRemote({ base: snapshot, local: doc.toJSON(), remoteText: text });
 
     if (result.ops.length > 0) {
       const starts: number[] = [];
@@ -736,7 +729,7 @@ function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEdito
       setStatus(next);
       latest.current.sync.onStatus?.(next);
     };
-    void import("@fumadocs-editor/sync").then((mod) => {
+    void import("@fumadocs-editor/core/sync").then((mod) => {
       if (!open) return;
       const transport = transportProp ?? (sharedTransport ??= mod.wsTransport());
       let read: Promise<ReadResult>;

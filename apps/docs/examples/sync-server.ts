@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createSyncServer } from "@fumadocs-editor/sync/node";
+import { createSyncServer } from "@fumadocs-editor/core/node";
 
 const sync = createSyncServer({ root: "content/docs" });
 

@@ -7,14 +7,14 @@ import {
   type Transaction,
 } from "@tiptap/pm/state";
 import { Fragment, type Node as PMNode, type NodeType, type ResolvedPos } from "@tiptap/pm/model";
+import { type ComponentSpec } from "@fumadocs-editor/core";
 import {
   BLOCK_REGION_NODE,
   INLINE_REGION_NODE,
   componentRegions,
   componentTypeName,
   isComponent,
-  type ComponentSpec,
-} from "@fumadocs-editor/core";
+} from "@fumadocs-editor/core/extensions";
 
 /** specs keyed by node type name (see `specsByType`) */
 export type SpecMap = ReadonlyMap<string, ComponentSpec>;

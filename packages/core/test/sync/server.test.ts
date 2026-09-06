@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { createSyncServer, type SyncServer } from "../src/node";
-import { wsTransport, type WsTransport } from "../src/client";
+import { createSyncServer, type SyncServer } from "../../src/sync/node";
+import { wsTransport, type WsTransport } from "../../src/sync/client";
 
 let root: string;
 let http: Server;

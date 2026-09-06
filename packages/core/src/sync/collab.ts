@@ -8,11 +8,7 @@ import {
   encodeAwarenessUpdate,
   removeAwarenessStates,
 } from "y-protocols/awareness";
-import {
-  componentSpecData,
-  type ComponentSpec,
-  type SyntaxOptions,
-} from "@fumadocs-editor/core/parse";
+import { componentSpecData, type ComponentSpec, type SyntaxOptions } from "../components/spec";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
 import type { WsTransport } from "./client";
 import type { SyncUser } from "./transport";

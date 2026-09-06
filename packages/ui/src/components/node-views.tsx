@@ -7,7 +7,11 @@ import {
   componentNodeTypes,
   type MdxAttribute,
 } from "@fumadocs-editor/core/extensions";
-import { componentRegions, isComponent, type ComponentRegion } from "@fumadocs-editor/core";
+import {
+  componentRegions,
+  isComponent,
+  type ComponentRegion,
+} from "@fumadocs-editor/core/extensions";
 import {
   NodeViewContent,
   NodeViewWrapper,
