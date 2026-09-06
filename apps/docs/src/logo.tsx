@@ -1,3 +1,4 @@
+"use client";
 import { useId, type SVGProps } from "react";
 
 export function FumadocsIcon(props: SVGProps<SVGSVGElement>) {
