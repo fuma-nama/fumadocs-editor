@@ -11,18 +11,17 @@ entry and attributes panel.
 
 ## Why a spec
 
-The editor does not render your real components. Real components own state
-and interactivity (tabs switch, accordions collapse, links navigate), which
-fights an always-editable surface. Instead, each component gets two things:
+The editor never renders your real components. Each one gets two things
+instead:
 
 - a **spec**: data describing how attributes and children map to editable
   regions
 - a **renderer**: a lightweight mirror that draws the look around those
   regions
 
-Because the spec is data, the editor can
-[protect the structure](#what-the-guard-guarantees) no matter what the
-renderer does.
+Because the spec is data, the editor keeps the declared shape on every
+edit, and a renderer that throws falls back to a source card without
+losing the document.
 
 ## A worked example
 
@@ -41,8 +40,8 @@ Take a `<Feature title="…" soon={true}>` card.
   lists, code, nested components.
 - `props` lists the remaining attributes for the attributes panel. A
   `boolean` prop becomes a toggle.
-- `insert` is the fragment the slash menu inserts: every region present,
-  all empty.
+- `insert` is the fragment the slash menu inserts. `emptyComponent` builds
+  it: every region present, all empty.
 - `regions` gives each region a class name. Regions render outside the
   renderer's tree, so this is where their typography lives.
 
@@ -75,18 +74,15 @@ Every `<Feature>` in a document is now editable in place.
 the `title` inline region, then the `body` block region. You place them
 once; there is no separate slot per region.
 
-- To style a region, target `data-region="<name>"` from the wrapper. The
-  example bolds the title with `[&_[data-region=title]]:font-medium`.
+- Style a region by name with `regions`, or target `data-region="<name>"`
+  from the wrapper.
 - Mark chrome `contentEditable={false}` (the "Soon" badge) so the caret
-  cannot enter it. Clicking chrome puts the caret in the nearest region;
-  double-clicking it selects the component, so give every component some
-  chrome to double-click: an icon, a rail, a padded edge.
-- On touch screens the block's joystick sits in the gutter left of the
-  block. A component that nests in
-  another (a row, a card) should reserve a 28×28px spot for the joystick in
-  its own chrome instead: an empty element with `data-fde-controls`, kept
-  clear by the region beside it. The built-in rows, cards, steps, tabs and
-  accordions do.
+  cannot enter it. Double-clicking chrome selects the component, so give
+  every component some: an icon, a rail, a padded edge.
+- A component that nests in another (a row, a card) reserves a spot for the
+  touch joystick in its own chrome: an empty element with
+  `data-fde-controls`. The built-in rows, cards, steps, tabs and accordions
+  do.
 
 ## Props and literals
 
@@ -120,21 +116,6 @@ Structural fields on `ComponentSpec` (from `@fumadocs-editor/core`):
 `contentRegion`, `childrenRegion` and `childComponent` are mutually
 exclusive. A spec with none of them is a leaf: props only, like
 `GithubInfo`. For containers, the
-[built-in specs](https://github.com/fuma-nama/fumadocs-editor/blob/main/packages/ui/src/components/fumadocs-ui.tsx)
+[built-in specs](https://github.com/fuma-nama/fumadocs-editor/blob/dev/packages/ui/src/components/fumadocs-ui.tsx)
 are the reference: Cards and Card, Files (`listLike`), Tabs
 (`itemsAttribute`).
-
-## What the guard guarantees
-
-A structure guard runs on every transaction and heals anything that would
-break a component's declared shape:
-
-- A component always has exactly its declared regions. A paste that brings
-  extra blocks is folded into the right region.
-- Selections spanning region boundaries cannot tear a component into
-  valid-but-wrong pieces, whether by typing, paste or delete.
-- Structural moves only place components into parents whose
-  `childComponent` accepts them. Invalid MDX cannot be produced.
-- A renderer that throws degrades that one component to a fallback card
-  with its regions still editable. The document stays lossless and siblings
-  are untouched. Fixing the attribute heals it in place.

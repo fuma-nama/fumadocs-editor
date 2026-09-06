@@ -13,6 +13,11 @@ one-line edit stays a one-line diff.
 
 ## Installation
 
+<Callout title="Try it without code">
+  `npx @fumadocs-editor/studio` opens an editor for the documents of a Fumadocs app from the
+  terminal. See [Studio](/studio).
+</Callout>
+
 <Steps>
 <Step>
 
@@ -68,7 +73,8 @@ debounced. Prefer pulling? Call `ref.getMarkdown()` instead.
 Out of the box the editor knows the fumadocs-ui components: Callout, Cards,
 Tabs, Steps, Accordions, Files, TypeTable, GithubInfo and
 `<include>`. Each renders in place with its own editable regions, a
-slash-menu entry and an attributes panel.
+slash-menu entry and an attributes panel. Code blocks are highlighted, and a
+`mermaid` fence renders its diagram below the source.
 
 Anything else still round-trips. A component without a [spec](/components)
 shows as a neutral card and is edited as source. Syntax the editor does not
@@ -77,7 +83,7 @@ understand is preserved verbatim rather than reformatted.
 ## Saving to disk
 
 `onChange` is enough when you own the persistence. If your documents are
-files in a repository, [`@fumadocs-editor/sync`](/sync) runs the read,
+files in a repository, [sync](/sync) runs the read,
 autosave and merge loop for you:
 
 <include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
@@ -96,11 +102,11 @@ The provider tracks `light | dark | system`, persists the choice to
 
 ## Packages
 
-| Package                 |                                                          |
-| ----------------------- | -------------------------------------------------------- |
-| `@fumadocs-editor/ui`   | The React editor. The only package you install directly. |
-| `@fumadocs-editor/core` | Parse, serialize, component specs. Pulled in by `ui`.    |
-| `@fumadocs-editor/sync` | Optional: file system mirror, collaboration, auth.       |
+| Package                   |                                                                      |
+| ------------------------- | -------------------------------------------------------------------- |
+| `@fumadocs-editor/ui`     | The React editor. The only package you install directly.             |
+| `@fumadocs-editor/core`   | Parse, serialize, specs, file sync, collab, auth. Pulled in by `ui`. |
+| `@fumadocs-editor/studio` | Standalone app: edit a Fumadocs site's documents from the terminal.  |
 
 ## Next steps
 

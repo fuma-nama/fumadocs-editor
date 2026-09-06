@@ -73,11 +73,10 @@ A document is identified by its root-relative posix path, so `read` and
 | asset serving                | requires `read` on the asset path                      |
 | presence identity            | a scope `user` overrides the name the client claims    |
 
-A denied path is a per-request error; the connection stays open. A rejected
-hello closes the socket with a dedicated code: the client reports `denied`
-rather than `offline` and stops retrying. Nothing is processed before the
-hello passes `authenticate`, and a connection that never sends one times
-out.
+A denied path is a per-request error; the connection stays open. Rejected
+credentials close the connection: the client reports `denied` rather than
+`offline` and stops retrying. A connection that never authenticates is
+closed after `helloTimeoutMs`.
 
 ## Media uploads
 
