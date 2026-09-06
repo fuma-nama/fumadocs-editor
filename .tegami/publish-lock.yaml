@@ -1,21 +1,18 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Initial release\n\nWYSIWYG editor for Fumadocs MDX.\n\n- **`@fumadocs-editor/ui`**: React editor. Prose, code, tables, MDX\n  components in place. Slash menu, selection toolbar, mobile bar. Untouched\n  blocks serialize byte-for-byte. Custom components: spec + renderer.\n- **`@fumadocs-editor/core`**: parse, incremental serialize, component specs,\n  dialects (math, directive admonitions, files fences, heading suffixes). FS\n  mirror with CAS autosave and block-level merge, Yjs collab, server auth with\n  per-doc scopes.\n"
-    filename: 2026-09-02-initial.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: minor\n---\n\n### Studio\n\n`npx @fumadocs-editor/studio` opens a directory of `.mdx` files in the\neditor without a host app: a sidebar ordered by `meta.json` and frontmatter\ntitles, autosave with live merge, `?collab`, and a `fumadocs-studio.config.ts`\nfor components, syntax, theme, auth, extra stylesheets and Vite plugins.\n"
-    filename: 2026-09-06-studio.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: patch\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Studio starts under every install layout\n\n`pnpx @fumadocs-editor/studio` died on startup with pnpm 11: its global\nvirtual store links only declared dependencies, and `@tiptap/y-tiptap` imports\n`prosemirror-transform` without declaring it. npm, bun and hoisted pnpm\ninstalls hid the bug.\n\n- **`@fumadocs-editor/core`**: the Yjs binding (`@tiptap/y-tiptap` and the\n  collaboration extensions) is bundled once, with its ProseMirror imports\n  routed to `@tiptap/pm`. New: `createCollabSession(...).extensions(caret?)`\n  returns the editor extensions for a session.\n- **`@fumadocs-editor/ui`**: takes the collaboration extensions from the\n  session; `yjs` and the `@tiptap` collaboration packages are no longer\n  dependencies.\n- **`@fumadocs-editor/studio`**: the dev server serves the assets of every\n  package it loads a module from (fonts referenced by stylesheets) instead of\n  guessing an install root, so packages spread across pnpm's global store or\n  an npx cache resolve.\n"
+    filename: 2026-09-06-install-layouts.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-09-02-initial.md
+      - 2026-09-06-install-layouts.md
     id: npm:@fumadocs-editor/core
     updated: true
   - changelogIds:
-      - 2026-09-06-studio.md
+      - 2026-09-06-install-layouts.md
     id: npm:@fumadocs-editor/studio
     updated: true
   - changelogIds:
-      - 2026-09-02-initial.md
+      - 2026-09-06-install-layouts.md
     id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
