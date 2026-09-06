@@ -295,7 +295,7 @@ const SLOP = 3;
  * touch (iOS lifts a mis-scaled page snapshot, its autoscroll strands the
  * drop line, and its drop lands nowhere; Android has none). The first real
  * move lifts the block, and the same target, line and drop as a native
- * drag apply. A press that never moves does nothing.
+ * drag apply. A press that never moves selects the block instead.
  */
 export function startPointerDrag(
   view: EditorView,
@@ -357,7 +357,14 @@ export function startPointerDrag(
     cancelAnimationFrame(scrolling);
     hideIndicator();
     tilt(0, 0);
-    if (!ghost) return;
+    if (!ghost) {
+      const node = view.state.doc.nodeAt(from);
+      if (e.type === "pointerup" && node && node.nodeSize === to - from) {
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, from)));
+        if (e.pointerType === "mouse") view.focus();
+      }
+      return;
+    }
     ghost.remove();
     const source = liftKey.getState(view.state);
     if (e.type === "pointerup" && target != null && source) {

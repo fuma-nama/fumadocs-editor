@@ -6,8 +6,6 @@ import { tokens } from "./tokens.stylex";
 const muted = tokens.mutedForeground;
 const border = tokens.border;
 
-export const fadeIn = stylex.keyframes({ from: { opacity: 0 } });
-
 export const content = stylex.create({
   root: {
     outline: "none",
@@ -30,13 +28,14 @@ export const content = stylex.create({
       pointerEvents: "none",
       color: muted,
       opacity: 0.5,
-      animationName: {
-        default: null,
-        [stylex.when.ancestor("[data-fde-settled]", settled)]: fadeIn,
-        [consts.reduceMotion]: "none",
+      transitionProperty: "opacity",
+      transitionDuration: {
+        default: "0s",
+        [stylex.when.ancestor("[data-fde-settled]", settled)]: "80ms",
+        [consts.reduceMotion]: "0s",
       },
-      animationDuration: "80ms",
-      animationTimingFunction: "ease-out",
+      transitionTimingFunction: "ease-out",
+      "@starting-style": { opacity: 0 },
     },
   },
   heading: {
@@ -296,7 +295,7 @@ export const content = stylex.create({
       default: null,
       [stylex.when.ancestor("[data-folder]", folder)]: "0.5rem",
     },
-    borderInlineStartWidth: { default: null, [stylex.when.ancestor("[data-folder]", folder)]: 1 },
+    borderInlineStartWidth: { default: 0, [stylex.when.ancestor("[data-folder]", folder)]: 1 },
     borderInlineStartStyle: "solid",
     borderInlineStartColor: border,
     transition: {
@@ -321,13 +320,14 @@ export const content = stylex.create({
       color: muted,
       opacity: 0.6,
       pointerEvents: "none",
-      animationName: {
-        default: null,
-        [stylex.when.ancestor("[data-fde-settled]", settled)]: fadeIn,
-        [consts.reduceMotion]: "none",
+      transitionProperty: "opacity",
+      transitionDuration: {
+        default: "0s",
+        [stylex.when.ancestor("[data-fde-settled]", settled)]: "80ms",
+        [consts.reduceMotion]: "0s",
       },
-      animationDuration: "80ms",
-      animationTimingFunction: "ease-out",
+      transitionTimingFunction: "ease-out",
+      "@starting-style": { opacity: 0 },
     },
   },
   regionBlock: { "--fde-gap": "0.5em" },

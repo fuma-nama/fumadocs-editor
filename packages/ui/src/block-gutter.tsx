@@ -6,7 +6,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { bubbleState } from "./bubble-menu";
-import { isList } from "./components/keymap";
+import { isList, isTable } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
 
 const GUTTER_BUTTON = 28;
@@ -63,9 +63,9 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
       const { range } = bubbleState(current.state);
       if (!range) return null;
       const node = doc.nodeAt(range.from)!;
-      if (!node.type.spec.code && (!touch || (node.isTextblock && node.content.size === 0))) {
-        return null;
-      }
+      // desktop: only blocks without chrome of their own to grab; touch: every block
+      const handled = node.type.spec.code || isTable(node.type);
+      if (!handled && (!touch || (node.isTextblock && node.content.size === 0))) return null;
       // the row the finger last touched: a long selection's joystick stays on
       // screen, and clear of the system's copy bar above the selection's start
       const head =

@@ -36,7 +36,7 @@ function componentAt(
 export const caretPolicy = Extension.create({
   name: "fdeCaretPolicy",
 
-  // A doc that starts with an atom (frontmatter) makes ProseMirror's initial
+  // A doc that starts with an atom (ESM, verbatim) makes ProseMirror's initial
   // selection a NodeSelection over it, so the first keystroke after focusing
   // would replace the whole block. Start on the first text position instead.
   // "mount" is the earliest synchronous point with a dispatchable view.

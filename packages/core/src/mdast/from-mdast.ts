@@ -405,7 +405,10 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "mdxjsEsm":
       return { type: "mdxjsEsm", attrs: { value: node.value } };
     case "yaml":
-      return { type: "frontmatter", attrs: { value: node.value } };
+      return {
+        type: "frontmatter",
+        content: node.value ? [{ type: "text", text: node.value }] : [],
+      };
     default:
       // definition, footnoteDefinition, html, ...
       return { type: "verbatim", attrs: { value: sliceSource(node, ctx) } };

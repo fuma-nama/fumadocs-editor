@@ -84,22 +84,6 @@ const styles = stylex.create({
   imageRow: { display: "flex", alignItems: "center", gap: "0.375rem" },
   imageSrc: { width: "13rem" },
   imageAlt: { width: "9rem" },
-  yaml: {
-    minHeight: "6rem",
-    width: "18rem",
-    resize: "vertical",
-    borderRadius: "0.375rem",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: { default: border, ":focus-visible": tokens.ring },
-    backgroundColor: tokens.background,
-    padding: "0.5rem",
-    fontFamily: consts.mono,
-    fontSize: tokens.fieldSize,
-    lineHeight: 1.625,
-    color: tokens.foreground,
-    outline: "none",
-  },
   headingOptions: {
     display: "flex",
     flexDirection: "column",
@@ -275,7 +259,7 @@ export function BlockTypePicker({
 export interface BubbleState {
   format: boolean;
   table: boolean;
-  atom: { kind: "image" | "frontmatter"; pos: number } | null;
+  atom: { kind: "image"; pos: number } | null;
   active: ActiveComponent | null;
   /** the run of blocks the joystick and ⋯ serve */
   range: BlockRange | null;
@@ -293,9 +277,8 @@ export function bubbleState(state: EditorState): BubbleState {
   }
 
   let atom: BubbleState["atom"] = null;
-  if (selection instanceof NodeSelection) {
-    const name = selection.node.type.name;
-    if (name === "image" || name === "frontmatter") atom = { kind: name, pos: selection.from };
+  if (selection instanceof NodeSelection && selection.node.type.name === "image") {
+    atom = { kind: "image", pos: selection.from };
   }
 
   const range = handleBlock(selection);
@@ -324,7 +307,7 @@ function summoned(state: EditorState): boolean {
     if (isComponent(node.type)) return true;
     // a code block's header holds its menu, the gutter its joystick
     if (node.type.spec.code) return false;
-    return node.type.name === "frontmatter" || movableIn(node, selection.$from.parent);
+    return movableIn(node, selection.$from.parent);
   }
   // a selection of structural tokens only (a double-click at a region's
   // end can produce one) renders nothing: it must not summon the bubble.
@@ -591,20 +574,6 @@ function ImagePanel({ editor, media }: { editor: Editor; media?: MediaProvider }
   );
 }
 
-function FrontmatterPanel({ editor }: { editor: Editor }) {
-  const value = (editor.getAttributes("frontmatter").value as string) ?? "";
-  return (
-    <textarea
-      {...stylex.props(chrome.input, styles.yaml)}
-      value={value}
-      spellCheck={false}
-      onChange={(event) =>
-        updateAtomAttributes(editor, "frontmatter", { value: event.target.value })
-      }
-    />
-  );
-}
-
 export function EditorBubble({
   editor,
   specs,
@@ -712,7 +681,10 @@ export function EditorBubble({
   );
   const shouldShow = useCallback(
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
-      if (!view.hasFocus() && wrapper?.contains(document.activeElement)) return true;
+      // focus in the bubble or a popover it portals into the wrapper keeps it
+      // open; chrome inside node views (a table cell, an add button) does not
+      const active = document.activeElement;
+      if (!view.hasFocus() && wrapper?.contains(active) && !view.dom.contains(active)) return true;
       return touch ? view.hasFocus() : summoned(editorState);
     },
     [wrapper, touch],
@@ -776,7 +748,6 @@ export function EditorBubble({
         </>
       )}
       {state?.atom?.kind === "image" && <ImagePanel editor={editor} media={media} />}
-      {state?.atom?.kind === "frontmatter" && <FrontmatterPanel editor={editor} />}
       {state && target && (
         <>
           {(state.format || state.atom) && <span {...stylex.props(chrome.divider)} />}

@@ -121,8 +121,8 @@ export function DragHandle({
     <button
       ref={button}
       type="button"
-      aria-label="Hold to drag"
-      title="Hold to drag"
+      aria-label="Drag to move, click to select"
+      title="Drag to move, click to select"
       {...stylex.props(chrome.button, look, styles.button, marker)}
       style={{ "--fde-joy": `${size}px` } as CSSProperties}
       onPointerDown={(event) => {

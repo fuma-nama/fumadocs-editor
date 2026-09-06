@@ -228,20 +228,31 @@ function Region({
   parent: UiComponentSpec;
   index: number;
 }) {
-  const { region } = componentRegions(parent, specs)[index];
+  const { region, placeholder } = componentRegions(parent, specs)[index];
   const sx = stylex.props(content.region, kind === "block" && content.regionBlock, styles.wrapper);
   const own = parent.regions?.[region];
+  const empty = !hasText(node);
   return (
     <Shell type={node.type!}>
       <div
         data-node-view-wrapper=""
         className={own ? `${sx.className} ${own}` : sx.className}
         data-region={region}
+        data-empty={empty || undefined}
+        data-placeholder={empty && placeholder ? placeholder : undefined}
       >
-        <ContentHole>{renderChildren(node.content, specs)}</ContentHole>
+        <ContentHole>
+          {renderChildren(node.content, specs) ?? (kind === "inline" ? <br /> : null)}
+        </ContentHole>
       </div>
     </Shell>
   );
+}
+
+function hasText(node: JSONContent): boolean {
+  if (node.text) return true;
+  for (const child of node.content ?? []) if (hasText(child)) return true;
+  return false;
 }
 
 function StaticCodeBlock({ node }: { node: JSONContent }) {
@@ -285,7 +296,7 @@ function renderNode(
     case "paragraph":
       return (
         <p key={key} className={contentClass.paragraph}>
-          {children()}
+          {children() ?? <br />}
         </p>
       );
     case "heading": {
@@ -298,7 +309,7 @@ function renderNode(
           data-anchor={(node.attrs?.anchor as string) ?? undefined}
           data-toc={(node.attrs?.toc as string) ?? undefined}
         >
-          {children()}
+          {children() ?? <br />}
         </Tag>
       );
     }
@@ -455,9 +466,14 @@ function renderNode(
           {String(node.attrs?.value ?? "")}
         </code>
       );
+    case "frontmatter":
+      return (
+        <pre key={key} className={contentClass.frontmatter}>
+          <code>{node.content?.[0]?.text ?? ""}</code>
+        </pre>
+      );
     case "mdxFlowExpression":
     case "mdxjsEsm":
-    case "frontmatter":
     case "verbatim":
       return (
         <pre key={key} className={contentClass[node.type]}>
@@ -485,6 +501,11 @@ export function StaticMdx({
         aria-label="Loading editor"
       >
         {renderChildren(doc.content, specs)}
+        {doc.content?.at(-1)?.type !== "paragraph" && (
+          <p className={contentClass.paragraph}>
+            <br />
+          </p>
+        )}
       </div>
     </MediaContext.Provider>
   );

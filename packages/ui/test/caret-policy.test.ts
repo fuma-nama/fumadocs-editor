@@ -3,9 +3,7 @@ import { describe, expect, test } from "vitest";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { caret, caretPath, makeEditor, press } from "./helpers";
 
-const DOC = `---
-title: Test
----
+const DOC = `export const meta = {};
 
 # Heading
 

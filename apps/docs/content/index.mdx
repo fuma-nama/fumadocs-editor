@@ -73,8 +73,9 @@ debounced. Prefer pulling? Call `ref.getMarkdown()` instead.
 Out of the box the editor knows the fumadocs-ui components: Callout, Cards,
 Tabs, Steps, Accordions, Files, TypeTable, GithubInfo and
 `<include>`. Each renders in place with its own editable regions, a
-slash-menu entry and an attributes panel. Code blocks are highlighted, and a
-`mermaid` fence renders its diagram below the source.
+slash-menu entry and an attributes panel. Code blocks are highlighted, a
+`mermaid` fence renders its diagram below the source, and frontmatter is
+edited in place as YAML.
 
 Anything else still round-trips. A component without a [spec](/components)
 shows as a neutral card and is edited as source. Syntax the editor does not

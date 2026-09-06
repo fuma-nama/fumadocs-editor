@@ -269,7 +269,7 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
     case "mdxjsEsm":
       return { type: "mdxjsEsm", value: String(node.attrs?.value ?? "") };
     case "frontmatter":
-      return { type: "yaml", value: String(node.attrs?.value ?? "") };
+      return { type: "yaml", value: textOf(node) };
     case "verbatim":
       return { type: "raw", value: String(node.attrs?.value ?? "") } as unknown as RootContent;
     default:

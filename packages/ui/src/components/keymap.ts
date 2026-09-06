@@ -100,13 +100,13 @@ const isInlineRegion = (type: NodeType) => type.name === INLINE_REGION_NODE;
 const isRegion = (type: NodeType) => isInlineRegion(type) || type.name === BLOCK_REGION_NODE;
 /** TipTap's lists share the `list` group: their items are the blocks that move */
 export const isList = (type: NodeType): boolean => type.isInGroup("list");
-const isTable = (type: NodeType) => type.spec.tableRole === "table";
+export const isTable = (type: NodeType): boolean => type.spec.tableRole === "table";
 
 const inlineRegionDepth = ($from: ResolvedPos) => ancestor($from, isInlineRegion);
 const regionDepth = ($from: ResolvedPos) => ancestor($from, isRegion);
 const componentDepth = ($from: ResolvedPos) => ancestor($from, isComponent);
 
-/** the YAML frontmatter atom: pinned first, so never moved or moved past */
+/** the YAML frontmatter block: pinned first, so never moved or moved past */
 export const FRONTMATTER_NODE = "frontmatter";
 
 // a nested list's parent is an item: it is a container for items, not a block
@@ -715,7 +715,7 @@ function exitMarks(editor: Editor): boolean {
  * of, or between components), move the caret straight to the adjacent text in
  * document order. Left to ProseMirror/native handling, these crossings strand
  * the caret on node-view wrappers and icons. An adjacent block atom
- * (frontmatter, ESM, verbatim) is selected instead: it has no text, and from
+ * (ESM, verbatim) is selected instead: it has no text, and from
  * a selected node the same keys step back into text. Plain prose-to-prose
  * moves stay native so the caret keeps its goal column.
  */

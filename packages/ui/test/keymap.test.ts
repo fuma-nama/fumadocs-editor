@@ -456,22 +456,20 @@ below
 });
 
 describe("vertical arrows", () => {
-  const DOC = `---
-title: Test
----
+  const DOC = `export const meta = {};
 
 # Heading
 
 Text.
 `;
 
-  test("ArrowUp from the first block selects the frontmatter atom", () => {
+  test("ArrowUp from the first block selects the atom before it", () => {
     const { editor } = makeEditor(DOC);
     caret(editor, "Heading", "start");
     press(editor, "ArrowUp");
     const sel = editor.state.selection;
     expect(sel).toBeInstanceOf(NodeSelection);
-    expect((sel as NodeSelection).node.type.name).toBe("frontmatter");
+    expect((sel as NodeSelection).node.type.name).toBe("mdxjsEsm");
   });
 
   test("ArrowDown from a selected atom returns to text", () => {
@@ -490,7 +488,7 @@ Text.
     press(editor, "Enter");
     editor.commands.insertContent("intro");
     const out = serialize();
-    expect(out.indexOf("intro")).toBeGreaterThan(out.indexOf("---"));
+    expect(out.indexOf("intro")).toBeGreaterThan(out.indexOf("export"));
     expect(out.indexOf("intro")).toBeLessThan(out.indexOf("# Heading"));
   });
 });
