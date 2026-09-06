@@ -1,5 +1,7 @@
 # @fumadocs-editor/core
 
+> **Experimental.** This project is still in early stage, breaking changes expected for future v1 release.
+
 Headless engine for [`@fumadocs-editor/ui`](https://www.npmjs.com/package/@fumadocs-editor/ui):
 MDX to TipTap, lossless serialize, component specs, file sync and collab.
 

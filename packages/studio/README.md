@@ -1,5 +1,7 @@
 # @fumadocs-editor/studio
 
+> **Experimental.** This project is still in early stage, breaking changes expected for future v1 release.
+
 Edit a directory of `.md` / `.mdx` files in the browser, no host app needed:
 
 ```bash

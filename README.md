@@ -2,6 +2,9 @@
 
 A WYSIWYG editor for Fumadocs MDX.
 
+> [!WARNING]
+> **Experimental.** This project is still in early stage, breaking changes expected for future v1 release.
+
 | Package                                  |                                   |
 | ---------------------------------------- | --------------------------------- |
 | [`@fumadocs-editor/ui`](packages/ui)     | React editor                      |

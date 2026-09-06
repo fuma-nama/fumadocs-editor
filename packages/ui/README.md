@@ -1,5 +1,7 @@
 # @fumadocs-editor/ui
 
+> **Experimental.** This project is still in early stage, breaking changes expected for future v1 release.
+
 WYSIWYG editor for Fumadocs MDX. Prose, code, tables, and MDX components
 render as an editable page. Untouched blocks serialize byte-for-byte.
 
