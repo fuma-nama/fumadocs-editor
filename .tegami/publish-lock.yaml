@@ -1,18 +1,14 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: patch\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Studio starts under every install layout\n\n`pnpx @fumadocs-editor/studio` died on startup with pnpm 11: its global\nvirtual store links only declared dependencies, and `@tiptap/y-tiptap` imports\n`prosemirror-transform` without declaring it. npm, bun and hoisted pnpm\ninstalls hid the bug.\n\n- **`@fumadocs-editor/core`**: the Yjs binding (`@tiptap/y-tiptap` and the\n  collaboration extensions) is bundled once, with its ProseMirror imports\n  routed to `@tiptap/pm`. New: `createCollabSession(...).extensions(caret?)`\n  returns the editor extensions for a session.\n- **`@fumadocs-editor/ui`**: takes the collaboration extensions from the\n  session; `yjs` and the `@tiptap` collaboration packages are no longer\n  dependencies.\n- **`@fumadocs-editor/studio`**: the dev server serves the assets of every\n  package it loads a module from (fonts referenced by stylesheets) instead of\n  guessing an install root, so packages spread across pnpm's global store or\n  an npx cache resolve.\n"
-    filename: 2026-09-06-install-layouts.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Compose the editor from parts\n\n`MdxEditor` is now a preset over exported parts: `MdxEditor.Root` owns the\ndocument (parse, sync, collab, the ref) and renders no chrome;\n`MdxEditor.Visual`, `MdxEditor.Source`, `MdxEditor.Status` and\n`MdxEditor.Tabs` render inside it, in any layout, both surfaces at once if\nyou want a split view. `useSourceText()`, `useSyncStatus()` and\n`useEditorMode()` back chrome of your own, a CodeMirror source pane for\nexample.\n\nThe document is the truth and the source is a projection: visual edits\nserialize into the text, text edits parse back into the document, and text\nthat does not parse leaves the document alone and reports the error.\n\nUnder the hood the root is now a plain document store; the parts and hooks\nsubscribe to it, so a source-only or a split host pays for nothing it does\nnot render.\n"
+    filename: 2026-09-08-source-editor-slot.md
     v: 0.0.0
 core:packages:
-  - changelogIds:
-      - 2026-09-06-install-layouts.md
-    id: npm:@fumadocs-editor/core
+  - id: npm:@fumadocs-editor/core
+    updated: false
+  - id: npm:@fumadocs-editor/studio
     updated: true
   - changelogIds:
-      - 2026-09-06-install-layouts.md
-    id: npm:@fumadocs-editor/studio
-    updated: true
-  - changelogIds:
-      - 2026-09-06-install-layouts.md
+      - 2026-09-08-source-editor-slot.md
     id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
