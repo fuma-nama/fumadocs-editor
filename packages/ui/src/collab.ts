@@ -1,7 +1,7 @@
 import type { Extensions } from "@tiptap/core";
 import type { SyntaxOptions } from "@fumadocs-editor/core/parse";
 import { createCollabSession } from "@fumadocs-editor/core/collab";
-import type { CollabLink } from "./editor";
+import type { CollabLink } from "./store";
 import type { UiComponentSpec } from "./components/spec";
 import * as stylex from "@stylexjs/stylex";
 import { content } from "./styles/content";

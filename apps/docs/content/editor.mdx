@@ -14,7 +14,7 @@ import { MdxEditor } from "@fumadocs-editor/ui";
 
 ## `sync`
 
-<auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorSync" />
+<auto-type-table path="../../../packages/ui/src/store.ts" name="MdxEditorSync" />
 
 ## Page variant
 
@@ -30,9 +30,39 @@ Two custom properties on an ancestor tune the column: `--fde-page-width`
 keeps clear of, for a panel floating there. The column stays centered while
 there is room and moves right of the inset when there is not.
 
+## Parts
+
+`MdxEditor` is a preset: sync status, Visual / MDX tabs, one surface at a
+time. When that layout does not fit, compose the parts yourself.
+
+```tsx
+import { MdxEditor, useSourceText } from "@fumadocs-editor/ui";
+
+function Source() {
+  const { value, onChange, error, readOnly } = useSourceText();
+  return <CodeMirror value={value} onChange={onChange} readOnly={readOnly} />;
+}
+
+<MdxEditor.Root sync={{ path }} ref={ref}>
+  <MdxEditor.Status />
+  <div className="split">
+    <MdxEditor.Visual />
+    <Source />
+  </div>
+</MdxEditor.Root>;
+```
+
+| Part               | What it is                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| `MdxEditor.Root`   | The document: parse, sync, collab, the ref. Takes the props below minus the frame ones |
+| `MdxEditor.Visual` | The WYSIWYG surface, static paint first                                                |
+| `MdxEditor.Source` | The MDX in a textarea, parse error above it                                            |
+| `MdxEditor.Status` | Sync dot and the keep-mine / take-disk chip; nothing without `sync`                    |
+| `MdxEditor.Tabs`   | Visual / MDX switch for hosts that show one surface at a time                          |
+
 ## Ref
 
-<auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorRef" />
+<auto-type-table path="../../../packages/ui/src/store.ts" name="MdxEditorRef" />
 
 The ref satisfies `SyncedDocument`, so it can be handed to
 [`createFileSession`](/sync#your-own-session) directly.

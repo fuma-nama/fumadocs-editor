@@ -9,7 +9,7 @@ import { Component as ReactComponent, Fragment, memo, type ReactNode } from "rea
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
 import { resolveSrc } from "./components/media";
-import { useEditorProviders } from "./components/providers";
+import { useEditorContext } from "./components/context";
 import { content, contentClass } from "./styles/content";
 import { consts } from "./styles/consts.stylex";
 import { chrome } from "./styles/shared";
@@ -22,7 +22,7 @@ import { chrome } from "./styles/shared";
 type SpecMap = Map<string, UiComponentSpec>;
 
 function StaticImg({ node }: { node: JSONContent }) {
-  const { media } = useEditorProviders();
+  const { media } = useEditorContext();
   return (
     <img
       className={contentClass.image}

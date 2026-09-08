@@ -1,141 +1,17 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
-import { tokens } from "./styles/tokens.stylex";
-import type { DocSnapshot, ParsedDoc, SyntaxOptions } from "@fumadocs-editor/core/parse";
-import type { Editor } from "@tiptap/core";
-import { Tabs } from "@base-ui/react/tabs";
-import {
-  Suspense,
-  lazy,
-  memo,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type Ref,
-} from "react";
-import { StaticMdx } from "./static-mdx";
-import { parseDocCached, sameOptions } from "./doc-cache";
-import type { EditorCollab } from "./collab";
-import type { SerializeFn } from "./live-editor";
-import type {
-  FileSession,
-  ReadResult,
-  SessionStatus,
-  SyncTransport,
-  WsTransport,
-} from "@fumadocs-editor/core/sync";
-import type { FileProvider, MediaProvider } from "./components/media";
-import { ProvidersContext } from "./components/providers";
-import { specsByType, type UiComponentSpec } from "./components/spec";
-import { fumadocsUiComponents } from "./components/fumadocs-ui";
-import { chrome } from "./styles/shared";
+import type { ReactNode } from "react";
+import { MdxEditorRoot, useEditorMode, type MdxEditorRootProps } from "./root";
+import { ModeTabs, SourceSurface, SyncStatus, VisualSurface } from "./surfaces";
 import { consts } from "./styles/consts.stylex";
-import { contentClass } from "./styles/content";
-import { useEditorTheme, type EditorTheme } from "./theme";
+import { tokens } from "./styles/tokens.stylex";
 
-const LiveEditor = lazy(() => import("./live-editor").then((m) => ({ default: m.LiveEditor })));
-
-export interface MdxEditorRef {
-  /** serialize; unedited blocks are byte-identical */
-  getMarkdown: () => string;
-  /**
-   * Merge on-disk markdown into the live document. Disk-only block changes
-   * apply as one non-undoable transaction; the caret stays put. Blocks
-   * edited on both sides keep local. Returns conflicting local child
-   * indices (`-1` = whole document, e.g. raw-source mode).
-   */
-  applyExternalMarkdown: (text: string) => Promise<number[]>;
-  /** replace the document (e.g. conflict: take disk) */
-  setMarkdown: (text: string) => Promise<void>;
-  /**
-   * Saved as `text`: adopt it as the merge base, do not touch the live
-   * document. `FileSession` calls this after every write.
-   */
-  markSaved: (text: string) => void;
-  /** the visual editor or the MDX source */
-  getMode: () => EditorMode;
-  /**
-   * Switch between the visual editor and the MDX source. Source that fails
-   * to parse stays in source mode with the error shown.
-   */
-  setMode: (mode: EditorMode) => void;
-}
-
-export type EditorMode = "visual" | "source";
-
-/** presence identity shown at a user's caret on other clients */
-export interface CollabUser {
-  name: string;
-  color: string;
-}
-
-export interface MdxEditorSync {
-  /** root-relative path on the sync server */
-  path: string;
-  /**
-   * Sync transport. Default: one shared websocket to the current host
-   * (`wsTransport()`). Pass your own for auth or a custom backend.
-   */
-  transport?: SyncTransport;
-  /**
-   * Collaborative editing. The server holds the document (single writer),
-   * peer carets show live, undo is your edits only. `true` joins as a
-   * guest; pass `user` for presence. Needs the websocket transport.
-   */
-  collab?: boolean | { user?: CollabUser };
-  /** also shown beside the mode tabs; use this to mirror it elsewhere */
-  onStatus?: (status: SessionStatus) => void;
-  /**
-   * File was read: text plus scope data. Does not change editor behavior;
-   * wire `writable` into `editable` yourself.
-   */
-  onOpen?: (result: ReadResult) => void;
-}
-
-export interface MdxEditorProps {
-  /** initial MDX; with `sync`, the file content is used instead */
-  defaultValue?: string;
-  /** serialized MDX after each change (debounced) */
-  onChange?: (markdown: string) => void;
-  /** editable MDX components; defaults to fumadocs-ui */
-  components?: UiComponentSpec[];
-  /**
-   * Parse-level dialects beyond component specs, e.g. `{ math: true }`.
-   * Combined with `components` into the document's `Syntax`.
-   */
-  syntax?: SyntaxOptions;
-  /**
-   * Sync with a file: autosave, live merge of disk edits, conflict chip,
-   * optional collab.
-   */
-  sync?: MdxEditorSync;
-  /**
-   * Reuse a parsed document across mounts (small LRU). Default: `sync.path`.
-   */
-  cacheKey?: string;
+export interface MdxEditorProps extends MdxEditorRootProps {
   /**
    * First paint without parsing. Markup should match the document so the
    * swap on hydrate does not shift.
    */
   staticFallback?: ReactNode;
-  /**
-   * Pin a colour theme. Omit to inherit {@link EditorThemeProvider},
-   * `next-themes` `.dark`, or the OS preference.
-   */
-  theme?: EditorTheme;
-  /** uploads and display URL resolution */
-  media?: MediaProvider;
-  /** include paths, page links */
-  files?: FileProvider;
-  /**
-   * TipTap passthrough, default true. `false`: read-only, no mutating
-   * chrome. Does not enforce auth; wire scope `writable` in yourself.
-   */
-  editable?: boolean;
   /**
    * `card` (default): a bordered box among other page content. `page`: the
    * editor is the page: the header stays at the top while the document
@@ -146,30 +22,7 @@ export interface MdxEditorProps {
   /** extra controls in the header: `start` before the sync status, `end` after the mode tabs */
   header?: { start?: ReactNode; end?: ReactNode };
   className?: string;
-  ref?: Ref<MdxEditorRef>;
 }
-
-interface SyncIndicatorProps {
-  status: SessionStatus;
-  onKeepMine?: () => void;
-  onTakeDisk?: () => void;
-  onFlush?: () => void;
-}
-
-export interface CollabLink {
-  transport: WsTransport;
-  path: string;
-  user: CollabUser;
-}
-
-interface EditorViewProps extends Omit<MdxEditorProps, "sync"> {
-  sync?: SyncIndicatorProps;
-  collab?: CollabLink;
-}
-
-type Stage = "static" | "mounting" | "live";
-
-const pulse = stylex.keyframes({ "50%": { opacity: 0.5 } });
 
 const styles = stylex.create({
   root: {
@@ -219,86 +72,6 @@ const styles = stylex.create({
     paddingBlock: "0.375rem",
   },
   grow: { flex: 1, minWidth: 0 },
-  tabs: {
-    boxSizing: "border-box",
-    display: "flex",
-    flexShrink: 0,
-    gap: "0.125rem",
-    borderRadius: "0.5rem",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: tokens.border,
-    backgroundColor: tokens.muted,
-    padding: "0.125rem",
-  },
-  tab: {
-    boxSizing: "border-box",
-    cursor: "pointer",
-    borderRadius: "0.375rem",
-    paddingInline: "0.75rem",
-    paddingBlock: "0.125rem",
-    fontSize: 12.5,
-    fontWeight: 500,
-    outline: "none",
-    color: {
-      default: tokens.mutedForeground,
-      ":hover": tokens.foreground,
-      ":is([data-active])": tokens.foreground,
-    },
-    backgroundColor: {
-      default: "transparent",
-      ":hover": `color-mix(in oklab, ${tokens.background} 70%, transparent)`,
-      ":is([data-active])": tokens.background,
-    },
-    boxShadow: {
-      default: null,
-      ":is([data-active])": consts.shadowSm,
-      ":focus-visible": consts.focusRing,
-    },
-  },
-  status: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    paddingInlineStart: "0.375rem",
-    fontSize: 12,
-    color: tokens.mutedForeground,
-  },
-  dot: { width: "0.375rem", height: "0.375rem", flexShrink: 0, borderRadius: 9999 },
-  synced: { backgroundColor: tokens.success },
-  dirty: { backgroundColor: tokens.warning },
-  saving: {
-    backgroundColor: tokens.warning,
-    animationName: pulse,
-    animationDuration: "2s",
-    animationTimingFunction: "cubic-bezier(0.4, 0, 0.6, 1)",
-    animationIterationCount: "infinite",
-    animationPlayState: { default: null, [consts.reduceMotion]: "paused" },
-  },
-  conflict: { backgroundColor: tokens.error },
-  offline: { backgroundColor: tokens.mutedForeground },
-  denied: { backgroundColor: tokens.error },
-  label: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  actions: { display: "flex", flexShrink: 0, alignItems: "center", gap: "0.25rem" },
-  conflictBtn: {
-    boxSizing: "border-box",
-    cursor: "pointer",
-    borderRadius: "0.375rem",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: tokens.border,
-    backgroundColor: {
-      default: tokens.background,
-      ":hover": tokens.accent,
-      ":active": tokens.border,
-    },
-    paddingInline: "0.5rem",
-    paddingBlock: "0.125rem",
-    fontSize: 11.5,
-    fontWeight: 500,
-    color: tokens.foreground,
-  },
-  body: { position: "relative" },
   // centered in the viewport when there is room, else right of the inset
   pageColumn: {
     flex: 1,
@@ -310,582 +83,58 @@ const styles = stylex.create({
       [consts.reduceMotion]: "none",
     },
   },
-  staticView: { cursor: "text", outline: "none" },
-  source: { display: "flex", flex: 1, flexDirection: "column" },
-  sourceError: {
-    margin: 0,
-    borderBottomWidth: 1,
-    borderBottomStyle: "solid",
-    borderBottomColor: tokens.border,
-    backgroundColor: `color-mix(in oklab, ${tokens.error} 10%, transparent)`,
-    paddingInline: "1.25rem",
-    paddingBlock: "0.625rem",
-    fontFamily: consts.mono,
-    fontSize: 13,
-    whiteSpace: "pre-wrap",
-    color: tokens.error,
-  },
-  textarea: {
-    boxSizing: "border-box",
-    minHeight: 420,
-    flex: 1,
-    resize: "vertical",
-    backgroundColor: tokens.background,
-    paddingInline: "1.25rem",
-    paddingBlock: "1rem",
-    fontFamily: consts.mono,
-    fontSize: tokens.fieldSize,
-    lineHeight: 1.625,
-    color: tokens.foreground,
-    outline: "none",
-    tabSize: 2,
-    boxShadow: {
-      default: null,
-      ":focus-visible": `inset 0 0 0 1px color-mix(in oklab, ${tokens.ring} 40%, transparent)`,
-    },
-  },
-  textareaPage: { resize: "none" },
 });
 
-const SYNC_LABEL: Record<SessionStatus, string> = {
-  synced: "Saved",
-  dirty: "Edited",
-  saving: "Saving…",
-  conflict: "Changed on disk",
-  offline: "Offline",
-  denied: "No access",
-};
+function Frame({
+  staticFallback,
+  variant = "card",
+  header,
+  className,
+}: Omit<MdxEditorProps, keyof MdxEditorRootProps>) {
+  const { mode } = useEditorMode();
+  const page = variant === "page";
+  let rootClass = stylex.props(styles.root, page && styles.page).className!;
+  if (className) rootClass += ` ${className}`;
+  const column = page ? stylex.props(styles.pageColumn).className : undefined;
 
-function SyncIndicator({ status, onKeepMine, onTakeDisk }: SyncIndicatorProps) {
   return (
-    <div {...stylex.props(styles.grow, styles.status)}>
-      <span aria-hidden {...stylex.props(styles.dot, styles[status])} />
-      <span {...stylex.props(styles.label)}>{SYNC_LABEL[status]}</span>
-      {status === "conflict" && (
-        <span {...stylex.props(styles.actions)}>
-          <button
-            type="button"
-            {...stylex.props(chrome.button, styles.conflictBtn, chrome.focusRing)}
-            onClick={onKeepMine}
-          >
-            Keep mine
-          </button>
-          <button
-            type="button"
-            {...stylex.props(chrome.button, styles.conflictBtn, chrome.focusRing)}
-            onClick={onTakeDisk}
-          >
-            Take disk
-          </button>
-        </span>
+    <div className={rootClass}>
+      <div {...stylex.props(styles.bar, page && styles.barPage)}>
+        {header?.start}
+        <div {...stylex.props(styles.grow)}>
+          <SyncStatus />
+        </div>
+        <ModeTabs />
+        {header?.end}
+      </div>
+      {mode === "visual" ? (
+        <VisualSurface staticFallback={staticFallback} className={column} />
+      ) : (
+        <SourceSurface fixed={page} className={column} />
       )}
     </div>
   );
 }
 
-function useStableValue<T>(value: T, equal: (a: T, b: T) => boolean): T {
-  const ref = useRef(value);
-  if (value !== ref.current && !equal(value, ref.current)) ref.current = value;
-  return ref.current;
-}
-
-function sameSpecs(a: UiComponentSpec[], b: UiComponentSpec[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
-const EditorView = memo(function EditorView({
-  defaultValue = "",
-  onChange,
-  components: componentsProp,
-  syntax: syntaxProp,
-  cacheKey,
-  staticFallback,
-  theme,
-  sync,
-  collab,
-  media,
-  files,
-  editable = true,
-  variant = "card",
-  header,
-  className,
-  ref,
-}: EditorViewProps) {
-  const components = useStableValue(componentsProp ?? fumadocsUiComponents, sameSpecs);
-  const syntax = useStableValue(syntaxProp, sameOptions);
-  const specMap = useMemo(() => specsByType(components), [components]);
-  const ambient = useEditorTheme();
-  const scoped = theme === "system" ? ambient.resolvedTheme : theme;
-
-  const [parsed, setParsed] = useState<ParsedDoc | null>(null);
-  const [stage, setStage] = useState<Stage>("static");
-  const [mode, setMode] = useState<EditorMode>("visual");
-  const [source, setSource] = useState("");
-  const [sourceError, setSourceError] = useState<string | null>(null);
-
-  const editorRef = useRef<Editor | null>(null);
-  const serializeRef = useRef<SerializeFn | null>(null);
-  const snapshotRef = useRef<DocSnapshot | undefined>(undefined);
-  const captureRef = useRef<{ point?: { x: number; y: number }; keys: string[] }>({ keys: [] });
-
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  const beginLive = () => setStage((current) => (current === "static" ? "mounting" : current));
-  const onReady = useCallback((editor: Editor, serialize: SerializeFn) => {
-    editorRef.current = editor;
-    serializeRef.current = serialize;
-    setStage("live");
-  }, []);
-
-  // `generation` bumps on server re-seed (restart); Y history cannot merge.
-  const [collabRuntime, setCollabRuntime] = useState<EditorCollab | null>(null);
-  const [generation, setGeneration] = useState(0);
-  const collabTransport = collab?.transport;
-  const collabPath = collab?.path;
-  const collabRef = useRef(collab);
-  collabRef.current = collab;
-  useEffect(() => {
-    if (!collabTransport) return;
-    let session: EditorCollab | undefined;
-    let cancelled = false;
-    void import("./collab").then((module) => {
-      if (cancelled) return;
-      session = module.startCollab(collabRef.current!, components, syntax, () => {
-        editorRef.current = null;
-        setStage("static");
-        setGeneration((current) => current + 1);
-      });
-      setCollabRuntime(session);
-    });
-    return () => {
-      cancelled = true;
-      session?.destroy();
-      setCollabRuntime(null);
-    };
-  }, [collabTransport, collabPath, components, syntax, generation]);
-
-  useEffect(() => {
-    if (parsed || sourceError || mode !== "visual") return;
-    if (staticFallback && stage === "static") return;
-    let cancelled = false;
-    parseDocCached(cacheKey, defaultValue, components, syntax).then(
-      (result) => {
-        if (cancelled) return;
-        snapshotRef.current = result.snapshot;
-        setParsed(result);
-      },
-      (error: unknown) => {
-        if (cancelled) return;
-        setSourceError(String(error));
-        setSource(defaultValue);
-        setMode("source");
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    parsed,
-    sourceError,
-    mode,
-    stage,
-    staticFallback,
-    cacheKey,
-    defaultValue,
-    components,
-    syntax,
-  ]);
-
-  useEffect(() => {
-    if (stage !== "static" || mode !== "visual") return;
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(() => beginLive(), { timeout: 1500 });
-      return () => cancelIdleCallback(id);
-    }
-    const id = setTimeout(beginLive, 200);
-    return () => clearTimeout(id);
-  }, [stage, mode]);
-
-  // replay clicks/keys captured on the static view through the live keymap
-  useEffect(() => {
-    if (stage !== "live") return;
-    const editor = editorRef.current;
-    const { point, keys } = captureRef.current;
-    captureRef.current = { keys: [] };
-    if (!editor || (!point && keys.length === 0)) return;
-    if (point) {
-      const found = editor.view.posAtCoords({ left: point.x, top: point.y });
-      editor.commands.focus(found ? found.pos : "start");
-    } else {
-      editor.commands.focus("start");
-    }
-    let run = "";
-    const flush = () => {
-      if (run === "") return;
-      editor.commands.insertContent({ type: "text", text: run });
-      run = "";
-    };
-    for (const key of keys) {
-      if (key.length === 1) run += key;
-      else {
-        flush();
-        editor.commands.keyboardShortcut(key);
-      }
-    }
-    flush();
-  }, [stage]);
-
-  const getMarkdown = () => {
-    if (mode === "source") return source;
-    const editor = editorRef.current;
-    const serialize = serializeRef.current;
-    return editor && serialize ? serialize(editor.state.doc, snapshotRef.current) : defaultValue;
-  };
-
-  const applyExternalMarkdown = async (text: string): Promise<number[]> => {
-    if (mode === "source") return [-1];
-
-    const editor = editorRef.current;
-    const snapshot = snapshotRef.current;
-    if (!editor || !snapshot) {
-      const result = await parseDocCached(cacheKey, text, components, syntax);
-      snapshotRef.current = result.snapshot;
-      setParsed(result);
-      return [];
-    }
-
-    const { mergeRemote } = await import("@fumadocs-editor/core/serialize");
-    const { doc } = editor.state;
-    const result = mergeRemote({ base: snapshot, local: doc.toJSON(), remoteText: text });
-
-    if (result.ops.length > 0) {
-      const starts: number[] = [];
-      const ends: number[] = [];
-      doc.forEach((child, offset) => {
-        starts.push(offset);
-        ends.push(offset + child.nodeSize);
-      });
-      // pre-merge positions via mapping; bias 1 keeps successive inserts in order
-      const tr = editor.state.tr;
-      for (const op of result.ops) {
-        if (op.type === "insert") {
-          const at = tr.mapping.map(op.after < 0 ? 0 : ends[op.after], 1);
-          tr.insert(at, editor.schema.nodeFromJSON(op.node));
-        } else {
-          const from = tr.mapping.map(starts[op.local], 1);
-          const to = tr.mapping.map(ends[op.local], -1);
-          if (op.type === "replace") tr.replaceWith(from, to, editor.schema.nodeFromJSON(op.node));
-          else tr.delete(from, to);
-        }
-      }
-      tr.setMeta("addToHistory", false);
-      editor.view.dispatch(tr);
-    }
-    snapshotRef.current = result.remote.snapshot;
-    return result.conflicts;
-  };
-
-  const setMarkdown = async (text: string): Promise<void> => {
-    const result = await parseDocCached(cacheKey, text, components, syntax);
-    snapshotRef.current = result.snapshot;
-    setParsed(result);
-    setSourceError(null);
-    // not an edit: no update event, so the session does not save it back
-    if (mode === "source") setSource(text);
-    else editorRef.current?.commands.setContent(result.doc, { emitUpdate: false });
-  };
-
-  const markSaved = (text: string) => {
-    void parseDocCached(cacheKey, text, components, syntax).then((result) => {
-      snapshotRef.current = result.snapshot;
-    });
-  };
-
-  useImperativeHandle(ref, () => ({
-    getMarkdown,
-    applyExternalMarkdown,
-    setMarkdown,
-    markSaved,
-    getMode: () => mode,
-    setMode: switchMode,
-  }));
-
-  function switchMode(next: EditorMode) {
-    if (next === mode) return;
-
-    if (next === "source") {
-      setSource(getMarkdown());
-      setMode("source");
-      editorRef.current = null; // LiveEditor unmounts and destroys the editor
-      return;
-    }
-
-    void parseDocCached(cacheKey, source, components, syntax).then(
-      (result) => {
-        snapshotRef.current = result.snapshot;
-        setParsed(result);
-        setSourceError(null);
-        setMode("visual");
-        setStage("static");
-      },
-      (error: unknown) => setSourceError(String(error)),
-    );
-  }
-
-  const providers = useMemo(() => ({ media, files }), [media, files]);
-  const providersRef = useRef(providers);
-  providersRef.current = providers;
-
-  const page = variant === "page";
-  let rootClass = stylex.props(styles.root, page && styles.page).className!;
-  if (scoped) rootClass += ` ${scoped}`;
-  if (className) rootClass += ` ${className}`;
-
+/**
+ * The ready-made editor: sync status, Visual / MDX tabs, one surface at a
+ * time. Compose your own layout from the parts when this does not fit.
+ */
+export function MdxEditor({ staticFallback, variant, header, className, ...root }: MdxEditorProps) {
   return (
-    <ProvidersContext.Provider value={providers}>
-      <div
-        data-fde-root=""
-        className={rootClass}
-        onKeyDown={(event) => {
-          if (sync?.onFlush && (event.metaKey || event.ctrlKey) && event.key === "s") {
-            event.preventDefault();
-            sync.onFlush();
-          }
-        }}
-      >
-        <Tabs.Root
-          value={mode}
-          onValueChange={(value) => switchMode(value as EditorMode)}
-          {...stylex.props(styles.bar, page && styles.barPage)}
-        >
-          {header?.start}
-          {sync ? <SyncIndicator {...sync} /> : <span {...stylex.props(styles.grow)} />}
-          <Tabs.List {...stylex.props(styles.tabs)}>
-            <Tabs.Tab {...stylex.props(chrome.button, styles.tab)} value="visual">
-              Visual
-            </Tabs.Tab>
-            <Tabs.Tab
-              {...stylex.props(chrome.button, styles.tab)}
-              value="source"
-              disabled={collab != null}
-            >
-              MDX
-            </Tabs.Tab>
-          </Tabs.List>
-          {header?.end}
-        </Tabs.Root>
-        {mode === "visual" ? (
-          <div data-fde-overlay="" {...stylex.props(styles.body, page && styles.pageColumn)}>
-            {stage !== "static" && parsed && (!collab || collabRuntime) && (
-              <Suspense fallback={null}>
-                <LiveEditor
-                  key={generation}
-                  collab={collabRuntime ?? undefined}
-                  editable={editable}
-                  doc={parsed.doc}
-                  components={components}
-                  specs={specMap}
-                  providers={providersRef}
-                  syntax={syntax}
-                  snapshotRef={snapshotRef}
-                  onChangeRef={onChangeRef}
-                  hidden={stage !== "live"}
-                  onReady={onReady}
-                />
-              </Suspense>
-            )}
-            {stage !== "live" && (
-              <div
-                {...stylex.props(styles.staticView)}
-                tabIndex={0}
-                onPointerDown={(event) => {
-                  captureRef.current.point = { x: event.clientX, y: event.clientY };
-                  beginLive();
-                }}
-                onKeyDown={(event) => {
-                  const { key } = event;
-                  if (
-                    editable &&
-                    !event.metaKey &&
-                    !event.ctrlKey &&
-                    !event.altKey &&
-                    (key.length === 1 || key === "Enter" || key === "Backspace")
-                  ) {
-                    captureRef.current.keys.push(key);
-                    event.preventDefault();
-                  }
-                  beginLive();
-                }}
-                onFocus={beginLive}
-              >
-                {staticFallback ??
-                  (parsed ? (
-                    <StaticMdx doc={parsed.doc} specs={specMap} />
-                  ) : (
-                    <div className={`ProseMirror ${contentClass.root}`} aria-hidden />
-                  ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div {...stylex.props(styles.source, page && styles.pageColumn)}>
-            {sourceError != null && <div {...stylex.props(styles.sourceError)}>{sourceError}</div>}
-            <textarea
-              {...stylex.props(chrome.input, styles.textarea, page && styles.textareaPage)}
-              value={source}
-              readOnly={!editable}
-              spellCheck={false}
-              onChange={(event) => {
-                setSource(event.target.value);
-                onChangeRef.current?.(event.target.value);
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </ProvidersContext.Provider>
-  );
-});
-
-let sharedTransport: WsTransport | undefined;
-
-const GUEST_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
-
-function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
-  if (typeof ref === "function") ref(value);
-  else if (ref) ref.current = value;
-}
-
-interface SyncLink {
-  text: string;
-  collab?: CollabLink;
-}
-
-function SyncedEditor({ sync, ref, ...props }: MdxEditorProps & { sync: MdxEditorSync }) {
-  const { path, transport: transportProp } = sync;
-  const collabOn = Boolean(sync.collab);
-  const [link, setLink] = useState<SyncLink | null>(null);
-  const [status, setStatus] = useState<SessionStatus>("synced");
-  const viewRef = useRef<MdxEditorRef | null>(null);
-  const sessionRef = useRef<FileSession | null>(null);
-  const latest = useRef({ sync, props, ref });
-  latest.current = { sync, props, ref };
-  // stable: a fresh callback would re-render the memoized view on every host render
-  const attach = useCallback((value: MdxEditorRef | null) => {
-    viewRef.current = value;
-    assignRef(latest.current.ref, value);
-  }, []);
-
-  useEffect(() => {
-    let open = true;
-    let session: FileSession | undefined;
-    let stopStatus = () => {};
-    setLink(null);
-    const report = (next: SessionStatus) => {
-      if (!open) return;
-      setStatus(next);
-      latest.current.sync.onStatus?.(next);
-    };
-    void import("@fumadocs-editor/core/sync").then((mod) => {
-      if (!open) return;
-      const transport = transportProp ?? (sharedTransport ??= mod.wsTransport());
-      let read: Promise<ReadResult>;
-      if (collabOn) {
-        if (!("sendBinary" in transport)) {
-          throw new Error("collab needs the websocket transport");
-        }
-        const ws = transport as WsTransport;
-        stopStatus = ws.onStatus((next) => report(next === "online" ? "synced" : next));
-        read = ws.read(path);
-      } else {
-        session = mod.createFileSession({
-          transport,
-          path,
-          document: {
-            getMarkdown: () => viewRef.current?.getMarkdown() ?? "",
-            applyExternalMarkdown: async (text) =>
-              (await viewRef.current?.applyExternalMarkdown(text)) ?? [],
-            setMarkdown: async (text) => viewRef.current?.setMarkdown(text),
-            markSaved: (text) => viewRef.current?.markSaved(text),
-          },
-          onStatus: report,
-        });
-        sessionRef.current = session;
-        read = session.open();
-      }
-      read.then(
-        (result) => {
-          if (!open) return;
-          const { sync: current } = latest.current;
-          current.onOpen?.(result);
-          const user = (typeof current.collab === "object" && current.collab.user) || {
-            name: "Guest",
-            color: GUEST_COLORS[Math.floor(Math.random() * GUEST_COLORS.length)],
-          };
-          setLink({
-            text: result.text,
-            collab: collabOn ? { transport: transport as WsTransport, path, user } : undefined,
-          });
-        },
-        () => {
-          if (open) setLink({ text: latest.current.props.defaultValue ?? "" });
-        },
-      );
-    });
-    return () => {
-      open = false;
-      stopStatus();
-      void session?.flush();
-      session?.close();
-      sessionRef.current = null;
-    };
-  }, [path, transportProp, collabOn]);
-
-  useEffect(() => {
-    const flush = () => void sessionRef.current?.flush();
-    window.addEventListener("blur", flush);
-    window.addEventListener("beforeunload", flush);
-    return () => {
-      window.removeEventListener("blur", flush);
-      window.removeEventListener("beforeunload", flush);
-    };
-  }, []);
-
-  const onChange = useCallback((markdown: string) => {
-    sessionRef.current?.changed();
-    latest.current.props.onChange?.(markdown);
-  }, []);
-
-  const indicator = useMemo<SyncIndicatorProps>(
-    () => ({
-      status,
-      onKeepMine: () => void sessionRef.current?.keepMine(),
-      onTakeDisk: () => void sessionRef.current?.takeDisk(),
-      onFlush: () => void sessionRef.current?.flush(),
-    }),
-    [status],
-  );
-
-  if (!link) return null;
-  return (
-    <EditorView
-      key={path}
-      {...props}
-      defaultValue={link.text}
-      cacheKey={props.cacheKey ?? path}
-      onChange={onChange}
-      sync={indicator}
-      collab={link.collab}
-      ref={attach}
-    />
+    <MdxEditorRoot {...root}>
+      <Frame
+        staticFallback={staticFallback}
+        variant={variant}
+        header={header}
+        className={className}
+      />
+    </MdxEditorRoot>
   );
 }
 
-export function MdxEditor({ sync, ...props }: MdxEditorProps) {
-  return sync ? <SyncedEditor sync={sync} {...props} /> : <EditorView {...props} />;
-}
+MdxEditor.Root = MdxEditorRoot;
+MdxEditor.Visual = VisualSurface;
+MdxEditor.Source = SourceSurface;
+MdxEditor.Status = SyncStatus;
+MdxEditor.Tabs = ModeTabs;

@@ -3,29 +3,19 @@ import * as stylex from "@stylexjs/stylex";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createSyntax, editorExtensions } from "@fumadocs-editor/core/extensions";
 import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
-import type { DocSnapshot, SyntaxOptions } from "@fumadocs-editor/core/parse";
 import type { Editor, JSONContent } from "@tiptap/core";
-import type { Node as PMNode } from "@tiptap/pm/model";
-import {
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type RefObject,
-} from "react";
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
+import { useEditorContext } from "./components/context";
 import { mathExtensions } from "./components/math";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
 import { BlockGutter } from "./block-gutter";
-import type { UiComponentSpec } from "./components/spec";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
-import type { EditorProviders } from "./components/providers";
 import type { EditorCollab } from "./collab";
+import type { SerializeFn } from "./store";
 import { contentClass } from "./styles/content";
 import { contentStyles } from "./components/content-styles";
 import { settled as settledMarker } from "./styles/markers.stylex";
@@ -43,128 +33,91 @@ const editorProps = {
   },
 };
 
-export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
-
-function useMediaQuery(query: string): boolean {
-  const [subscribe, getSnapshot] = useMemo(() => {
-    let list: MediaQueryList | undefined;
-    const resolve = () => (list ??= window.matchMedia(query));
-    return [
-      (onChange: () => void) => {
-        resolve().addEventListener("change", onChange);
-        return () => resolve().removeEventListener("change", onChange);
-      },
-      () => resolve().matches,
-    ] as const;
-  }, [query]);
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
+let coarse: MediaQueryList | undefined;
+const coarsePointer = () => (coarse ??= window.matchMedia("(pointer: coarse)"));
+const subscribeCoarse = (onChange: () => void) => {
+  coarsePointer().addEventListener("change", onChange);
+  return () => coarsePointer().removeEventListener("change", onChange);
+};
+const isCoarse = () => coarsePointer().matches;
+const noTouch = () => false;
 
 export interface LiveEditorProps {
-  doc: JSONContent;
-  components: UiComponentSpec[];
-  specs: Map<string, UiComponentSpec>;
-  /** read by the extensions when they act, so the editor outlives provider changes */
-  providers: RefObject<EditorProviders>;
-  snapshotRef: RefObject<DocSnapshot | undefined>;
-  onChangeRef: RefObject<((markdown: string) => void) | undefined>;
-  onReady: (editor: Editor, serialize: SerializeFn) => void;
-  hidden: boolean;
-  editable: boolean;
-  syntax?: SyntaxOptions;
+  content: JSONContent;
   collab?: EditorCollab;
+  editable: boolean;
+  hidden: boolean;
+  onReady: (editor: Editor, serialize: SerializeFn) => void;
 }
 
 export const LiveEditor = memo(function LiveEditor({
-  doc,
-  components,
-  specs,
-  providers,
-  snapshotRef,
-  onChangeRef,
-  onReady,
-  hidden,
-  editable,
-  syntax,
+  content,
   collab,
+  editable,
+  hidden,
+  onReady,
 }: LiveEditorProps) {
-  const extensions = useMemo(
-    () => [
-      ...editorExtensions({
-        componentNodes: false,
-        codeBlock: false,
-        image: false,
-        mathNodes: false,
-        history: !collab,
-      }),
-      contentStyles,
-      codeBlockExtension(),
-      imageExtension(providers),
-      ...componentExtensions(specs),
-      ...mathExtensions(syntax?.math === true),
-      slashMenu(specs, providers, syntax?.math),
-      fileSuggest(specs, providers),
-      linkSuggest(providers),
-      ...(collab ? collab.extensions : []),
-    ],
-    [providers, specs, syntax, collab],
-  );
-  const serialize = useMemo(
-    () => createIncrementalSerializer(createSyntax(components, syntax)),
-    [components, syntax],
-  );
-
-  const serializeTimer = useRef<number>(undefined);
-  useEffect(() => () => clearTimeout(serializeTimer.current), []);
+  const { store } = useEditorContext();
+  const [{ extensions, serialize }] = useState(() => {
+    const { components, specs, syntax } = store;
+    return {
+      extensions: [
+        ...editorExtensions({
+          componentNodes: false,
+          codeBlock: false,
+          image: false,
+          mathNodes: false,
+          history: !collab,
+        }),
+        contentStyles,
+        codeBlockExtension(),
+        imageExtension(store),
+        ...componentExtensions(specs),
+        ...mathExtensions(syntax?.math === true),
+        slashMenu(specs, store, syntax?.math),
+        fileSuggest(specs, store),
+        linkSuggest(store),
+        ...(collab ? collab.extensions : []),
+      ],
+      serialize: createIncrementalSerializer(createSyntax(components, syntax)),
+    };
+  });
 
   const editor = useEditor({
     extensions,
     editable,
     // under collab the server's Y.Doc is the document; seeding content here
     // would sync a duplicate copy into it
-    content: collab ? null : doc,
+    content: collab ? null : content,
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
     editorProps,
     onCreate({ editor }) {
-      if (collab) {
-        void collab.whenSynced.then(() => {
-          if (!editor.isDestroyed) onReady(editor, serialize);
-        });
-      } else {
+      if (!collab) {
         onReady(editor, serialize);
+        return;
       }
-    },
-    onUpdate({ editor }) {
-      if (!onChangeRef.current) return;
-      clearTimeout(serializeTimer.current);
-      serializeTimer.current = window.setTimeout(() => {
-        serializeTimer.current = undefined;
-        onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
-      }, 250);
-    },
-    onBlur({ editor }) {
-      if (serializeTimer.current === undefined) return;
-      clearTimeout(serializeTimer.current);
-      serializeTimer.current = undefined;
-      onChangeRef.current?.(serialize(editor.state.doc, snapshotRef.current));
+      void collab.whenSynced.then(() => {
+        if (!editor.isDestroyed) onReady(editor, serialize);
+      });
     },
   });
 
+  // useEditor keeps the instance's own editable flag when options change
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
 
-  const touch = useMediaQuery("(pointer: coarse)");
+  const touch = useSyncExternalStore(subscribeCoarse, isCoarse, noTouch);
 
   // insert animations arm one painted frame after the editor shows: the
   // hydration swap must not move; only real insertions animate
-  const [settled, setSettled] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (hidden || !editor) return;
     let inner: number;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setSettled(true));
+      inner = requestAnimationFrame(() => frame.current?.setAttribute("data-fde-settled", ""));
     });
     return () => {
       cancelAnimationFrame(outer);
@@ -173,16 +126,12 @@ export const LiveEditor = memo(function LiveEditor({
   }, [hidden, editor]);
 
   return (
-    <div
-      {...stylex.props(styles.frame, settledMarker)}
-      hidden={hidden}
-      data-fde-settled={settled || undefined}
-    >
+    <div ref={frame} {...stylex.props(styles.frame, settledMarker)} hidden={hidden}>
       <EditorContent editor={editor} />
       {editor && editable && (
         <>
           <BlockGutter editor={editor} touch={touch} />
-          <EditorBubble editor={editor} specs={specs} touch={touch} />
+          <EditorBubble editor={editor} specs={store.specs} touch={touch} />
         </>
       )}
     </div>

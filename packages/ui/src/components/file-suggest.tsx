@@ -4,12 +4,10 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { FileText } from "lucide-react";
-import type { RefObject } from "react";
 import { INLINE_REGION_NODE, componentRegions } from "@fumadocs-editor/core/extensions";
 import { SlashPopup, suggestionRender, type PopupProps, type SlashItem } from "../slash-menu";
 import type { UiComponentSpec } from "./spec";
-import type { FileProvider } from "./media";
-import type { EditorProviders } from "./providers";
+import type { EditorProviders, FileProvider } from "./media";
 
 interface ActivePath {
   from: number;
@@ -34,7 +32,7 @@ function activePath(state: EditorState, specs: Map<string, UiComponentSpec>): Ac
 
 export function fileSuggest(
   specs: Map<string, UiComponentSpec>,
-  providers: RefObject<EditorProviders>,
+  providers: EditorProviders,
 ): Extension {
   return Extension.create({
     name: "fdeFileSuggest",
@@ -90,7 +88,7 @@ export function fileSuggest(
           view: () => ({
             update: (view) => {
               active = activePath(view.state, specs);
-              const { files } = providers.current;
+              const { files } = providers;
               if (!active || !files) {
                 dismissed = null;
                 hide();
@@ -154,7 +152,7 @@ export function fileSuggest(
   });
 }
 
-export function linkSuggest(providers: RefObject<EditorProviders>): Extension {
+export function linkSuggest(providers: EditorProviders): Extension {
   let listed: FileProvider | undefined;
   let paths: string[] = [];
 
@@ -183,7 +181,7 @@ export function linkSuggest(providers: RefObject<EditorProviders>): Extension {
           editor: this.editor,
           char: "[[",
           allow: ({ state, range }) => {
-            if (!providers.current.files) return false;
+            if (!providers.files) return false;
             const $pos = state.doc.resolve(range.from);
             if (!$pos.parent.type.allowsMarkType(state.schema.marks.link)) return false;
             // attribute regions serialize to plain strings: no links there
@@ -193,7 +191,7 @@ export function linkSuggest(providers: RefObject<EditorProviders>): Extension {
             return true;
           },
           items: async ({ query }) => {
-            const { files } = providers.current;
+            const { files } = providers;
             if (!files) return [];
             if (listed !== files) {
               listed = files;

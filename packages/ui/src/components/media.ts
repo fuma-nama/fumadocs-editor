@@ -22,3 +22,8 @@ export interface FileProvider {
    * document (e.g. "./shared/props.mdx"), relative to the open document */
   list(): Promise<string[]>;
 }
+
+export interface EditorProviders {
+  media?: MediaProvider;
+  files?: FileProvider;
+}

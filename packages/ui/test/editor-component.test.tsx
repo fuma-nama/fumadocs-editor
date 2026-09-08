@@ -5,6 +5,7 @@ import type { Editor } from "@tiptap/core";
 import type { MdxAttribute } from "@fumadocs-editor/core";
 import type { SyncTransport } from "@fumadocs-editor/core/sync";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
+import { useSourceText } from "../src/root";
 import { fumadocsUiComponents } from "../src/components/fumadocs-ui";
 import { setStringProp } from "../src/components/attr-values";
 import type { UiComponentSpec } from "../src/components/spec";
@@ -407,4 +408,57 @@ test("sync: a save advances the merge base, so a later disk edit elsewhere merge
   await settle();
   expect(statuses).not.toContain("conflict");
   expect(editor.state.doc.textContent).toBe("LOCAL First.Second, from disk.");
+});
+
+test("compound: Visual and a custom source surface share one document", async () => {
+  vi.useFakeTimers();
+  const editorRef = { current: null as MdxEditorRef | null };
+  const seen: string[] = [];
+  function Source() {
+    const { value, onChange, readOnly } = useSourceText();
+    seen.push(value);
+    return createElement("input", {
+      "data-source": "",
+      value,
+      readOnly,
+      onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+    });
+  }
+  host = document.body.appendChild(document.createElement("div"));
+  root = createRoot(host);
+  act(() =>
+    root!.render(
+      createElement(
+        MdxEditor.Root,
+        { defaultValue: "Hello.\n", ref: editorRef },
+        createElement(MdxEditor.Visual),
+        createElement(Source),
+      ),
+    ),
+  );
+  const { editor } = await hydrate();
+  expect(host!.querySelector("textarea")).toBeNull();
+  expect(seen.at(-1)).toBe("Hello.\n");
+
+  // visual edits project into the source after the serialize debounce
+  act(() => {
+    editor.commands.setTextSelection(1);
+    editor.commands.insertContent("Hey. ");
+  });
+  act(() => void vi.advanceTimersByTime(300));
+  expect(seen.at(-1)).toBe("Hey. Hello.\n");
+
+  // source edits parse back into the live document
+  const input = host!.querySelector<HTMLInputElement>("[data-source]")!;
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setter.call(input, "Changed.");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(400);
+    await vi.dynamicImportSettled();
+  });
+  expect(editor.state.doc.textContent).toBe("Changed.");
+  expect(editorRef.current!.getMarkdown()).toBe("Changed.");
 });

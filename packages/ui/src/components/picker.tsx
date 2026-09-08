@@ -51,8 +51,6 @@ export function Picker<T extends PickerItem>({
   items,
   value,
   onPick,
-  open,
-  onOpenChange,
   align = "start",
   side,
   ariaLabel,
@@ -66,8 +64,6 @@ export function Picker<T extends PickerItem>({
   items: readonly T[];
   value: T | undefined;
   onPick: (item: T) => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
   align?: "start" | "end";
   side?: "top" | "bottom";
   ariaLabel?: string;
@@ -87,8 +83,6 @@ export function Picker<T extends PickerItem>({
       onValueChange={(item) => {
         if (item) onPick(item);
       }}
-      open={open}
-      onOpenChange={onOpenChange}
     >
       <Combobox.Trigger
         ref={portal.anchorRef}
