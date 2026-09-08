@@ -1,6 +1,6 @@
 {
   "name": "@fumadocs-editor/ui",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MDX editor for Fumadocs: React component with Base UI chrome",
   "keywords": [
     "editor",
