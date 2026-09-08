@@ -44,7 +44,7 @@ import { DragHandle } from "./drag-handle";
 import { updateAtomAttributes } from "./components/attributes";
 import { handleBlock, movableIn } from "./components/keymap";
 import { Picker } from "./components/picker";
-import { useEditorProviders } from "./components/providers";
+import { useEditorContext } from "./components/context";
 import { chrome } from "./styles/shared";
 
 type Chain = ReturnType<Editor["chain"]>;
@@ -187,16 +187,12 @@ export function activeBlock(editor: Editor): string {
 export function BlockTypePicker({
   editor,
   block,
-  open,
-  onOpenChange,
   side,
   triggerCls,
   container,
 }: {
   editor: Editor;
   block: string;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
   side?: "top" | "bottom";
   triggerCls: string;
   container: HTMLElement | undefined;
@@ -207,8 +203,6 @@ export function BlockTypePicker({
       items={TURN_INTO}
       value={current}
       onPick={(item) => item.run(editor.chain().focus()).run()}
-      open={open}
-      onOpenChange={onOpenChange}
       side={side}
       ariaLabel="Block type"
       triggerCls={triggerCls}
@@ -357,7 +351,7 @@ function LinkControl({
   href: string | null;
   container: HTMLElement | undefined;
 }) {
-  const { files } = useEditorProviders();
+  const { files } = useEditorContext();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [paths, setPaths] = useState<string[]>([]);
@@ -518,7 +512,7 @@ function TableControl({
 }
 
 function ImagePanel({ editor }: { editor: Editor }) {
-  const { media } = useEditorProviders();
+  const { media } = useEditorContext();
   const attrs = editor.getAttributes("image");
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -583,7 +577,6 @@ export function EditorBubble({
   specs: Map<string, UiComponentSpec>;
   touch: boolean;
 }) {
-  const [turnIntoOpen, setTurnIntoOpen] = useState(false);
   // Cmd-. shows the bubble at a resting caret, past `shouldShow`
   const [forced, setForced] = useState(false);
   // Portal target: the menu hides on editor blur unless focus lands inside
@@ -621,10 +614,6 @@ export function EditorBubble({
       };
     },
   });
-
-  useEffect(() => {
-    if (!state?.format) setTurnIntoOpen(false);
-  }, [state?.format]);
 
   const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, state?.block === true);
 
@@ -716,8 +705,6 @@ export function EditorBubble({
           <BlockTypePicker
             editor={editor}
             block={state.turnInto}
-            open={turnIntoOpen}
-            onOpenChange={setTurnIntoOpen}
             triggerCls={ghostSelectClass}
             container={wrapper}
           />

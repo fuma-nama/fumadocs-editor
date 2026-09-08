@@ -6,11 +6,11 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tip
 import type { Editor, Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { ImageIcon } from "lucide-react";
-import { useState, type RefObject } from "react";
+import { useState } from "react";
 import { content } from "../styles/content";
-import { resolveSrc, type MediaProvider } from "./media";
+import { resolveSrc, type EditorProviders, type MediaProvider } from "./media";
 import { isRinged, nodeViewOptions } from "./node-view-options";
-import { useEditorProviders, type EditorProviders } from "./providers";
+import { useEditorContext } from "./context";
 
 const styles = stylex.create({
   wrapper: { display: "inline-block", maxWidth: "100%" },
@@ -54,7 +54,7 @@ export async function insertImages(
 
 function ImageView(props: NodeViewProps) {
   const { node } = props;
-  const { media } = useEditorProviders();
+  const { media } = useEditorContext();
   const selected = isRinged(props);
   const src = (node.attrs.src as string) ?? "";
   const [broken, setBroken] = useState("");
@@ -92,7 +92,7 @@ function imageFiles(transfer: DataTransfer | null): File[] {
   return files;
 }
 
-export function imageExtension(providers: RefObject<EditorProviders>): Extension {
+export function imageExtension(providers: EditorProviders): Extension {
   return Image.extend({
     addNodeView: () => ReactNodeViewRenderer(ImageView, nodeViewOptions),
     addProseMirrorPlugins() {
@@ -101,14 +101,14 @@ export function imageExtension(providers: RefObject<EditorProviders>): Extension
         new Plugin({
           props: {
             handlePaste(view, event) {
-              const { media } = providers.current;
+              const { media } = providers;
               const files = media ? imageFiles(event.clipboardData) : [];
               if (!media || files.length === 0) return false;
               void insertImages(editor, media, files, view.state.selection.from);
               return true;
             },
             handleDrop(view, event) {
-              const { media } = providers.current;
+              const { media } = providers;
               const files = media ? imageFiles(event.dataTransfer) : [];
               if (!media || files.length === 0) return false;
               const at = view.posAtCoords({ left: event.clientX, top: event.clientY });

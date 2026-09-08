@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   createServer,
   mergeConfig,
-  searchForWorkspaceRoot,
+  normalizePath,
   type InlineConfig,
   type Plugin,
   type ViteDevServer,
@@ -58,7 +58,7 @@ const OPTIMIZE = [
   "react-dom",
   "react-dom/client",
 ];
-const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
+const NODE_MODULES = "/node_modules/";
 const CONFIG_ID = "virtual:fumadocs-studio-config";
 const STYLES_ID = "virtual:fumadocs-studio-styles";
 const EMPTY_CONFIG_ID = "\0fumadocs-studio-config";
@@ -69,15 +69,41 @@ const SETTLE_MS = 100;
 function optimizeInclude(): string[] {
   const include: string[] = [];
   for (const spec of OPTIMIZE) {
-    if (fileURLToPath(import.meta.resolve(spec)).includes(NODE_MODULES)) include.push(spec);
+    if (normalizePath(fileURLToPath(import.meta.resolve(spec))).includes(NODE_MODULES)) {
+      include.push(spec);
+    }
   }
   return include;
 }
 
-/** the install root holding every dependency: the path before `node_modules`, else the workspace */
-function depsRoot(): string {
-  const at = studioDir.indexOf(NODE_MODULES);
-  return at < 0 ? searchForWorkspaceRoot(studioDir) : studioDir.slice(0, at);
+/** the package an id under `node_modules` belongs to */
+function packageDir(id: string): string | undefined {
+  const at = id.lastIndexOf(NODE_MODULES);
+  if (at < 0) return;
+  const name = at + NODE_MODULES.length;
+  let end = id.indexOf("/", name);
+  if (id[name] === "@") end = id.indexOf("/", end + 1);
+  if (end > 0) return id.slice(0, end);
+}
+
+/**
+ * Vite serves the modules it resolved, but the fonts a stylesheet references
+ * are checked against `fs.allow` alone. Installs spread packages over many
+ * roots (pnpm's global virtual store, npx caches), so rather than guessing
+ * roots, every package a module loads from becomes servable.
+ */
+function packageAccess(): Plugin {
+  let allow: string[];
+  return {
+    name: "fumadocs-studio:packages",
+    configResolved(config) {
+      allow = config.server.fs.allow;
+    },
+    load(id) {
+      const dir = packageDir(id);
+      if (dir && !allow.some((root) => dir.startsWith(`${root}/`))) allow.push(dir);
+    },
+  };
 }
 
 /** resolution rules shared by the dev server and the config loader */
@@ -87,7 +113,7 @@ export function baseConfig(projectRoot: string): InlineConfig {
     envDir: false,
     root: appDir,
     resolve: { dedupe: PINNED },
-    server: { fs: { allow: [appDir, projectRoot, depsRoot()] } },
+    server: { fs: { allow: [appDir, projectRoot] } },
   };
 }
 
@@ -183,7 +209,7 @@ export async function startStudio(options: StudioOptions): Promise<ViteDevServer
     clearScreen: false,
     // the project's, never this package's: it may be an npx cache
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
-    plugins: [studioPlugin(options), editorSync({ ...sync, root: contentRoot })],
+    plugins: [studioPlugin(options), packageAccess(), editorSync({ ...sync, root: contentRoot })],
     server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },
   } satisfies InlineConfig);

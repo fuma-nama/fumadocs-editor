@@ -17,7 +17,7 @@ import { componentExtensions } from "../src/components/node-views";
 import { codeBlockExtension } from "../src/components/code-block";
 import { mathExtensions } from "../src/components/math";
 import { imageExtension } from "../src/components/image-view";
-import { caret, specs } from "./helpers";
+import { caret, specs, track } from "./helpers";
 
 const syntax = createSyntax(fumadocsUiComponents, { math: true });
 
@@ -43,16 +43,18 @@ function link(a: Y.Doc, b: Y.Doc) {
 }
 
 function collabEditor(ydoc: Y.Doc) {
-  const editor = new Editor({
-    element: document.createElement("div"),
-    extensions: [
-      ...editorExtensions({ components: fumadocsUiComponents, history: false }),
-      ...componentKeymap(specs),
-      structureGuard(specs),
-      caretPolicy,
-      Collaboration.configure({ document: ydoc }),
-    ],
-  });
+  const editor = track(
+    new Editor({
+      element: document.createElement("div"),
+      extensions: [
+        ...editorExtensions({ components: fumadocsUiComponents, history: false }),
+        ...componentKeymap(specs),
+        structureGuard(specs),
+        caretPolicy,
+        Collaboration.configure({ document: ydoc }),
+      ],
+    }),
+  );
   void editor.view;
   return editor;
 }

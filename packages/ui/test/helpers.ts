@@ -1,4 +1,4 @@
-import { expect } from "vitest";
+import { afterEach, expect } from "vitest";
 import { Editor } from "@tiptap/core";
 import {
   createSyntax,
@@ -15,18 +15,35 @@ import { specsByType } from "../src/components/spec";
 export const syntax = createSyntax(fumadocsUiComponents);
 export const specs = specsByType(fumadocsUiComponents);
 
+// prosemirror-view's DOMObserver schedules a 20ms flush from stop() that reads
+// the global `document`; vitest deletes it on jsdom teardown, so a view left
+// alive at the end of a file throws an unhandled error on slow (CI) runners
+const live: Editor[] = [];
+
+/** destroy `editor` after the current test */
+export function track<T extends Editor>(editor: T): T {
+  live.push(editor);
+  return editor;
+}
+
+afterEach(() => {
+  for (const editor of live.splice(0)) editor.destroy();
+});
+
 export function makeEditor(mdx: string) {
   const { doc, snapshot } = parseMdxToDoc(mdx, syntax);
-  const editor = new Editor({
-    element: document.createElement("div"),
-    extensions: [
-      ...editorExtensions({ components: fumadocsUiComponents }),
-      ...componentKeymap(specs),
-      structureGuard(specs),
-      caretPolicy,
-    ],
-    content: doc,
-  });
+  const editor = track(
+    new Editor({
+      element: document.createElement("div"),
+      extensions: [
+        ...editorExtensions({ components: fumadocsUiComponents }),
+        ...componentKeymap(specs),
+        structureGuard(specs),
+        caretPolicy,
+      ],
+      content: doc,
+    }),
+  );
   void editor.view; // the view (and plugin view hooks) mount lazily
   // serialized output must always reparse: structural moves may never emit invalid MDX
   const serialize = () => {

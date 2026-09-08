@@ -24,14 +24,14 @@ import {
   ImageIcon,
   Table2,
 } from "lucide-react";
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
 import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
 import "@tiptap/extension-table";
 import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
-import type { EditorProviders } from "./components/providers";
+import type { EditorProviders } from "./components/media";
 
 const muted = tokens.mutedForeground;
 
@@ -123,9 +123,9 @@ const MATH_ITEMS: SlashItem[] = [
   ),
 ];
 
-function imageItem(providers: RefObject<EditorProviders>): SlashItem {
+function imageItem(providers: EditorProviders): SlashItem {
   return block("Image", <ImageIcon size={15} />, (e, r) => {
-    const { media } = providers.current;
+    const { media } = providers;
     if (media) {
       const input = document.createElement("input");
       input.type = "file";
@@ -291,7 +291,7 @@ export function suggestionRender(): {
 
 export function insertItems(
   specs: Map<string, UiComponentSpec>,
-  providers: RefObject<EditorProviders>,
+  providers: EditorProviders,
   math?: boolean,
 ): SlashItem[] {
   return [...BLOCKS, ...(math ? MATH_ITEMS : []), imageItem(providers), ...componentItems(specs)];
@@ -326,7 +326,7 @@ export function entryItems(
 
 export function slashMenu(
   specMap: Map<string, UiComponentSpec>,
-  providers: RefObject<EditorProviders>,
+  providers: EditorProviders,
   math?: boolean,
 ): Extension {
   const all = insertItems(specMap, providers, math);
