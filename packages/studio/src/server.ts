@@ -9,12 +9,17 @@ import {
   type Plugin,
   type ViteDevServer,
 } from "vite";
-import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
-import { editorSync } from "@fumadocs-editor/core/vite";
-import type { SyncScope } from "@fumadocs-editor/core/node";
-import { TREE_ENDPOINT, TREE_EVENT, type TreeResponse } from "../app/protocol";
+import {
+  ASSET_ENDPOINT,
+  AUTH_HEADER,
+  SYNC_ENDPOINT,
+  UPLOAD_ENDPOINT,
+} from "@fumadocs-editor/core/sync";
+import stylex from "@stylexjs/unplugin/vite";
+import { createSyncServer, type SyncScope } from "@fumadocs-editor/core/node";
+import { TREE_ENDPOINT, TREE_EVENT, type TreeCommand, type TreeResponse } from "../app/protocol";
 import type { StudioOptions } from "./load-config";
-import { openWorkspace } from "./tree";
+import { CommandError, openWorkspace } from "./tree";
 
 const studioDir = path.resolve(import.meta.dirname, "..");
 const appDir = path.join(studioDir, "app");
@@ -29,6 +34,7 @@ const PINNED = [
   "@fumadocs-editor/ui",
   "@fumadocs-editor/core",
   "@base-ui/react",
+  "@stylexjs/stylex",
   "react",
   "react-dom",
 ];
@@ -47,10 +53,13 @@ const OPTIMIZE = [
   "@fumadocs-editor/core/extensions",
   "@fumadocs-editor/core/sync",
   "@fumadocs-editor/core/collab",
+  "@base-ui/react/alert-dialog",
   "@base-ui/react/autocomplete",
   "@base-ui/react/collapsible",
   "@base-ui/react/dialog",
+  "@base-ui/react/menu",
   "@base-ui/react/scroll-area",
+  "@stylexjs/stylex",
   "lucide-react",
   "react",
   "react/jsx-runtime",
@@ -65,6 +74,7 @@ const EMPTY_CONFIG_ID = "\0fumadocs-studio-config";
 const RESOLVED_STYLES_ID = "\0fumadocs-studio-styles";
 /** editors write in bursts; read a changed file once it settles */
 const SETTLE_MS = 100;
+const MAX_COMMAND_BYTES = 64 * 1024;
 
 function optimizeInclude(): string[] {
   const include: string[] = [];
@@ -119,11 +129,56 @@ export function baseConfig(projectRoot: string): InlineConfig {
 
 const ALLOW_ALL: SyncScope = { write: true };
 
+const allows = (rule: SyncScope["read"], target: string) =>
+  typeof rule === "function" ? rule(target) : rule !== false;
+
+function readJson(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_COMMAND_BYTES) {
+        reject(new CommandError(413, "command too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        reject(new CommandError(400, "not a JSON command"));
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+function parseCommand(body: unknown): TreeCommand {
+  const command = body as Partial<Record<string, unknown>> | null;
+  if (command && typeof command === "object") {
+    const { type, path: target, title, dir, order } = command;
+    if (type === "create" && isString(target) && isString(title)) {
+      return { type, path: target, title };
+    }
+    if (type === "mkdir" && isString(dir) && isString(title)) return { type, dir, title };
+    if (type === "delete" && isString(target)) return { type, path: target };
+    if (type === "order" && isString(dir) && Array.isArray(order) && order.every(isString)) {
+      return { type, dir, order };
+    }
+  }
+  throw new CommandError(400, "not a tree command");
+}
+
 function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions): Plugin {
-  const { authenticate } = server;
+  const { authenticate, upload, evictAfterMs, helloTimeoutMs } = server;
   const workspace = openWorkspace(contentRoot);
 
-  const authorize = async (request: IncomingMessage) => {
+  const authorize = async (request: IncomingMessage): Promise<SyncScope | null> => {
     const header = request.headers[AUTH_HEADER];
     let payload: unknown;
     if (typeof header === "string") {
@@ -141,14 +196,8 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
     }
   };
 
-  const serveTree = async (request: IncomingMessage, response: ServerResponse) => {
-    const scope = await authorize(request);
-    if (!scope) {
-      response.statusCode = 401;
-      return response.end();
-    }
-    const read = scope.read ?? true;
-    const tree = (await workspace).tree(typeof read === "function" ? read : () => read);
+  const sendTree = async (scope: SyncScope, response: ServerResponse) => {
+    const tree = (await workspace).tree((target) => allows(scope.read, target));
     response.setHeader("content-type", "application/json");
     response.setHeader("cache-control", "no-store");
     response.end(JSON.stringify({ root: path.basename(contentRoot), tree } satisfies TreeResponse));
@@ -170,6 +219,20 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
       }
     },
     configureServer(vite) {
+      const sync = createSyncServer({
+        root: contentRoot,
+        authenticate,
+        upload,
+        evictAfterMs,
+        helloTimeoutMs,
+      });
+      vite.httpServer?.on("upgrade", (request, socket, head) => {
+        if (request.url === SYNC_ENDPOINT) sync.handleUpgrade(request, socket, head as Buffer);
+      });
+      vite.httpServer?.once("close", () => void sync.close());
+      vite.middlewares.use(UPLOAD_ENDPOINT, sync.handleUpload);
+      vite.middlewares.use(ASSET_ENDPOINT, sync.handleAsset);
+
       // the documents are not modules, so Vite's watcher only feeds the index
       vite.watcher.add(contentRoot);
       const pending = new Map<string, NodeJS.Timeout>();
@@ -190,10 +253,35 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
           }, SETTLE_MS),
         );
       });
+
+      const handle = async (request: IncomingMessage, response: ServerResponse) => {
+        const scope = await authorize(request);
+        if (!scope) throw new CommandError(401, "");
+        if (request.method !== "POST") return sendTree(scope, response);
+        const command = parseCommand(await readJson(request));
+        const ws = await workspace;
+        const target =
+          command.type === "order"
+            ? command.dir
+              ? `${command.dir}/meta.json`
+              : "meta.json"
+            : command.type === "mkdir"
+              ? `${command.dir}/index.mdx`
+              : command.path;
+        if (!allows(scope.write, target))
+          throw new CommandError(403, `no write access to ${target}`);
+        if (command.type === "create") await ws.create(command.path, command.title);
+        else if (command.type === "mkdir") await ws.mkdir(command.dir, command.title);
+        else if (command.type === "delete") {
+          await ws.remove(command.path, () => sync.remove(command.path));
+        } else await ws.order(command.dir, command.order);
+        await sendTree(scope, response);
+      };
       vite.middlewares.use(TREE_ENDPOINT, (request, response) => {
-        serveTree(request, response).catch((error: unknown) => {
-          response.statusCode = 500;
-          response.end(String(error));
+        handle(request, response).catch((error: unknown) => {
+          response.statusCode = error instanceof CommandError ? error.status : 500;
+          response.setHeader("content-type", "text/plain");
+          response.end(error instanceof Error ? error.message : String(error));
         });
       });
     },
@@ -202,18 +290,30 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
 
 /** starts the studio's Vite dev server; resolves once it listens */
 export async function startStudio(options: StudioOptions): Promise<ViteDevServer> {
-  const { projectRoot, contentRoot, port, host, open, server } = options;
-  const { vite: userConfig = {}, ...sync } = server;
+  const { projectRoot, port, host, open, server } = options;
   const config: InlineConfig = mergeConfig(baseConfig(projectRoot), {
     publicDir: false,
     clearScreen: false,
     // the project's, never this package's: it may be an npx cache
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
-    plugins: [studioPlugin(options), packageAccess(), editorSync({ ...sync, root: contentRoot })],
+    plugins: [
+      studioPlugin(options),
+      packageAccess(),
+      // the app's StyleX compiles per request; its CSS is served from a virtual endpoint
+      stylex({
+        dev: false,
+        classNamePrefix: "fds",
+        propertyValidationMode: "throw",
+        unstable_moduleResolution: { type: "commonJS", rootDir: studioDir },
+        lightningcssOptions: {
+          targets: { chrome: 120 << 16, firefox: 120 << 16, safari: 17 << 16 },
+        },
+      }),
+    ],
     server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },
   } satisfies InlineConfig);
-  const vite = await createServer(mergeConfig(config, userConfig));
+  const vite = await createServer(mergeConfig(config, server.vite ?? {}));
   await vite.listen();
   return vite;
 }

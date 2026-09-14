@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Duplex } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -64,6 +64,12 @@ export interface SyncServer {
   handleUpload(request: IncomingMessage, response: ServerResponse): void;
   /** GET asset endpoint (`/<relative>` after the mount prefix), requires read */
   handleAsset(request: IncomingMessage, response: ServerResponse): void;
+  /**
+   * Deletes a mirrored file. Its collaborative document is dropped first,
+   * unsaved edits included: a pending save would otherwise recreate the
+   * file. Callers check permissions themselves.
+   */
+  remove(path: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -453,6 +459,12 @@ export function createSyncServer({
           })
           .pipe(response);
       });
+    },
+
+    async remove(relative) {
+      const target = rel(relative);
+      await authority.drop(target);
+      await unlink(resolveSafe(target));
     },
 
     async close() {

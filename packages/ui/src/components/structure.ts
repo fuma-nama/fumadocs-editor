@@ -174,39 +174,71 @@ function hover(
   return target;
 }
 
-/** a copy of the run for the ghost, and the box it occupies */
-function ghostOf(view: EditorView, from: number, to: number): { el: HTMLElement; rect: DOMRect } {
+/** one box per block of the run; a run inside a textblock is one box */
+function ghostRects(view: EditorView, from: number, to: number): DOMRect[] {
+  const rects: DOMRect[] = [];
+  const $from = view.state.doc.resolve(from);
+  const parent = $from.parent;
+  for (let i = $from.index(), pos = from; pos < to; i++) {
+    const dom = view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) rects.push(dom.getBoundingClientRect());
+    pos += parent.child(i).nodeSize;
+  }
+  if (rects.length > 0) return rects;
   const start = view.domAtPos(from);
   const end = view.domAtPos(to);
   const range = document.createRange();
   range.setStart(start.node, start.offset);
   range.setEnd(end.node, end.offset);
-  const el = document.createElement("div");
-  el.appendChild(range.cloneContents());
-  // the clone leaves the content root: its font and the blocks' gap
-  // (`--fde-gap` on `view.dom`) are inherited there, not in the overlay
-  const host = range.commonAncestorContainer;
-  const style = getComputedStyle(host instanceof Element ? host : host.parentElement!);
-  el.style.font = style.font;
-  el.style.setProperty("--fde-gap", style.getPropertyValue("--fde-gap"));
-  // the block clones' outer margins would offset them inside the ghost's box
-  (el.firstElementChild as HTMLElement | null)?.style.setProperty("margin-top", "0");
-  (el.lastElementChild as HTMLElement | null)?.style.setProperty("margin-bottom", "0");
-  return { el, rect: range.getBoundingClientRect() };
+  return [range.getBoundingClientRect()];
 }
 
-function lift(root: HTMLElement, ghost: HTMLElement, rect: DOMRect, x: number, y: number) {
-  const at = local(root, rect.left, rect.top);
+/**
+ * The lifted blocks' silhouettes. Only their offset from the pointer eases,
+ * from where the blocks sat to the pointer: the pointer's own motion
+ * applies at once, so a moving cursor never fights the slide.
+ */
+function lift(root: HTMLElement, rects: DOMRect[], x: number, y: number) {
+  let left = Infinity;
+  let top = Infinity;
+  for (const rect of rects) {
+    left = Math.min(left, rect.left);
+    top = Math.min(top, rect.top);
+  }
+  const ghost = document.createElement("div");
+  const at = local(root, left, top);
   const base = local(root, x, y);
-  ghost.className += ` ${contentClass.dragGhost}`;
-  ghost.style.cssText += `;position:absolute;left:${at.left}px;top:${at.top}px;width:${rect.width}px;box-sizing:border-box;margin:0;z-index:49;pointer-events:none`;
+  ghost.style.cssText = `position:absolute;left:${at.left}px;top:${at.top}px;z-index:49;pointer-events:none;will-change:transform`;
+  for (const rect of rects) {
+    const shape = document.createElement("div");
+    shape.className = contentClass.dragGhost;
+    shape.style.cssText = `position:absolute;left:${rect.left - left}px;top:${rect.top - top}px;width:${rect.width}px;height:${rect.height}px`;
+    ghost.appendChild(shape);
+  }
   root.appendChild(ghost);
+  const slideMs = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : SLIDE_MS;
+  const started = performance.now();
+  let frame = 0;
+  const render = () => {
+    frame = 0;
+    const now = local(root, x, y);
+    const t = Math.min(1, (performance.now() - started) / slideMs);
+    const k = 1 - (1 - t) ** 3;
+    const dx = (at.left - base.left) * (1 - k);
+    const dy = (at.top - base.top) * (1 - k) + GHOST_GAP * k;
+    ghost.style.transform = `translate(${now.left + dx - at.left}px, ${now.top + dy - at.top}px)`;
+    if (t < 1) frame = requestAnimationFrame(render);
+  };
   return {
-    move(x: number, y: number) {
-      const at = local(root, x, y);
-      ghost.style.transform = `translate(${at.left - base.left}px, ${at.top - base.top}px)`;
+    move(nx: number, ny: number) {
+      x = nx;
+      y = ny;
+      if (!frame) render();
     },
-    remove: () => ghost.remove(),
+    remove() {
+      cancelAnimationFrame(frame);
+      ghost.remove();
+    },
   };
 }
 
@@ -287,6 +319,10 @@ const lifted = new Plugin<BlockRange | null>({
 
 const EDGE = 48;
 
+/** the ghost's top-left slides to the pointer over SLIDE_MS, this far below it */
+const GHOST_GAP = 12;
+const SLIDE_MS = 180;
+
 const SLOP = 3;
 
 /**
@@ -307,7 +343,7 @@ export function startPointerDrag(
   const { from, to } = range;
   if (to <= from) return;
   setLifted(view, range);
-  const shape = ghostOf(view, from, to);
+  const rects = ghostRects(view, from, to);
   const content = view.state.doc.slice(from, to).content;
   const viewport = window.visualViewport;
   const { pointerId, clientX: startX, clientY: startY } = event;
@@ -339,7 +375,7 @@ export function startPointerDrag(
     tilt(x - startX, y - startY);
     if (!ghost) {
       if (Math.abs(x - startX) < SLOP && Math.abs(y - startY) < SLOP) return;
-      ghost = lift(overlay(view), shape.el, shape.rect, x, y);
+      ghost = lift(overlay(view), rects, x, y);
       // a finger's drag leaves the keyboard: the page shows under the
       // block, and the IME commits the word it was composing in it (the
       // browser fights a block moving under an open composition)
@@ -348,30 +384,40 @@ export function startPointerDrag(
     follow();
     if (!scrolling) scrolling = requestAnimationFrame(scroll);
   };
-  const end = (e: PointerEvent) => {
-    if (e.pointerId !== pointerId) return;
+  const finish = (drop: boolean, mouse: boolean) => {
     handle.removeEventListener("pointermove", move);
     handle.removeEventListener("pointerup", end);
     handle.removeEventListener("pointercancel", end);
     handle.removeEventListener("lostpointercapture", end);
+    window.removeEventListener("keydown", onKey, true);
     cancelAnimationFrame(scrolling);
     hideIndicator();
     tilt(0, 0);
     if (!ghost) {
       const node = view.state.doc.nodeAt(from);
-      if (e.type === "pointerup" && node && node.nodeSize === to - from) {
+      if (drop && node && node.nodeSize === to - from) {
         view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, from)));
-        if (e.pointerType === "mouse") view.focus();
+        if (mouse) view.focus();
       }
       return;
     }
     ghost.remove();
     const source = liftKey.getState(view.state);
-    if (e.type === "pointerup" && target != null && source) {
+    if (drop && target != null && source) {
       placeDrop(view, view.state.doc.slice(source.from, source.to).content, target, source);
       // a finger's drop must not raise the keyboard
-      if (e.pointerType === "mouse") view.focus();
-    }
+      if (mouse) view.focus();
+    } else setLifted(view, null);
+  };
+  const end = (e: PointerEvent) => {
+    if (e.pointerId === pointerId) finish(e.type === "pointerup", e.pointerType === "mouse");
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    finish(false, event.pointerType === "mouse");
+    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
   };
   handle.setPointerCapture(pointerId);
   handle.addEventListener("pointermove", move);
@@ -379,6 +425,7 @@ export function startPointerDrag(
   handle.addEventListener("pointercancel", end);
   // the handle can unmount mid-drag (its toolbar hides): a cancel
   handle.addEventListener("lostpointercapture", end);
+  window.addEventListener("keydown", onKey, true);
 }
 
 /** a container of child components (Cards, Steps, Tabs, Files) goes with its last child */

@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
-import { TREE_ENDPOINT, TREE_EVENT } from "../app/protocol";
+import { TREE_ENDPOINT, TREE_EVENT, type TreeCommand, type TreeResponse } from "../app/protocol";
 import { startStudio } from "../src/server";
 
 let dir: string;
@@ -29,8 +29,12 @@ beforeAll(async () => {
     open: false,
     styles: [path.join(dir, "extra.css")],
     server: {
-      authenticate: ({ payload }) =>
-        payload === "viewer" ? { write: false, read: (p) => !p.startsWith("guides/") } : null,
+      authenticate: ({ payload }) => {
+        if (payload === "editor") return { write: true };
+        return payload === "viewer"
+          ? { write: false, read: (p) => !p.startsWith("guides/") }
+          : null;
+      },
     },
   });
   const { port } = server.httpServer!.address() as AddressInfo;
@@ -90,4 +94,60 @@ test("serves the assets of packages the app loads modules from", async () => {
   expect((await fetch(`${url}/@fs${font}`)).status).toBe(200);
   const outside = path.resolve(import.meta.dirname, "../package.json");
   expect((await fetch(`${url}/@fs${outside}`)).status).toBe(403);
+});
+
+const command = (body: TreeCommand | Record<string, unknown>, token = "editor") =>
+  fetch(url + TREE_ENDPOINT, {
+    method: "POST",
+    headers: { [AUTH_HEADER]: JSON.stringify(token), "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+test("commands need write access and a well-formed body", async () => {
+  expect((await command({ type: "order", dir: "", order: [] }, "viewer")).status).toBe(403);
+  const denied = await fetch(url + TREE_ENDPOINT, { method: "POST", body: "{}" });
+  expect(denied.status).toBe(401);
+  const malformed = await command({ type: "order", dir: "" });
+  expect(malformed.status).toBe(400);
+  expect(await malformed.text()).toBe("not a tree command");
+});
+
+test("create, order and delete answer with the tree and touch disk", async () => {
+  const created = await command({ type: "create", path: "guides/intro.mdx", title: "Intro" });
+  expect(created.status).toBe(200);
+  const { tree } = (await created.json()) as TreeResponse;
+  expect(tree[0]).toMatchObject({ type: "folder", name: "guides" });
+  expect((tree[0] as { children: { title: string }[] }).children.map((n) => n.title)).toEqual([
+    "Intro",
+    "setup",
+  ]);
+  expect(await readFile(path.join(dir, "content/guides/intro.mdx"), "utf8")).toBe(
+    "---\ntitle: Intro\n---\n",
+  );
+
+  const ordered = await command({
+    type: "order",
+    dir: "",
+    order: ["index", "---More---", "new", "guides"],
+  });
+  expect(ordered.status).toBe(200);
+  expect(JSON.parse(await readFile(path.join(dir, "content/meta.json"), "utf8"))).toEqual({
+    pages: ["index", "---More---", "new", "guides"],
+  });
+  const stale = await command({ type: "order", dir: "", order: ["ghost"] });
+  expect(stale.status).toBe(409);
+
+  const folder = await command({ type: "mkdir", dir: "reference", title: "Reference" });
+  expect(folder.status).toBe(200);
+  expect(await readFile(path.join(dir, "content/reference/meta.json"), "utf8")).toBe(
+    '{\n  "title": "Reference"\n}\n',
+  );
+  expect(JSON.parse(await readFile(path.join(dir, "content/meta.json"), "utf8"))).toEqual({
+    pages: ["index", "---More---", "new", "guides", "reference"],
+  });
+
+  const deleted = await command({ type: "delete", path: "guides/intro.mdx" });
+  expect(deleted.status).toBe(200);
+  await expect(stat(path.join(dir, "content/guides/intro.mdx"))).rejects.toThrow();
+  expect((await command({ type: "delete", path: "guides/intro.mdx" })).status).toBe(404);
 });

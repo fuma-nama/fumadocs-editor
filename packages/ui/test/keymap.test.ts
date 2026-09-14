@@ -20,6 +20,36 @@ const CALLOUT = `<Callout type="info" title="Heads up">
 `;
 
 describe("marks at the caret", () => {
+  test.each([
+    { source: "Before <span>text</span>\n", tag: "</span>" },
+    { source: "Before <span>text</span> after.\n", tag: "</span>" },
+    { source: "Before <span>text</span> after.\n", tag: "<span>" },
+  ])(
+    "deleting and retyping the end of $tag keeps JSX source active: $source",
+    ({ source, tag }) => {
+      const { editor, serialize } = makeEditor(source);
+      const end = caret(editor, tag);
+      editor.view.dispatch(editor.state.tr.delete(end - 1, end));
+      editor.view.dispatch(editor.state.tr.insertText(">"));
+      expect(
+        editor.state.doc.resolve(end).nodeBefore!.marks.map((mark) => mark.type.name),
+      ).toContain("mdxJsxTag");
+      expect(serialize()).toBe(source);
+    },
+  );
+
+  test("ArrowRight exits JSX at the end of a line without inserting a character", () => {
+    const { editor, serialize } = makeEditor("Before <span>text</span>\n\nNext paragraph.\n");
+    const end = caret(editor, "</span>");
+    expect(press(editor, "ArrowRight")).toBe(true);
+    expect(editor.state.selection.from).toBe(end);
+    expect(editor.state.storedMarks).toEqual([]);
+    expect(press(editor, "ArrowRight")).toBe(false);
+    editor.view.dispatch(editor.state.tr.insertText(" plain"));
+    expect(editor.state.doc.resolve(end + 6).nodeBefore!.marks).toEqual([]);
+    expect(serialize()).toBe("Before <span>text</span> plain\n\nNext paragraph.\n");
+  });
+
   test("a shortcut toggle with no selection marks what is typed next", () => {
     const { editor, serialize } = makeEditor("Hello\n");
     caret(editor, "Hello");

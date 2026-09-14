@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import * as stylex from "@stylexjs/stylex";
 import {
   MdxEditor,
   useEditorTheme,
   type EditorTheme,
   type FileProvider,
+  type EditorMode,
   type MdxEditorRef,
   type MdxEditorSync,
 } from "@fumadocs-editor/ui";
@@ -27,12 +29,65 @@ import {
   frontmatterTitle,
   TREE_ENDPOINT,
   TREE_EVENT,
+  type TreeCommand,
   type TreeNode,
   type TreeResponse,
 } from "./protocol";
 import { authHeaders, collab, components, media, syntax, transport } from "./providers";
 import { FilePanel } from "./files";
 import { Palette, type PaletteGroup, type PaletteItem } from "./palette";
+
+const COARSE = "@media (pointer: coarse)";
+const REDUCE = "@media (prefers-reduced-motion: reduce)";
+const MONO = "var(--font-mono)";
+const muted = "var(--fde-muted-foreground)";
+
+const styles = stylex.create({
+  // the open panel gets a column of its own; the editor keeps its document clear of it
+  withPanel: { "--fde-page-inset": { default: null, "@media (min-width: 960px)": "19.5rem" } },
+  message: { margin: 0, padding: "40vh 1.5rem 0", color: muted, fontSize: 14, textAlign: "center" },
+  iconButton: {
+    display: "inline-flex",
+    boxSizing: "border-box",
+    height: "1.75rem",
+    minWidth: "1.75rem",
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.375rem",
+    padding: "0 0.375rem",
+    borderWidth: 0,
+    borderRadius: "0.5rem",
+    backgroundColor: {
+      default: "transparent",
+      ":hover": "var(--fde-accent)",
+      ':is([aria-pressed="true"])': "var(--fde-accent)",
+    },
+    color: {
+      default: muted,
+      ":hover": "var(--fde-foreground)",
+      ':is([aria-pressed="true"])': "var(--fde-foreground)",
+    },
+    fontFamily: "inherit",
+    cursor: "pointer",
+    transitionProperty: "background-color",
+    transitionDuration: { default: "120ms", [REDUCE]: "0s" },
+    outlineWidth: 2,
+    outlineStyle: { default: "none", ":focus-visible": "solid" },
+    outlineColor: "var(--fde-ring)",
+    outlineOffset: 2,
+  },
+  key: { display: { default: null, [COARSE]: "none" }, fontFamily: "inherit", fontSize: 11 },
+  path: {
+    minWidth: 0,
+    overflow: "hidden",
+    color: muted,
+    fontFamily: MONO,
+    fontSize: 12.5,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+});
 
 type TreeError = "denied" | "offline";
 type FileNode = Extract<TreeNode, { type: "file" }>;
@@ -87,6 +142,10 @@ function relativeTo(from: string, to: string): string {
 }
 
 const readHash = () => decodeURIComponent(location.hash.slice(1)) || null;
+const subscribeHash = (onChange: () => void) => {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+};
 const openFile = (path: string) => {
   location.hash = encodeURIComponent(path);
 };
@@ -94,12 +153,13 @@ const openFile = (path: string) => {
 export function Studio() {
   const [response, setResponse] = useState<TreeResponse | null>(null);
   const [error, setError] = useState<TreeError | null>(null);
-  const [active, setActive] = useState(readHash);
+  const hash = useSyncExternalStore(subscribeHash, readHash);
   const [status, setStatus] = useState<SessionStatus>("synced");
   const [writable, setWritable] = useState(true);
   const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem(PANEL_KEY) === "1");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [groups, setGroups] = useState<PaletteGroup[]>([]);
+  // the editor mode lives on the ref; the palette snapshots it as it opens
+  const [mode, setMode] = useState<EditorMode>("visual");
   const { theme, setTheme } = useEditorTheme();
   const editorRef = useRef<MdxEditorRef>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -121,6 +181,22 @@ export function Studio() {
     }
   }, []);
 
+  const run = useCallback(async (command: TreeCommand) => {
+    const headers = await authHeaders();
+    headers["content-type"] = "application/json";
+    const res = await fetch(TREE_ENDPOINT, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(command),
+    });
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    const body = (await res.json()) as TreeResponse;
+    // a fetch still in flight would land an older tree over this one
+    loads.current++;
+    setResponse(body);
+    setError(null);
+  }, []);
+
   // the server pings over Vite's HMR socket whenever the tree changes on disk
   useEffect(() => {
     void loadTree();
@@ -129,40 +205,38 @@ export function Studio() {
     return () => hot?.off(TREE_EVENT, loadTree);
   }, [loadTree]);
 
-  useEffect(() => {
-    const onHash = () => setActive(readHash());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+  const setPanel = useCallback((open: boolean) => {
+    setPanelOpen(open);
+    localStorage.setItem(PANEL_KEY, open ? "1" : "0");
+  }, []);
+  const closePanel = useCallback(() => setPanel(false), [setPanel]);
+  const openPalette = useCallback(() => {
+    setMode(editorRef.current?.getMode() ?? "visual");
+    setPaletteOpen(true);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(PANEL_KEY, panelOpen ? "1" : "0");
-  }, [panelOpen]);
-
-  const openPaletteRef = useRef(() => {});
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        openPaletteRef.current();
+        openPalette();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [openPalette]);
 
   const files = useMemo(() => (response ? collectFiles(response.tree) : []), [response]);
-  const known = active !== null && files.some((file) => file.path === active);
+  // the hash names the open file; a missing or stale one falls back to the first
+  const active =
+    hash !== null && files.some((file) => file.path === hash) ? hash : (files[0]?.path ?? null);
+  // without a file there is no header to open the list from
+  const panelShown = panelOpen || (response !== null && files.length === 0);
 
-  // the hash is the source of truth for the open file; fall back to the first
-  useEffect(() => {
-    if (!known && files.length > 0) location.replace(`#${encodeURIComponent(files[0].path)}`);
-  }, [known, files]);
-
-  useEffect(() => {
-    const title = active ?? response?.root ?? "Fumadocs Studio";
-    document.title = `${UNSAVED.has(status) ? "● " : ""}${title}`;
-  }, [active, status, response]);
+  const docTitle = active ?? response?.root ?? "Fumadocs Studio";
+  if (typeof document !== "undefined" && document.title !== docTitle) {
+    document.title = docTitle;
+  }
 
   useEffect(() => {
     if (!UNSAVED.has(status)) return;
@@ -171,20 +245,19 @@ export function Studio() {
     return () => window.removeEventListener("beforeunload", guard);
   }, [status]);
 
-  const sync = useMemo<MdxEditorSync | undefined>(
-    () =>
-      known
-        ? {
-            transport,
-            path: active,
-            collab,
-            onStatus: setStatus,
-            onOpen: (result) => setWritable(result.writable ?? true),
-          }
-        : undefined,
-    [known, active],
-  );
+  // the editor reads the latest callbacks; the session only restarts on path/transport/collab
+  const sync: MdxEditorSync | undefined =
+    active === null
+      ? undefined
+      : {
+          transport,
+          path: active,
+          collab,
+          onStatus: setStatus,
+          onOpen: (result) => setWritable(result.writable ?? true),
+        };
 
+  // identity matters: the editor lists paths again for a new provider
   const fileProvider = useMemo<FileProvider | undefined>(() => {
     if (!active || files.length < 2) return undefined;
     return {
@@ -210,42 +283,35 @@ export function Studio() {
     });
   };
 
-  const header = useMemo(
-    () => ({
-      start: (
-        <>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Files"
-            aria-pressed={panelOpen}
-            onClick={() => setPanelOpen(!panelOpen)}
-          >
-            <PanelLeft size={16} />
-          </button>
-          <span className="path">{active}</span>
-        </>
-      ),
-      end: (
+  const header = {
+    start: (
+      <>
         <button
           type="button"
-          className="icon-button"
-          aria-label="Search files and actions"
-          onClick={() => openPaletteRef.current()}
+          {...stylex.props(styles.iconButton)}
+          aria-label="Files"
+          aria-pressed={panelOpen}
+          onClick={() => setPanel(!panelOpen)}
         >
-          <Search size={16} />
-          <kbd>{META_KEY}K</kbd>
+          <PanelLeft size={16} />
         </button>
-      ),
-    }),
-    [panelOpen, active],
-  );
+        <span {...stylex.props(styles.path)}>{active}</span>
+      </>
+    ),
+    end: (
+      <button
+        type="button"
+        {...stylex.props(styles.iconButton)}
+        aria-label="Search files and actions"
+        onClick={openPalette}
+      >
+        <Search size={16} />
+        <kbd {...stylex.props(styles.key)}>{META_KEY}K</kbd>
+      </button>
+    ),
+  };
 
-  const collabHref = `${collab ? location.pathname : "?collab"}${location.hash}`;
-
-  // items are snapshotted when the palette opens (the editor mode lives on
-  // the ref) and kept while it fades out
-  openPaletteRef.current = () => {
+  const groups = useMemo<PaletteGroup[]>(() => {
     const fileItems: PaletteItem[] = [];
     for (const file of files) {
       fileItems.push({
@@ -261,11 +327,11 @@ export function Studio() {
         id: "files",
         label: panelOpen ? "Hide file list" : "Show file list",
         icon: panelOpen ? PanelLeftClose : PanelLeft,
-        run: () => setPanelOpen(!panelOpen),
+        run: () => setPanel(!panelOpen),
       },
     ];
-    if (known) {
-      const source = editorRef.current?.getMode() === "source";
+    if (active !== null) {
+      const source = mode === "source";
       actions.push(
         {
           id: "mode",
@@ -282,6 +348,7 @@ export function Studio() {
         },
       );
     }
+    const collabHref = `${collab ? location.pathname : "?collab"}${location.hash}`;
     actions.push({
       id: "collab",
       label: collab ? "Turn off collaboration" : "Turn on collaboration",
@@ -301,12 +368,11 @@ export function Studio() {
       });
     }
     actions.push({ id: "theme", label: "Theme", icon: SunMoon, detail: current, items: themes });
-    setGroups([
+    return [
       { label: "Files", items: fileItems },
       { label: "Actions", items: actions },
-    ]);
-    setPaletteOpen(true);
-  };
+    ];
+  }, [files, panelOpen, active, mode, theme, setTheme, setPanel]);
 
   let message: string | null = null;
   if (error === "denied") message = "Access denied: this token cannot open the workspace.";
@@ -314,9 +380,9 @@ export function Studio() {
   else if (response && files.length === 0) message = `No .md or .mdx files under ${response.root}.`;
 
   return (
-    <div className="studio" ref={rootRef} data-files={panelOpen ? "" : undefined}>
+    <div {...stylex.props(panelShown && styles.withPanel)} ref={rootRef}>
       {message ? (
-        <p className="message">{message}</p>
+        <p {...stylex.props(styles.message)}>{message}</p>
       ) : (
         sync && (
           <MdxEditor
@@ -338,9 +404,11 @@ export function Studio() {
           root={response.root}
           nodes={response.tree}
           active={active}
-          hidden={!panelOpen}
+          hidden={!panelShown}
           onSelect={openFile}
-          onClose={() => setPanelOpen(false)}
+          onClose={closePanel}
+          run={run}
+          container={rootRef}
         />
       )}
       <Palette

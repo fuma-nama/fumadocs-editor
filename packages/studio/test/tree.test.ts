@@ -1,17 +1,25 @@
-import { mkdir, mkdtemp, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { frontmatterTitle, type TreeNode } from "../app/protocol";
-import { buildTree, openWorkspace, type WorkspaceIndex } from "../src/tree";
+import { frontmatterTitle, pagesEntry, type TreeNode } from "../app/protocol";
+import {
+  buildTree,
+  CommandError,
+  openWorkspace,
+  orderPages,
+  type WorkspaceIndex,
+} from "../src/tree";
 
 const outline = (nodes: TreeNode[]): unknown[] =>
   nodes.map((node) =>
     node.type === "separator"
       ? `--- ${node.title}`
-      : node.type === "folder"
-        ? { [node.title]: outline(node.children) }
-        : node.title,
+      : node.type === "link"
+        ? `[${node.title}](${node.url})`
+        : node.type === "folder"
+          ? { [node.title]: outline(node.children) }
+          : node.title,
   );
 
 const tree = (
@@ -25,12 +33,12 @@ const tree = (
 };
 
 describe("buildTree", () => {
-  test("default order: index first, then by name, folders mixed in", () => {
+  test("default order: index first, then pages by name, then folders", () => {
     expect(tree(["zeta.mdx", "index.mdx", "alpha.md", "guides/intro.mdx"])).toEqual([
       "index",
       "alpha",
-      { guides: ["intro"] },
       "zeta",
+      { guides: ["intro"] },
     ]);
   });
 
@@ -41,33 +49,53 @@ describe("buildTree", () => {
     ]);
   });
 
-  test("pages: explicit order, separators, links skipped, unknown dropped", () => {
+  test("pages: explicit order, separators, links, unknown dropped", () => {
     expect(
       tree(["a.mdx", "b.mdx", "c.mdx"], {
         "": { pages: ["c", "---Group---", "[Site](https://example.com)", "missing", "a"] },
       }),
-    ).toEqual(["c", "--- Group", "a", "b"]);
+    ).toEqual(["c", "--- Group", "[Site](https://example.com)", "a", "b"]);
+    const [separator, link] = buildTree({
+      files: new Map(),
+      metas: new Map([["", { pages: ["---[Book]Docs---", "external:[Globe][Site](https://x)"] }]]),
+    });
+    expect(separator).toEqual({ type: "separator", title: "Docs", icon: "Book" });
+    expect(link).toEqual({
+      type: "link",
+      title: "Site",
+      url: "https://x",
+      icon: "Globe",
+      external: true,
+    });
+    expect(pagesEntry(separator)).toBe("---[Book]Docs---");
+    expect(pagesEntry(link)).toBe("external:[Globe][Site](https://x)");
+    expect(pagesEntry({ type: "separator", title: "" })).toBe("---");
   });
 
-  test("pages: rest placement and z...a", () => {
+  test("pages: rest placement and z...a (index stays first)", () => {
     expect(tree(["a.mdx", "b.mdx", "c.mdx"], { "": { pages: ["b", "...", "a"] } })).toEqual([
       "b",
       "c",
       "a",
     ]);
-    expect(tree(["a.mdx", "b.mdx", "c.mdx"], { "": { pages: ["z...a"] } })).toEqual([
-      "c",
+    expect(tree(["a.mdx", "b.mdx", "index.mdx", "g/x.mdx"], { "": { pages: ["z...a"] } })).toEqual([
+      "index",
+      { g: ["x"] },
       "b",
       "a",
     ]);
   });
 
-  test("pages: !hidden still listed, ...folder picks the folder", () => {
+  test("pages: !hidden still listed, a folder wins its key, ...folder picks the folder", () => {
     expect(
       tree(["hidden.mdx", "guides.mdx", "guides/one.mdx"], {
         "": { pages: ["!hidden", "...guides", "guides"] },
       }),
     ).toEqual(["hidden", { guides: ["one"] }, "guides"]);
+    expect(tree(["guides.mdx", "guides/one.mdx"], { "": { pages: ["guides"] } })).toEqual([
+      { guides: ["one"] },
+      "guides",
+    ]);
   });
 
   test("pages: unlisted items are appended", () => {
@@ -171,5 +199,151 @@ describe("openWorkspace", () => {
     expect(await workspace.update("add", at("notes.txt"))).toBe(false);
     expect(await workspace.update("add", at("guides/.hidden/x.mdx"))).toBe(false);
     expect(await workspace.update("add", path.join(root, "..", "outside.mdx"))).toBe(false);
+  });
+});
+
+describe("orderPages", () => {
+  const keys = ["index", "a", "b", "c", "guides"];
+
+  test("no pages: what moved becomes explicit around ...", () => {
+    expect(orderPages(undefined, ["c", "index", "a", "b", "guides"], keys)).toEqual(["c", "..."]);
+    expect(orderPages(undefined, ["index", "a", "b", "guides", "c"], keys)).toEqual(["...", "c"]);
+    expect(orderPages(undefined, ["index", "a", "b", "c", "guides"], keys)).toEqual(["..."]);
+  });
+
+  test("listed entries keep their prefixes; separators and links go where placed", () => {
+    expect(
+      orderPages(
+        ["!a", "---Top---", "[Site](https://x)", "..."],
+        ["---Top---", "index", "[Site](https://x)", "b", "a", "c", "guides"],
+        keys,
+      ),
+    ).toEqual(["---Top---", "index", "[Site](https://x)", "b", "!a", "..."]);
+    expect(
+      orderPages(["---A---", "..."], ["---B---", "index", "a", "b", "c", "guides"], keys),
+    ).toEqual(["---B---", "..."]);
+  });
+
+  test("z...a covers a descending run, index first", () => {
+    expect(orderPages(["z...a"], ["a", "index", "guides", "c", "b"], keys)).toEqual(["a", "z...a"]);
+  });
+
+  test("without a rest token, trailing unlisted keys stay unlisted", () => {
+    expect(orderPages(["a", "b"], ["b", "a", "index", "c", "guides"], keys)).toEqual(["b", "a"]);
+    expect(orderPages(["a", "b"], ["a", "c", "b", "index", "guides"], keys)).toEqual([
+      "a",
+      "c",
+      "b",
+    ]);
+    expect(orderPages(["a", "b"], ["b", "index", "c", "guides", "a"], keys)).toEqual([
+      "b",
+      "index",
+      "c",
+      "guides",
+      "a",
+    ]);
+  });
+
+  test("unknown keys and an unplaced rest token stay after their old neighbour", () => {
+    expect(orderPages(["a", "gone", "b", "..."], ["b", "a", "index", "c", "guides"], keys)).toEqual(
+      ["b", "a", "gone", "..."],
+    );
+    expect(orderPages(["...", "a"], ["a"], ["a"])).toEqual(["...", "a"]);
+  });
+
+  test("separators and links left out are gone", () => {
+    expect(
+      orderPages(["---A---", "a", "[x](y)", "..."], ["a", "index", "b", "c", "guides"], keys),
+    ).toEqual(["a", "..."]);
+  });
+});
+
+describe("commands", () => {
+  let root: string;
+  const read = (relative: string) => readFile(path.join(root, relative), "utf8");
+  const meta = async (relative: string) => JSON.parse(await read(relative)) as unknown;
+  beforeAll(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "fde-studio-commands-"));
+    await mkdir(path.join(root, "guides"));
+    await writeFile(path.join(root, "index.mdx"), "---\ntitle: Home\n---\n");
+    await writeFile(path.join(root, "guides/a.mdx"), "");
+    await writeFile(
+      path.join(root, "guides/meta.json"),
+      '{\n  "title": "Guides",\n  "pages": ["a"]\n}\n',
+    );
+  });
+  afterAll(() => rm(root, { recursive: true, force: true }));
+
+  test("create: frontmatter title, appended to an explicit list, refused twice", async () => {
+    const workspace = await openWorkspace(root);
+    await workspace.create("guides/new.mdx", "New: Draft");
+    expect(await read("guides/new.mdx")).toBe('---\ntitle: "New: Draft"\n---\n');
+    expect(await meta("guides/meta.json")).toEqual({ title: "Guides", pages: ["a", "new"] });
+    await workspace.create("deep/nested/page.mdx", "Nested");
+    expect(await read("deep/nested/page.mdx")).toBe("---\ntitle: Nested\n---\n");
+    expect(outline(workspace.tree(() => true))).toEqual([
+      "Home",
+      { deep: [{ nested: ["Nested"] }] },
+      { Guides: ["a", "New: Draft"] },
+    ]);
+    await expect(workspace.create("guides/new.mdx", "Again")).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(workspace.create("../out.mdx", "Out")).rejects.toBeInstanceOf(CommandError);
+    await expect(workspace.create("notes.txt", "Text")).rejects.toMatchObject({ status: 400 });
+  });
+
+  test("mkdir: meta title, index page, listed in an explicit parent, refused twice", async () => {
+    const workspace = await openWorkspace(root);
+    await workspace.mkdir("guides/advanced", "Advanced Topics");
+    expect(await meta("guides/advanced/meta.json")).toEqual({ title: "Advanced Topics" });
+    expect(await read("guides/advanced/index.mdx")).toBe("---\ntitle: Advanced Topics\n---\n");
+    expect(await meta("guides/meta.json")).toEqual({
+      title: "Guides",
+      pages: ["a", "new", "advanced"],
+    });
+    expect(outline(workspace.tree(() => true))[2]).toEqual({
+      Guides: ["a", "New: Draft", { "Advanced Topics": ["Advanced Topics"] }],
+    });
+    await expect(workspace.mkdir("guides/advanced", "Again")).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(workspace.mkdir("guides", "Guides")).rejects.toMatchObject({ status: 409 });
+    await expect(workspace.mkdir("../out", "Out")).rejects.toMatchObject({ status: 400 });
+  });
+
+  test("order: rewrites pages, keeps other fields, refuses unknown keys", async () => {
+    const workspace = await openWorkspace(root);
+    await workspace.order("guides", ["---Start---", "new", "a", "advanced"]);
+    expect(await read("guides/meta.json")).toBe(
+      '{\n  "title": "Guides",\n  "pages": [\n    "---Start---",\n    "new",\n    "a",\n    "advanced"\n  ]\n}\n',
+    );
+    expect(outline(workspace.tree(() => true))[2]).toEqual({
+      Guides: ["--- Start", "New: Draft", "a", { "Advanced Topics": ["Advanced Topics"] }],
+    });
+    await workspace.order("", ["guides", "index", "deep"]);
+    expect(await meta("meta.json")).toEqual({ pages: ["guides", "..."] });
+    await expect(workspace.order("guides", ["zzz"])).rejects.toMatchObject({ status: 409 });
+    await expect(workspace.order("nope", [])).rejects.toMatchObject({ status: 404 });
+  });
+
+  test("remove: unlinks through the callback and drops the entry", async () => {
+    const workspace = await openWorkspace(root);
+    let unlinked = false;
+    await workspace.remove("guides/new.mdx", async () => {
+      await unlink(path.join(root, "guides/new.mdx"));
+      unlinked = true;
+    });
+    expect(unlinked).toBe(true);
+    expect(await meta("guides/meta.json")).toEqual({
+      title: "Guides",
+      pages: ["---Start---", "a", "advanced"],
+    });
+    expect(outline(workspace.tree(() => true))[0]).toEqual({
+      Guides: ["--- Start", "a", { "Advanced Topics": ["Advanced Topics"] }],
+    });
+    await expect(workspace.remove("guides/new.mdx", async () => {})).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

@@ -34,14 +34,28 @@ function isDark(el: Element): boolean {
   return getComputedStyle(el).colorScheme.includes("dark");
 }
 
+// one class observer and media query for every diagram on the page
+const scopeListeners = new Set<() => void>();
+let stopScope = () => {};
+
 function subscribeThemeScope(onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  mql.addEventListener("change", onChange);
+  if (scopeListeners.size === 0) {
+    const notify = () => {
+      for (const listener of scopeListeners) listener();
+    };
+    const observer = new MutationObserver(notify);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    mql.addEventListener("change", notify);
+    stopScope = () => {
+      observer.disconnect();
+      mql.removeEventListener("change", notify);
+    };
+  }
+  scopeListeners.add(onChange);
   return () => {
-    observer.disconnect();
-    mql.removeEventListener("change", onChange);
+    scopeListeners.delete(onChange);
+    if (scopeListeners.size === 0) stopScope();
   };
 }
 

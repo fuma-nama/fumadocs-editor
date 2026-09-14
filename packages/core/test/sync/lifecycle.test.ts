@@ -134,3 +134,25 @@ test("a chunked oversized body is refused at the cap while streaming", async () 
   });
   expect(status).toBe(413);
 });
+
+test("remove drops the collab doc first: no flush recreates the file", async () => {
+  await writeFile(path.join(root, "gone.mdx"), "keep me\n");
+  const a = openTransport();
+  await a.request({ type: "collab-open", path: "gone.mdx", components: [] });
+  const session = createCollabSession({ transport: a, path: "gone.mdx", components: [] });
+  await session.whenSynced;
+  textAt(session, 0).insert(7, " please");
+
+  await sync.remove("gone.mdx");
+  // the last disconnect would flush a live doc to disk
+  session.destroy();
+  a.close();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await expect(readFile(path.join(root, "gone.mdx"), "utf-8")).rejects.toThrow();
+
+  const b = openTransport();
+  await expect(
+    b.request({ type: "collab-open", path: "gone.mdx", components: [] }),
+  ).rejects.toThrow();
+  b.close();
+});

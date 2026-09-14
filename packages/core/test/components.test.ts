@@ -74,7 +74,8 @@ describe("component regions", () => {
 
   test("a child-only component outside its parent stays generic JSX", () => {
     const { doc } = parseMdxToDoc('<Card title="Loose" />\n', syntax);
-    expect(doc.content![0].type).toBe("mdxJsxFlowElement");
+    expect(doc.content![0].type).toBe("mdxJsxTagBlock");
+    expect(doc.content![0].content![0].text).toBe('<Card title="Loose" />');
   });
 
   test("Card description folds into the editable body region", () => {
@@ -125,7 +126,7 @@ describe("component regions", () => {
 
 describe("expression attribute literals", () => {
   const attrValue = (source: string) => {
-    const { doc } = parseMdxToDoc(source);
+    const { doc } = parseMdxToDoc(source, createSyntax([{ name: "TypeTable" }]));
     let value: unknown;
     const walk = (node: JSONContent) => {
       if (node.attrs?.attributes) value = (node.attrs.attributes as { value: unknown }[])[0].value;

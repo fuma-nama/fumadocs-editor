@@ -22,7 +22,7 @@ import {
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from "@tiptap/react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { content } from "../styles/content";
 import { nodeViewOptions } from "./node-view-options";
 import { chrome } from "../styles/shared";
@@ -61,29 +61,35 @@ const styles = stylex.create({
 const inlineClass = stylex.props(content.mathInline, math).className;
 const blockClass = stylex.props(content.block, math).className;
 
+// one lazy load shared by every math view; views subscribe until it lands
 let katexModule: Katex | null = null;
-let katexPromise: Promise<void> | undefined;
+const katexWaiters = new Set<() => void>();
+
+function subscribeKatex(onLoad: () => void): () => void {
+  if (!katexModule) {
+    if (katexWaiters.size === 0) {
+      void Promise.all([
+        import("katex"),
+        // @ts-expect-error -- style-only import, no module declaration
+        import("katex/dist/katex.min.css"),
+      ]).then(([m]) => {
+        katexModule = m.default;
+        for (const waiter of katexWaiters) waiter();
+      });
+    }
+    katexWaiters.add(onLoad);
+  }
+  return () => {
+    katexWaiters.delete(onLoad);
+  };
+}
+
+function getKatex() {
+  return katexModule;
+}
 
 function useKatex(): Katex | null {
-  const [katex, setKatex] = useState(katexModule);
-  useEffect(() => {
-    if (katex) return;
-    katexPromise ??= Promise.all([
-      import("katex"),
-      // @ts-expect-error -- style-only import, no module declaration
-      import("katex/dist/katex.min.css"),
-    ]).then(([m]) => {
-      katexModule = m.default;
-    });
-    let live = true;
-    void katexPromise.then(() => {
-      if (live) setKatex(katexModule);
-    });
-    return () => {
-      live = false;
-    };
-  }, [katex]);
-  return katex;
+  return useSyncExternalStore(subscribeKatex, getKatex, () => null);
 }
 
 function Preview({

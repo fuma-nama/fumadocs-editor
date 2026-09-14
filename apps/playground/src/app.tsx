@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
@@ -101,7 +101,6 @@ function Playground() {
   // consumer wiring for the auth scope: the handshake's `writable` (data the
   // sync layer exposes) drives our own `editable` prop
   const [writable, setWritable] = useState(true);
-  const markdownRef = useRef("");
 
   useEffect(() => {
     let open = true;
@@ -137,28 +136,24 @@ function Playground() {
     };
   }, [active]);
 
-  const sync = useMemo<MdxEditorSync | undefined>(
-    () =>
-      active
-        ? {
-            transport,
-            path: active,
-            collab: collabEnabled && { user: collabUser },
-            onStatus: (next) => {
-              setStatus(next);
-              // our own saves aren't echoed back to us: the badge follows the session
-              if (next === "synced") setDiskText(markdownRef.current);
-            },
-            onOpen: (result) => {
-              markdownRef.current = result.text;
-              setMarkdown(result.text);
-              setDiskText(result.text);
-              setWritable(result.writable ?? true);
-            },
-          }
-        : undefined,
-    [active],
-  );
+  // the editor reads the latest `sync` callbacks; the session itself only restarts on path/transport/collab
+  const sync: MdxEditorSync | undefined = active
+    ? {
+        transport,
+        path: active,
+        collab: collabEnabled && { user: collabUser },
+        onStatus: (next) => {
+          setStatus(next);
+          // our own saves aren't echoed back to us: the badge follows the session
+          if (next === "synced") setDiskText(markdown);
+        },
+        onOpen: (result) => {
+          setMarkdown(result.text);
+          setDiskText(result.text);
+          setWritable(result.writable ?? true);
+        },
+      }
+    : undefined;
 
   // the mirrored files double as reference targets (include, page links);
   // paths are written relative to the open document (all docs sit at the root)
@@ -174,11 +169,6 @@ function Playground() {
       },
     };
   }, [files, active]);
-
-  const onChange = (next: string) => {
-    markdownRef.current = next;
-    setMarkdown(next);
-  };
 
   const identical = markdown === diskText;
 
@@ -241,7 +231,7 @@ function Playground() {
               sync={sync}
               components={components}
               syntax={syntax}
-              onChange={onChange}
+              onChange={setMarkdown}
               media={media}
               files={fileProvider}
               editable={writable}
@@ -256,7 +246,7 @@ function Playground() {
                 defaultValue={fallbackDoc}
                 components={components}
                 syntax={syntax}
-                onChange={onChange}
+                onChange={setMarkdown}
                 media={media}
               />
             )

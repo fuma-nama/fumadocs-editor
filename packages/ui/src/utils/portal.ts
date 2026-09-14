@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useRef, type RefObject } from "react";
 
 /**
  * Popups must portal INSIDE the editor root (`[data-fde-root]`), not to
@@ -13,6 +13,10 @@ import { useCallback, useState } from "react";
  * DOM, and picking an option would register as an outside press and dismiss
  * the parent panel.
  *
+ * `container` is a ref object: Base UI reads it when the portal mounts, which
+ * is on open, long after the anchor attached. Resolving it into state would
+ * cost every control a second render on mount.
+ *
  * Every positioner uses `positionMethod="fixed"`. Base UI keeps a popup
  * `position: fixed` until its first placement is computed, and Floating UI
  * measures that pass against the viewport; the `absolute` method then
@@ -20,13 +24,13 @@ import { useCallback, useState } from "react";
  * bubble's wrapper) and lands the popup off by that ancestor's offset until
  * a scroll recomputes it.
  */
-export function useEditorPortal() {
-  const [container, setContainer] = useState<HTMLElement | undefined>(undefined);
-  const anchorRef = useCallback((node: HTMLElement | null) => {
-    if (node)
-      setContainer(
-        (node.closest("[data-fde-popup], [data-fde-root]") as HTMLElement | null) ?? undefined,
-      );
-  }, []);
-  return { anchorRef, container };
+export function useEditorPortal(): {
+  anchorRef: (node: HTMLElement | null) => void;
+  container: RefObject<HTMLElement | null>;
+} {
+  const container = useRef<HTMLElement | null>(null);
+  const anchorRef = useRef((node: HTMLElement | null) => {
+    if (node) container.current = node.closest("[data-fde-popup], [data-fde-root]");
+  });
+  return { anchorRef: anchorRef.current, container };
 }

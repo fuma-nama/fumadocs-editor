@@ -13,12 +13,39 @@ export interface MetaJson {
 export type TreeNode =
   | { type: "file"; name: string; path: string; title: string }
   | { type: "folder"; name: string; path: string; title: string; children: TreeNode[] }
-  | { type: "separator"; title: string };
+  | { type: "separator"; title: string; icon?: string }
+  | { type: "link"; title: string; url: string; icon?: string; external?: boolean };
 
 export interface TreeResponse {
   /** basename of the content directory */
   root: string;
   tree: TreeNode[];
+}
+
+/** `POST` body of the tree endpoint; the reply is the tree after the change */
+export type TreeCommand =
+  /** a new page holding a frontmatter `title` */
+  | { type: "create"; path: string; title: string }
+  /** a new folder: `meta.json` carrying the title and an `index.mdx` */
+  | { type: "mkdir"; dir: string; title: string }
+  | { type: "delete"; path: string }
+  /** the folder's `pages` rewritten to show `order`, entries as {@link pagesEntry} gives them */
+  | { type: "order"; dir: string; order: string[] };
+
+/** the `meta.json` `pages` entry that produces `node` in its folder */
+export function pagesEntry(node: TreeNode): string {
+  switch (node.type) {
+    case "separator": {
+      if (!node.title && !node.icon) return "---";
+      return `---${node.icon ? `[${node.icon}]` : ""}${node.title}---`;
+    }
+    case "link": {
+      const icon = node.icon ? `[${node.icon}]` : "";
+      return `${node.external ? "external:" : ""}${icon}[${node.title}](${node.url})`;
+    }
+    default:
+      return node.name;
+  }
 }
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
