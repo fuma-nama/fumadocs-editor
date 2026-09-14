@@ -87,12 +87,66 @@ test("incomplete tags stay as authored source while typing", () => {
   );
 });
 
-test("opening and closing tag names can be edited directly", () => {
+test.each([
+  ["<span", "<strong", "Before <strong>xxx</strong> after.\n"],
+  ["</span", "</em", "Before <em>xxx</em> after.\n"],
+])("renaming %s renames the partner tag", (before, after, output) => {
   const { snapshot } = mount("Before <span>xxx</span> after.\n");
-  replaceText("<span", "<strong");
-  replaceText("</span", "</strong");
+  replaceText(before, after);
+  expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(output);
+});
+
+test("renaming a block tag renames its partner", () => {
+  const { snapshot } = mount('<div className="x">\n\nxxx\n\n</div>\n');
+  replaceText("</div", "</section");
   expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(
-    "Before <strong>xxx</strong> after.\n",
+    '<section className="x">\n  xxx\n</section>\n',
+  );
+});
+
+test.each([
+  [
+    'Before <span className="text-red-400">xxx</span> after.\n',
+    'Before <span className="text>xxx</span> after.\n',
+  ],
+  ['<div className="text-red-400">\n\nxxx\n\n</div>\n', '<div className="text>\n  xxx\n</div>\n'],
+])("an unclosed attribute value keeps the element: %s", (source, output) => {
+  const { snapshot } = mount(source);
+  replaceText('"text-red-400"', '"text');
+  expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(output);
+});
+
+function typeText(text: string) {
+  const { from, to } = editor.state.selection;
+  const handled = editor.view.someProp("handleTextInput", (f) => f(editor.view, from, to, text));
+  if (!handled) editor.view.dispatch(editor.state.tr.insertText(text));
+}
+
+test("typing = after an attribute name opens quotes, Backspace closes them again", () => {
+  const { snapshot } = mount("Before <span title>xxx</span> after.\n");
+  let position = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (position < 0 && node.text === "<span title>") position = pos + 11;
+  });
+  editor.commands.setTextSelection(position);
+  typeText("=");
+  expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(
+    'Before <span title="">xxx</span> after.\n',
+  );
+  expect(editor.state.selection.from).toBe(position + 2);
+  typeText("a");
+  typeText('"');
+  expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(
+    'Before <span title="a">xxx</span> after.\n',
+  );
+  expect(editor.state.selection.from).toBe(position + 4);
+  editor.commands.setTextSelection(position + 2);
+  editor.view.dispatch(editor.state.tr.delete(position + 2, position + 3));
+  editor.view.dom.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }),
+  );
+  expect(serializeDocToMdx(editor.getJSON(), snapshot)).toBe(
+    "Before <span title>xxx</span> after.\n",
   );
 });
 
