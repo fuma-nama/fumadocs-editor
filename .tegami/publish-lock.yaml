@@ -1,28 +1,18 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: minor\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Edit the sidebar from the file list\n\nThe studio's file list now edits `meta.json` and the pages it orders.\n"
-    filename: 2026-09-14-studio-sidebar-editor.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Unknown JSX is edited as source\n\nAn element with no registered spec keeps its children editable; its tags show as source while the caret is inside. Names and attributes are edited in place, and a tag whose brackets break is removed together with its partner, so the document always re-parses. The `mdxJsxTextElement` node is gone: inline tags carry the `mdxJsxTag` mark and block tags are `mdxJsxTagBlock` blocks around the element's children.\n"
-    filename: 2026-09-15-jsx-tags.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Studio no longer hangs on a white page\n\nOpening the studio while a stale tab was still polling the port could leave\nthe page blank forever: the StyleX plugin compiled the app on every request\nand, for the two style-only modules, loaded their `@stylexjs/stylex` import\nthrough Vite's dependency optimizer, which was itself waiting for those\nrequests to finish before committing. The app is now compiled ahead of time\n(StyleX included), so the dev server serves plain JS and CSS and neither\n`@stylexjs/unplugin` nor Babel is installed with the package.\n"
+    filename: 2026-09-15-studio-precompiled-app.md
     v: 0.0.0
 core:packages:
+  - id: npm:@fumadocs-editor/core
+    updated: false
   - changelogIds:
-      - 2026-09-14-studio-sidebar-editor.md
-      - 2026-09-15-jsx-tags.md
-    id: npm:@fumadocs-editor/core
-    updated: true
-  - changelogIds:
-      - 2026-09-14-studio-sidebar-editor.md
+      - 2026-09-15-studio-precompiled-app.md
     id: npm:@fumadocs-editor/studio
     updated: true
-  - changelogIds:
-      - 2026-09-14-studio-sidebar-editor.md
-      - 2026-09-15-jsx-tags.md
-    id: npm:@fumadocs-editor/ui
-    updated: true
+  - id: npm:@fumadocs-editor/ui
+    updated: false
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
   - id: npm:docs
-  - id: npm:playground
