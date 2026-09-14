@@ -4,8 +4,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as Y from "yjs";
+import { connect } from "./helpers";
 import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport } from "../../src/sync/client";
 import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 
 let root: string;
@@ -50,7 +50,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const openTransport = () => wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
+const openTransport = () => connect(`ws://127.0.0.1:${port}/__fde_sync`);
 const collabOpen = (transport: ReturnType<typeof openTransport>) =>
   transport.request<{ epoch: string }>({ type: "collab-open", path: "doc.mdx", components: [] });
 
@@ -62,7 +62,7 @@ const textAt = (session: CollabSession, index: number): Y.XmlText => {
 test("last disconnect flushes to disk; the doc survives the grace, then evicts and re-seeds", async () => {
   const a = openTransport();
   const first = await collabOpen(a);
-  const session = createCollabSession({ transport: a, path: "doc.mdx", components: [] });
+  const session = createCollabSession({ client: a, path: "doc.mdx", components: [] });
   await session.whenSynced;
   textAt(session, 0).insert(5, " evicted-edit");
   session.destroy();
@@ -89,7 +89,7 @@ test("last disconnect flushes to disk; the doc survives the grace, then evicts a
   await new Promise((resolve) => setTimeout(resolve, EVICT_MS + 700));
   const c = openTransport();
   expect((await collabOpen(c)).epoch).not.toBe(first.epoch);
-  const fresh = createCollabSession({ transport: c, path: "doc.mdx", components: [] });
+  const fresh = createCollabSession({ client: c, path: "doc.mdx", components: [] });
   await fresh.whenSynced;
   expect(textAt(fresh, 0).toString()).toBe("hello evicted-edit");
   fresh.destroy();
@@ -139,11 +139,11 @@ test("deleting a page drops its collab doc first: no flush recreates the file", 
   await writeFile(path.join(root, "gone.mdx"), "keep me\n");
   const a = openTransport();
   await a.request({ type: "collab-open", path: "gone.mdx", components: [] });
-  const session = createCollabSession({ transport: a, path: "gone.mdx", components: [] });
+  const session = createCollabSession({ client: a, path: "gone.mdx", components: [] });
   await session.whenSynced;
   textAt(session, 0).insert(7, " please");
 
-  await a.command({ type: "delete", path: "gone.mdx" });
+  await a.request({ type: "delete", path: "gone.mdx" });
   // the last disconnect would flush a live doc to disk
   session.destroy();
   a.close();

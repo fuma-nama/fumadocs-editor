@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createFileSession, type FileSession } from "../../src/sync/session";
-import type { FileState, SyncTransport } from "../../src/sync/transport";
+import type { SyncClient } from "../../src/sync/client";
+import type { ConnectionStatus, FileState } from "../../src/sync/transport";
 import { createHash } from "node:crypto";
 
 const hashText = (text: string) => createHash("sha1").update(text).digest("hex");
 
-/** in-memory transport with a controllable "disk" */
-function memoryTransport() {
+/** in-memory client with a controllable "disk" */
+function memoryClient() {
   const files = new Map<string, string>();
   const watchers = new Map<string, Set<(state: FileState) => void>>();
-  const statusListeners = new Set<(status: "online" | "offline") => void>();
+  const statusListeners = new Set<(status: ConnectionStatus) => void>();
   let online = true;
   const writes: string[] = [];
 
@@ -18,39 +19,43 @@ function memoryTransport() {
     return { text, version: text === "" ? "" : hashText(text) };
   };
 
-  const transport: SyncTransport & {
-    onStatus: (l: (status: "online" | "offline") => void) => () => void;
-  } = {
-    list: async () => [...files.keys()],
-    read: async (path) => state(path),
-    async write(path, text, baseVersion) {
+  const client: SyncClient = {
+    async request(message) {
+      const path = message.path as string;
+      if (message.type === "read") return state(path) as never;
       if (!online) throw new Error("sync offline");
-      if (state(path).version !== baseVersion) return { ok: false, current: state(path) };
+      if (state(path).version !== message.baseVersion) {
+        return { ok: false, current: state(path) } as never;
+      }
+      const text = message.text as string;
       files.set(path, text);
       writes.push(text);
-      return { ok: true, version: hashText(text) };
+      return { ok: true, version: hashText(text) } as never;
     },
-    watch(path, onChange) {
-      const set = watchers.get(path) ?? new Set();
-      set.add(onChange);
-      watchers.set(path, set);
-      return () => set.delete(onChange);
+    subscribe(topic, listener) {
+      const set = watchers.get(topic) ?? new Set();
+      set.add(listener as (state: FileState) => void);
+      watchers.set(topic, set);
+      return () => set.delete(listener as (state: FileState) => void);
     },
+    sendBinary() {},
+    status: () => (online ? "online" : "offline"),
     onStatus(listener) {
       statusListeners.add(listener);
       listener(online ? "online" : "offline");
       return () => statusListeners.delete(listener);
     },
+    close() {},
   };
 
   return {
-    transport,
+    client,
     writes,
     /** an external process changes the file */
     external(path: string, text: string, notify = true) {
       files.set(path, text);
       if (!notify) return;
-      for (const listener of watchers.get(path) ?? []) listener(state(path));
+      for (const listener of watchers.get(`watch:${path}`) ?? []) listener(state(path));
     },
     setOnline(next: boolean) {
       online = next;
@@ -60,7 +65,7 @@ function memoryTransport() {
   };
 }
 
-let mem: ReturnType<typeof memoryTransport>;
+let mem: ReturnType<typeof memoryClient>;
 let session: FileSession;
 let text: string;
 let statuses: string[];
@@ -69,13 +74,13 @@ let conflictsToReport: number[];
 
 beforeEach(async () => {
   vi.useFakeTimers();
-  mem = memoryTransport();
+  mem = memoryClient();
   mem.external("doc.mdx", "# One\n");
   statuses = [];
   remoteApplied = [];
   conflictsToReport = [];
   session = createFileSession({
-    transport: mem.transport,
+    client: mem.client,
     path: "doc.mdx",
     document: {
       getMarkdown: () => text,

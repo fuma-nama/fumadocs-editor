@@ -31,7 +31,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { collab, components, media, syntax, transport } from "./providers";
+import { client, collab, components, media, syntax } from "./providers";
 import { FilePanel } from "./files";
 import { Palette, type PaletteGroup, type PaletteItem } from "./palette";
 
@@ -153,7 +153,7 @@ const openFile = (path: string) => {
 };
 
 export function Studio() {
-  const workspace = useWorkspace({ transport });
+  const workspace = useWorkspace({ client });
   const [typed, setTyped] = useState<Title | null>(null);
   const hash = useSyncExternalStore(subscribeHash, readHash);
   const [status, setStatus] = useState<SessionStatus>("synced");
@@ -211,12 +211,12 @@ export function Studio() {
     return () => window.removeEventListener("beforeunload", guard);
   }, [status]);
 
-  // the editor reads the latest callbacks; the session only restarts on path/transport/collab
+  // the editor reads the latest callbacks; the session only restarts on path/client/collab
   const sync: MdxEditorSync | undefined =
     active === null
       ? undefined
       : {
-          transport,
+          client,
           path: active,
           collab,
           onStatus: setStatus,

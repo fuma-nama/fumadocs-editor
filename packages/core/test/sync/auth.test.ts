@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as Y from "yjs";
+import { connect, list, read, write } from "./helpers";
 import { createSyncServer, type SyncScope, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport } from "../../src/sync/client";
 import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 import { AUTH_HEADER } from "../../src/sync/transport";
 
@@ -96,11 +96,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const open = (token: unknown) =>
-  wsTransport({
-    url: `ws://127.0.0.1:${port}/__fde_sync`,
-    auth: () => token,
-  });
+const open = (token: unknown) => connect(`ws://127.0.0.1:${port}/__fde_sync`, () => token);
 
 const docText = (session: CollabSession, index: number) =>
   (session.doc.getXmlFragment("default").get(index) as Y.XmlElement).toString();
@@ -113,14 +109,14 @@ const textAt = (session: CollabSession, index: number): Y.XmlText => {
 test("the auth payload reaches authenticate verbatim", async () => {
   const payload = { token: "abc", nested: { n: 1 } };
   const transport = open(payload);
-  await transport.list();
+  await list(transport);
   expect(seen).toContainEqual(payload);
   transport.close();
 });
 
 test("a rejected payload is denied, distinct from offline, without a retry loop", async () => {
   const transport = open("bad-once");
-  await expect(transport.read("outside.mdx")).rejects.toThrow(/denied/);
+  await expect(read(transport, "outside.mdx")).rejects.toThrow(/denied/);
   expect(transport.status()).toBe("denied");
   // no silent reconnect: authenticate never sees the token again
   await new Promise((resolve) => setTimeout(resolve, 700));
@@ -130,11 +126,10 @@ test("a rejected payload is denied, distinct from offline, without a retry loop"
 
 test("reconnects re-invoke the client auth hook and carry the fresh token", async () => {
   let calls = 0;
-  const transport = wsTransport({
-    url: `ws://127.0.0.1:${port}/__fde_sync`,
-    auth: () => (calls++ === 0 ? "admin" : "admin-fresh"),
-  });
-  await transport.list();
+  const transport = connect(`ws://127.0.0.1:${port}/__fde_sync`, () =>
+    calls++ === 0 ? "admin" : "admin-fresh",
+  );
+  await list(transport);
   // drop every socket but keep the sync server: the transport reconnects
   for (const socket of sockets) socket.destroy();
   await new Promise((resolve) => http.close(resolve));
@@ -142,7 +137,7 @@ test("reconnects re-invoke the client auth hook and carry the fresh token", asyn
   wire();
   await listen();
   await until(() => (seen.includes("admin-fresh") ? true : undefined));
-  expect(await transport.list()).toContain("outside.mdx");
+  expect(await list(transport)).toContain("outside.mdx");
   transport.close();
 }, 10000);
 
@@ -162,22 +157,22 @@ test("nothing is processed before the hello; hello-less connections time out", a
 
 test("subtree write scope: CAS writes gated on the normalized path", async () => {
   const transport = open("team-a");
-  const inside = await transport.read("team-a/inside.mdx");
+  const inside = await read(transport, "team-a/inside.mdx");
   expect(inside.user).toEqual({ name: "Ada" });
   expect(inside.writable).toBe(true);
 
-  expect((await transport.write("team-a/inside.mdx", "# Inside v2\n", inside.version)).ok).toBe(
+  expect((await write(transport, "team-a/inside.mdx", "# Inside v2\n", inside.version)).ok).toBe(
     true,
   );
 
-  const outside = await transport.read("outside.mdx");
+  const outside = await read(transport, "outside.mdx");
   expect(outside.writable).toBe(false);
-  await expect(transport.write("outside.mdx", "# clobber\n", outside.version)).rejects.toThrow(
+  await expect(write(transport, "outside.mdx", "# clobber\n", outside.version)).rejects.toThrow(
     /denied/,
   );
   // a traversal cannot smuggle the write past the predicate
   await expect(
-    transport.write("team-a/../outside.mdx", "# clobber\n", outside.version),
+    write(transport, "team-a/../outside.mdx", "# clobber\n", outside.version),
   ).rejects.toThrow(/denied/);
   expect(await readFile(path.join(root, "outside.mdx"), "utf-8")).toBe("# Outside\n");
   transport.close();
@@ -185,13 +180,17 @@ test("subtree write scope: CAS writes gated on the normalized path", async () =>
 
 test("subtree write scope: Y updates refused outside, applied inside", async () => {
   const transport = open("team-a");
-  const denied = createCollabSession({ transport, path: "outside.mdx", components: [] });
+  const denied = createCollabSession({ client: transport, path: "outside.mdx", components: [] });
   await denied.whenSynced;
   expect(denied.access).toEqual({ user: { name: "Ada" }, writable: false });
   textAt(denied, 0).insert(0, "HACK");
   expect(docText(denied, 0)).toContain("HACK"); // locally diverged, that is all
 
-  const granted = createCollabSession({ transport, path: "team-a/shared.mdx", components: [] });
+  const granted = createCollabSession({
+    client: transport,
+    path: "team-a/shared.mdx",
+    components: [],
+  });
   await granted.whenSynced;
   expect(granted.access).toEqual({ user: { name: "Ada" }, writable: true });
   textAt(granted, 0).insert(0, "team:");
@@ -200,7 +199,7 @@ test("subtree write scope: Y updates refused outside, applied inside", async () 
   // the untouched doc, and the disk still holds the original after the
   // authority's save window
   const admin = open("admin");
-  const observer = createCollabSession({ transport: admin, path: "outside.mdx", components: [] });
+  const observer = createCollabSession({ client: admin, path: "outside.mdx", components: [] });
   await observer.whenSynced;
   expect(docText(observer, 0)).not.toContain("HACK");
 
@@ -222,32 +221,32 @@ test("subtree write scope: Y updates refused outside, applied inside", async () 
 
 test("read predicate: filtered list, withheld broadcasts, refused joins", async () => {
   const reader = open("reader");
-  const listed = await reader.list();
+  const listed = await list(reader);
   expect(listed).toContain("outside.mdx");
   expect(listed).not.toContain("secret/hidden.mdx");
 
-  await expect(reader.read("secret/hidden.mdx")).rejects.toThrow(/denied/);
+  await expect(read(reader, "secret/hidden.mdx")).rejects.toThrow(/denied/);
   await expect(
     reader.request({ type: "collab-open", path: "secret/hidden.mdx", components: [] }),
   ).rejects.toThrow(/denied/);
 
   const events: string[] = [];
-  reader.watch("secret/hidden.mdx", () => events.push("secret"));
-  reader.watch("outside.mdx", (state) => events.push(state.text));
-  await reader.read("outside.mdx"); // socket open, watches registered
+  reader.subscribe("watch:secret/hidden.mdx", () => events.push("secret"));
+  reader.subscribe("watch:outside.mdx", (state) => events.push(state.text));
+  await read(reader, "outside.mdx"); // socket open, watches registered
 
   const admin = open("admin");
-  const hidden = await admin.read("secret/hidden.mdx");
-  await admin.write("secret/hidden.mdx", "# Hidden v2\n", hidden.version);
-  const outside = await admin.read("outside.mdx");
-  await admin.write("outside.mdx", "# Outside v2\n", outside.version);
+  const hidden = await read(admin, "secret/hidden.mdx");
+  await write(admin, "secret/hidden.mdx", "# Hidden v2\n", hidden.version);
+  const outside = await read(admin, "outside.mdx");
+  await write(admin, "outside.mdx", "# Outside v2\n", outside.version);
 
   await until(() => (events.includes("# Outside v2\n") ? true : undefined));
   expect(events).not.toContain("secret");
 
   // restore for later tests
-  const current = await admin.read("outside.mdx");
-  await admin.write("outside.mdx", "# Outside\n", current.version);
+  const current = await read(admin, "outside.mdx");
+  await write(admin, "outside.mdx", "# Outside\n", current.version);
   reader.close();
   admin.close();
 }, 10000);
@@ -256,12 +255,12 @@ test("a scope user overrides spoofed awareness before it reaches peers", async (
   const adminTransport = open("admin");
   const adaTransport = open("team-a");
   const adminSession = createCollabSession({
-    transport: adminTransport,
+    client: adminTransport,
     path: "team-a/inside.mdx",
     components: [],
   });
   const adaSession = createCollabSession({
-    transport: adaTransport,
+    client: adaTransport,
     path: "team-a/inside.mdx",
     components: [],
   });

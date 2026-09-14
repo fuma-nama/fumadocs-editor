@@ -78,12 +78,12 @@ export function MdxEditorRoot({
   useImperativeHandle(ref, () => store.handle, [store]);
 
   const path = sync?.path;
-  const transport = sync?.transport;
+  const client = sync?.client;
   const collab = Boolean(sync?.collab);
   useEffect(() => {
     store.open();
     return () => store.close();
-  }, [store, path, transport, collab]);
+  }, [store, path, client, collab]);
 
   const ambient = useEditorTheme();
   const scoped = theme === "system" ? ambient.resolvedTheme : theme;

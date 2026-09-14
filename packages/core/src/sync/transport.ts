@@ -1,5 +1,3 @@
-import type { TreeCommand, WorkspaceTree } from "./tree";
-
 export interface FileState {
   text: string;
   /** content hash; the compare-and-swap token for writes */
@@ -31,35 +29,22 @@ export type WriteResult =
 export type ConnectionStatus = "online" | "offline" | "denied";
 
 /**
- * A place markdown files live, addressed by root-relative posix paths. The
- * dev-server transport speaks this over a websocket; other backends (a real
- * filesystem handle, a database) only need these four calls.
+ * A channel to the sync server: text frames carry the JSON protocol,
+ * binary frames collab. It only moves messages; `createSyncClient` speaks
+ * the protocol on top. The websocket is one implementation; a
+ * `MessagePort`, a worker or an in-memory pair need the same four calls.
  */
 export interface SyncTransport {
-  /** every file path in the workspace (filtered to what this connection may read) */
-  list(): Promise<string[]>;
-  read(path: string): Promise<ReadResult>;
-  write(path: string, text: string, baseVersion: string): Promise<WriteResult>;
-  /** change notifications for one path; returns unsubscribe */
-  watch(path: string, onChange: (state: FileState) => void): () => void;
+  /** dropped while the channel is down */
+  send(data: string | Uint8Array): void;
+  onMessage(listener: (data: string | Uint8Array) => void): () => void;
   /**
-   * Connection state changes, firing immediately with the current state;
-   * returns unsubscribe. Optional: a backend that cannot go offline (an
-   * in-memory store) omits it.
+   * Connectivity, firing immediately with the current state; returns
+   * unsubscribe. Optional: a channel that cannot drop omits it.
    */
-  onStatus?(listener: (status: ConnectionStatus) => void): () => void;
-  /**
-   * The workspace as a sidebar shows it, in `meta.json` order, kept current;
-   * fires with the current tree once it is known. Optional: a backend
-   * without folders or `meta.json` omits it, together with `command`.
-   */
-  tree?(onChange: (tree: WorkspaceTree) => void): () => void;
-  /** creates pages and folders, deletes pages, reorders a folder; rejects with the reason */
-  command?(command: TreeCommand): Promise<void>;
+  onStatus?(listener: (online: boolean) => void): () => void;
+  close(): void;
 }
-
-/** websocket close code for a rejected hello; denied is not offline */
-export const CLOSE_DENIED = 4403;
 
 /** request header carrying the JSON-encoded auth payload on the HTTP media endpoints */
 export const AUTH_HEADER = "x-fde-auth";

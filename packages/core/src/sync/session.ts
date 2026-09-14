@@ -1,4 +1,5 @@
-import type { FileState, ReadResult, SyncTransport } from "./transport";
+import type { SyncClient } from "./client";
+import type { FileState, ReadResult, WriteResult } from "./transport";
 
 export type SessionStatus = "synced" | "dirty" | "saving" | "conflict" | "offline" | "denied";
 
@@ -21,7 +22,7 @@ export interface SyncedDocument {
 }
 
 export interface FileSessionOptions {
-  transport: SyncTransport;
+  client: SyncClient;
   path: string;
   document: SyncedDocument;
   onStatus?: (status: SessionStatus) => void;
@@ -48,12 +49,12 @@ const TRAILING_MS = 800;
 const MAX_WAIT_MS = 5000;
 
 /**
- * One open file against a `SyncTransport`: autosave with compare-and-swap
+ * One open file over a `SyncClient`: autosave with compare-and-swap
  * writes, external changes merged in as they land, and same-block conflicts
  * pausing writes until the user picks a side.
  */
 export function createFileSession(options: FileSessionOptions): FileSession {
-  const { transport, path, document, onStatus } = options;
+  const { client, path, document, onStatus } = options;
 
   let baseVersion = "";
   let lastSynced = "";
@@ -109,7 +110,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     saving = true;
     emit();
     try {
-      const result = await transport.write(path, text, baseVersion);
+      const result = await client.request<WriteResult>({ type: "write", path, text, baseVersion });
       if (result.ok) {
         baseVersion = result.version;
         lastSynced = text;
@@ -147,22 +148,23 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     emit();
   };
 
-  const stopWatch = transport.watch(path, (state) => {
+  const read = () => client.request<ReadResult>({ type: "read", path });
+
+  const stopWatch = client.subscribe(`watch:${path}`, (state) => {
     if (!closed && !conflict) void incoming(state);
   });
 
-  const stopStatus =
-    transport.onStatus?.((next) => {
-      online = next === "online";
-      denied = next === "denied";
-      emit();
-      if (online && dirty && !conflict) schedule();
-    }) ?? (() => {});
+  const stopStatus = client.onStatus((next) => {
+    online = next === "online";
+    denied = next === "denied";
+    emit();
+    if (online && dirty && !conflict) schedule();
+  });
   constructed = true;
 
   return {
     async open() {
-      const state = await transport.read(path);
+      const state = await read();
       baseVersion = state.version;
       lastSynced = state.text;
       dirty = false;
@@ -189,7 +191,7 @@ export function createFileSession(options: FileSessionOptions): FileSession {
     },
     async takeDisk() {
       if (!conflict) return;
-      const state = await transport.read(path);
+      const state = await read();
       await document.setMarkdown(state.text);
       baseVersion = state.version;
       lastSynced = state.text;

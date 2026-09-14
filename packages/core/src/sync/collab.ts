@@ -16,14 +16,14 @@ import {
 } from "y-protocols/awareness";
 import { componentSpecData, type ComponentSpec, type SyntaxOptions } from "../components/spec";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
-import type { WsTransport } from "./client";
+import type { SyncClient } from "./client";
 import type { SyncUser } from "./transport";
 
 /** an update applied from the wire; local edits carry any other origin */
 const REMOTE = "remote";
 
 export interface CollabSessionOptions {
-  transport: WsTransport;
+  client: SyncClient;
   path: string;
   /**
    * The syntax the document is edited with. Only the data fields of each
@@ -74,14 +74,14 @@ export interface CollabSession {
 }
 
 /**
- * One collaboratively edited document over the mirror websocket: a Y.Doc
+ * One collaboratively edited document over the sync client: a Y.Doc
  * kept in sync with the server's authoritative copy, plus presence. The
- * transport owns the connection; on every (re)connect the session re-opens
+ * client owns the connection; on every (re)connect the session re-opens
  * the document and runs the y-protocols handshake, which also delivers any
  * edits buffered while offline.
  */
 export function createCollabSession(options: CollabSessionOptions): CollabSession {
-  const { transport, path, components, syntax, onReset } = options;
+  const { client, path, components, syntax, onReset } = options;
   const doc = options.doc ?? new Y.Doc();
   const awareness = new Awareness(doc);
   let epoch: string | undefined;
@@ -92,9 +92,9 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
     synced = resolve;
   });
 
-  const send = (frame: encoding.Encoder) => transport.sendBinary(encoding.toUint8Array(frame));
+  const send = (frame: encoding.Encoder) => client.sendBinary(encoding.toUint8Array(frame));
 
-  const stopBinary = transport.onBinary((data) => {
+  const stopBinary = client.subscribe("binary", (data) => {
     const frame = readCollabFrame(data);
     if (frame.path !== path) return;
     if (frame.kind === MESSAGE_SYNC) {
@@ -132,7 +132,7 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
 
   const hello = async () => {
     try {
-      const reply = await transport.request<{
+      const reply = await client.request<{
         epoch: string;
         user?: SyncUser;
         writable?: boolean;
@@ -189,7 +189,7 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   };
 
   // fires immediately with the current state, so this is also the first open
-  const stopStatus = transport.onStatus((status) => {
+  const stopStatus = client.onStatus((status) => {
     if (status === "online") void hello();
   });
 

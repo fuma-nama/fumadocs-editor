@@ -4,8 +4,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as Y from "yjs";
+import type { SyncClient } from "../../src/sync/client";
+import { connect, read, write } from "./helpers";
 import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport, type WsTransport } from "../../src/sync/client";
 import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 
 let root: string;
@@ -51,10 +52,10 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const openTransport = () => wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
+const openTransport = () => connect(`ws://127.0.0.1:${port}/__fde_sync`);
 
-function openSession(transport: WsTransport, extra?: { doc?: Y.Doc; onReset?: () => void }) {
-  return createCollabSession({ transport, path: "doc.mdx", components: [], ...extra });
+function openSession(transport: SyncClient, extra?: { doc?: Y.Doc; onReset?: () => void }) {
+  return createCollabSession({ client: transport, path: "doc.mdx", components: [], ...extra });
 }
 
 /** the first text leaf of top-level child `index` (paragraphs hold one) */
@@ -179,8 +180,8 @@ test("a mirror client's CAS write reaches the collab doc", async () => {
   // a plain (non-collab) client writes through the JSON protocol; its
   // chokidar echo is suppressed, so the authority must be fed directly
   const mirror = openTransport();
-  const state = await mirror.read("doc.mdx");
-  const written = await mirror.write("doc.mdx", `${state.text}\nmirror block\n`, state.version);
+  const state = await read(mirror, "doc.mdx");
+  const written = await write(mirror, "doc.mdx", `${state.text}\nmirror block\n`, state.version);
   expect(written.ok).toBe(true);
   await until(() => {
     const fragment = session.doc.getXmlFragment("default");

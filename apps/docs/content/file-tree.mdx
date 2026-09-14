@@ -11,9 +11,9 @@ the site's navigation follows.
 
 <include meta='title="workspace.tsx"'>../examples/file-tree.tsx</include>
 
-`useWorkspace` subscribes to the tree over the same websocket the editor
+`useWorkspace` subscribes to the tree over the same connection the editor
 uses and hands back `run` for changes. Both come from the
-[sync server](/sync); with no `transport` they share the page's default one.
+[sync server](/sync); with no `client` they share the page's default one.
 
 ## What it edits
 
@@ -58,14 +58,10 @@ page needs `write` on its path, reordering needs `write` on the folder's
 `meta.json`. The tree only lists what `read` allows. A refusal shows at the
 bottom of the tree.
 
-## Custom backends
+## Protocol
 
-The tree rides two optional calls on `SyncTransport`. A backend that has
-folders and an order can implement them; one that does not simply omits
-them and `useWorkspace` throws.
-
-<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="SyncTransport" />
-
-`WorkspaceTree`, `TreeNode` and `TreeCommand` are exported from
-`@fumadocs-editor/core/sync`, together with `pagesEntry`, the function that
-turns a node back into its `meta.json` entry.
+`useWorkspace` is `client.subscribe("tree", …)` plus `client.request` with a
+`TreeCommand`; the tree is pushed again after every change. `WorkspaceTree`,
+`TreeNode` and `TreeCommand` are exported from `@fumadocs-editor/core/sync`,
+together with `pagesEntry`, the function that turns a node back into its
+`meta.json` entry.

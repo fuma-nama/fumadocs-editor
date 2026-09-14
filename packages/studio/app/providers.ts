@@ -9,7 +9,7 @@ import {
   ASSET_ENDPOINT,
   AUTH_HEADER,
   UPLOAD_ENDPOINT,
-  wsTransport,
+  createSyncClient,
 } from "@fumadocs-editor/core/sync";
 import config from "virtual:fumadocs-studio-config";
 
@@ -26,7 +26,7 @@ export const syntax = config.syntax;
 export const auth =
   config.auth ?? (() => params.get("token") ?? localStorage.getItem("fde-token") ?? undefined);
 
-export const transport = wsTransport({ auth });
+export const client = createSyncClient({ auth });
 
 export const collab: MdxEditorSync["collab"] =
   typeof config.collab === "object"

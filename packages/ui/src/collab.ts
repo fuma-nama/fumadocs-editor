@@ -19,7 +19,7 @@ export function startCollab(
   onReset: () => void,
 ): EditorCollab {
   const session = createCollabSession({
-    transport: collab.transport,
+    client: collab.client,
     path: collab.path,
     components,
     syntax,

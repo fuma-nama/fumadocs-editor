@@ -1,5 +1,6 @@
-export { wsTransport } from "./sync/client";
-export type { WsTransport, WsTransportOptions } from "./sync/client";
+export { createSyncClient } from "./sync/client";
+export type { SyncClient, SyncClientOptions, SyncEvents } from "./sync/client";
+export { wsTransport } from "./sync/ws";
 export { createFileSession } from "./sync/session";
 export type {
   FileSession,

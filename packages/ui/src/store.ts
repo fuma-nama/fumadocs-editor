@@ -3,8 +3,7 @@ import type {
   FileSession,
   ReadResult,
   SessionStatus,
-  SyncTransport,
-  WsTransport,
+  SyncClient,
 } from "@fumadocs-editor/core/sync";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
@@ -12,7 +11,7 @@ import type { EditorCollab } from "./collab";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { specsByType, type UiComponentSpec } from "./components/spec";
 import { parseDocCached } from "./doc-cache";
-import { loadSync, sharedTransport } from "./transport";
+import { loadSync, sharedClient } from "./client";
 
 export interface MdxEditorRef {
   /** serialize; unedited blocks are byte-identical */
@@ -49,14 +48,14 @@ export interface MdxEditorSync {
   /** root-relative path on the sync server */
   path: string;
   /**
-   * Sync transport. Default: one shared websocket to the current host
-   * (`wsTransport()`). Pass your own for auth or a custom backend.
+   * Sync connection. Default: one shared websocket to the current host
+   * (`createSyncClient()`). Pass your own for auth or another transport.
    */
-  transport?: SyncTransport;
+  client?: SyncClient;
   /**
    * Collaborative editing. The server holds the document (single writer),
    * peer carets show live, undo is your edits only. `true` joins as a
-   * guest; pass `user` for presence. Needs the websocket transport.
+   * guest; pass `user` for presence.
    */
   collab?: boolean | { user?: CollabUser };
   /** also shown by `MdxEditor.Status`; use this to mirror it elsewhere */
@@ -69,7 +68,7 @@ export interface MdxEditorSync {
 }
 
 export interface CollabLink {
-  transport: WsTransport;
+  client: SyncClient;
   path: string;
   user: CollabUser;
 }
@@ -212,7 +211,7 @@ export class DocumentStore {
     const collabOn = Boolean(sync.collab);
     void loadSync().then((mod) => {
       if (token !== this.token) return;
-      const transport = sync.transport ?? sharedTransport(mod);
+      const client = sync.client ?? sharedClient(mod);
       const report = (status: SessionStatus) => {
         if (token !== this.token) return;
         this.set({ status });
@@ -220,13 +219,11 @@ export class DocumentStore {
       };
       let read: Promise<ReadResult>;
       if (collabOn) {
-        if (!("sendBinary" in transport)) throw new Error("collab needs the websocket transport");
-        const ws = transport as WsTransport;
-        this.stopSync = ws.onStatus((next) => report(next === "online" ? "synced" : next));
-        read = ws.read(path);
+        this.stopSync = client.onStatus((next) => report(next === "online" ? "synced" : next));
+        read = client.request<ReadResult>({ type: "read", path });
       } else {
         const session = mod.createFileSession({
-          transport,
+          client,
           path,
           document: this.handle,
           onStatus: report,
@@ -255,7 +252,7 @@ export class DocumentStore {
             name: "Guest",
             color: GUEST_COLORS[Math.floor(Math.random() * GUEST_COLORS.length)],
           };
-          this.startCollab({ transport: transport as WsTransport, path, user }, token);
+          this.startCollab({ client, path, user }, token);
         },
         () => {
           if (token === this.token) this.load(this.options.defaultValue, token);

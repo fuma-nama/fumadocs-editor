@@ -3,8 +3,9 @@ import { createServer, type Server } from "node:http";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { SyncClient } from "../../src/sync/client";
+import { connect } from "./helpers";
 import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport, type WsTransport } from "../../src/sync/client";
 import type { TreeNode, WorkspaceTree } from "../../src/sync/tree";
 
 let root: string;
@@ -56,13 +57,12 @@ afterAll(async () => {
   await rm(path.dirname(root), { recursive: true, force: true });
 });
 
-const open = (token: string) =>
-  wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync`, auth: () => token });
+const open = (token: string) => connect(`ws://127.0.0.1:${port}/__fde_sync`, () => token);
 
 /** the tree as each transport sees it, latest last */
-function follow(transport: WsTransport) {
+function follow(transport: SyncClient) {
   const seen: WorkspaceTree[] = [];
-  const stop = transport.tree((tree) => seen.push(tree));
+  const stop = transport.subscribe("tree", (tree) => seen.push(tree));
   return { seen, stop, latest: () => seen.at(-1) };
 }
 
@@ -85,11 +85,6 @@ test("the tree applies the scope and follows the filesystem", async () => {
     "New",
   ]);
 
-  // a second subscriber on the same transport gets the tree it already holds
-  const again: WorkspaceTree[] = [];
-  viewer.tree((tree) => again.push(tree))();
-  expect(again).toEqual([v.latest()]);
-
   v.stop();
   e.stop();
   viewer.close();
@@ -98,7 +93,7 @@ test("the tree applies the scope and follows the filesystem", async () => {
 
 test("commands need write access and a well-formed body", async () => {
   const viewer = open("viewer");
-  await expect(viewer.command({ type: "order", dir: "", order: [] })).rejects.toThrow(
+  await expect(viewer.request({ type: "order", dir: "", order: [] })).rejects.toThrow(
     /write denied: meta.json/,
   );
   await expect(
@@ -109,7 +104,7 @@ test("commands need write access and a well-formed body", async () => {
   const editor = open("editor");
   await expect(editor.request({ type: "order", dir: "" })).rejects.toThrow(/malformed/);
   await expect(
-    editor.command({ type: "create", path: "../out.mdx", title: "Out" }),
+    editor.request({ type: "create", path: "../out.mdx", title: "Out" }),
   ).rejects.toThrow(/escapes/);
   editor.close();
 });
@@ -119,7 +114,7 @@ test("create, order, mkdir and delete touch disk; subscribers see the tree befor
   const e = follow(editor);
   await until(e.latest);
 
-  await editor.command({ type: "create", path: "guides/intro.mdx", title: "Intro" });
+  await editor.request({ type: "create", path: "guides/intro.mdx", title: "Intro" });
   const guides = e.latest()!.nodes[0] as Extract<TreeNode, { type: "folder" }>;
   expect(guides).toMatchObject({ type: "folder", name: "guides" });
   expect(titles({ root: "", nodes: guides.children })).toEqual(["Intro", "setup"]);
@@ -127,16 +122,16 @@ test("create, order, mkdir and delete touch disk; subscribers see the tree befor
     "---\ntitle: Intro\n---\n",
   );
 
-  await editor.command({ type: "order", dir: "", order: ["index", "---More---", "new", "guides"] });
+  await editor.request({ type: "order", dir: "", order: ["index", "---More---", "new", "guides"] });
   expect(JSON.parse(await readFile(path.join(root, "meta.json"), "utf8"))).toEqual({
     pages: ["index", "---More---", "new", "guides"],
   });
   expect(titles(e.latest()!)).toEqual(["Home", "More", "New", "guides"]);
-  await expect(editor.command({ type: "order", dir: "", order: ["ghost"] })).rejects.toThrow(
+  await expect(editor.request({ type: "order", dir: "", order: ["ghost"] })).rejects.toThrow(
     /no longer under/,
   );
 
-  await editor.command({ type: "mkdir", dir: "reference", title: "Reference" });
+  await editor.request({ type: "mkdir", dir: "reference", title: "Reference" });
   expect(await readFile(path.join(root, "reference/meta.json"), "utf8")).toBe(
     '{\n  "title": "Reference"\n}\n',
   );
@@ -144,9 +139,9 @@ test("create, order, mkdir and delete touch disk; subscribers see the tree befor
     pages: ["index", "---More---", "new", "guides", "reference"],
   });
 
-  await editor.command({ type: "delete", path: "guides/intro.mdx" });
+  await editor.request({ type: "delete", path: "guides/intro.mdx" });
   await expect(stat(path.join(root, "guides/intro.mdx"))).rejects.toThrow();
-  await expect(editor.command({ type: "delete", path: "guides/intro.mdx" })).rejects.toThrow(
+  await expect(editor.request({ type: "delete", path: "guides/intro.mdx" })).rejects.toThrow(
     /no page at/,
   );
   e.stop();

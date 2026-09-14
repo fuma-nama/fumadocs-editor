@@ -16,7 +16,7 @@ import {
   ASSET_ENDPOINT,
   AUTH_HEADER,
   UPLOAD_ENDPOINT,
-  wsTransport,
+  createSyncClient,
   type SessionStatus,
 } from "@fumadocs-editor/core/sync";
 import { Moon, Sun } from "lucide-react";
@@ -90,11 +90,12 @@ const media: MediaProvider = {
     /^(?:[a-z]+:|\/)/i.test(src) ? src : `${ASSET_ENDPOINT}/${src.replace(/^\.\//, "")}`,
 };
 
-// one transport for the page; the token is read fresh per connection attempt
-const transport = wsTransport({ auth: authToken });
+// one connection for the page; the token is read fresh per connection attempt
+const client = createSyncClient({ auth: authToken });
+const list = () => client.request<string[]>({ type: "list" });
 
 function Playground() {
-  const workspace = useWorkspace({ transport });
+  const workspace = useWorkspace({ client });
   const [files, setFiles] = useState<string[] | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
@@ -107,7 +108,7 @@ function Playground() {
 
   useEffect(() => {
     let open = true;
-    void transport.list().then(
+    void list().then(
       (paths) => {
         if (!open) return;
         setFiles(paths);
@@ -117,7 +118,7 @@ function Playground() {
         if (!open) return;
         // no sync endpoint (static preview / production build): edit a
         // bundled document without the mirror
-        setDenied(transport.status() === "denied");
+        setDenied(client.status() === "denied");
         setFiles([]);
       },
     );
@@ -130,7 +131,7 @@ function Playground() {
   useEffect(() => {
     if (!active) return;
     let open = true;
-    const stop = transport.watch(active, (state) => {
+    const stop = client.subscribe(`watch:${active}`, (state) => {
       if (open) setDiskText(state.text);
     });
     return () => {
@@ -139,10 +140,10 @@ function Playground() {
     };
   }, [active]);
 
-  // the editor reads the latest `sync` callbacks; the session itself only restarts on path/transport/collab
+  // the editor reads the latest `sync` callbacks; the session itself only restarts on path/client/collab
   const sync: MdxEditorSync | undefined = active
     ? {
-        transport,
+        client,
         path: active,
         collab: collabEnabled && { user: collabUser },
         onStatus: (next) => {

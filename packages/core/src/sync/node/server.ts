@@ -3,7 +3,6 @@ import path from "node:path";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { ComponentSpec, SyntaxOptions } from "../../components/spec";
-import { CLOSE_DENIED } from "../transport";
 import type { WorkspaceTree } from "../tree";
 import { createDocAuthority } from "./authority";
 import { createMediaHandlers, type UploadLimits } from "./media";
@@ -67,6 +66,8 @@ interface Request {
   order?: unknown;
 }
 
+/** websocket close code for a rejected hello; denied is not offline */
+const CLOSE_DENIED = 4403;
 /** many files change at once (a `git pull`): one tree for the burst */
 const TREE_SETTLE_MS = 100;
 
@@ -192,7 +193,11 @@ export function createSyncServer({
       }
       conn.authenticating = true;
       void authorize(request, message.payload).then((scope) => {
-        if (!scope) return client.close(CLOSE_DENIED, "sync: access denied");
+        if (!scope) {
+          // the reply tells the client not to retry; the close follows it
+          client.send(JSON.stringify({ id: message.id, ok: false, error: "access denied" }));
+          return client.close(CLOSE_DENIED, "sync: access denied");
+        }
         clearTimeout(helloTimer);
         conn.scope = scope;
         client.send(JSON.stringify({ id: message.id, ok: true, result: { user: scope.user } }));
@@ -277,10 +282,12 @@ export function createSyncServer({
           reply({ ...opened, user: scope.user, writable: scope.write(relative) });
           return;
         }
-        case "tree":
+        case "tree": {
           conn.tree = true;
-          reply(treeFor(conn, await openWorkspaceOnce()));
+          const ws = await openWorkspaceOnce();
+          client.send(JSON.stringify({ type: "tree", ...treeFor(conn, ws) }));
           return;
+        }
         case "untree":
           conn.tree = false;
           return;

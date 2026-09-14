@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
-import type { SyncTransport } from "@fumadocs-editor/core/sync";
+import type { SyncClient } from "@fumadocs-editor/core/sync";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 import { useSourceText } from "../src/root";
 
@@ -161,24 +161,30 @@ test("sync: a save advances the merge base, so a later disk edit elsewhere merge
   let disk = "First.\n\nSecond.\n";
   let version = 1;
   const watchers = new Set<(state: { text: string; version: string }) => void>();
-  const transport: SyncTransport = {
-    list: async () => ["doc.mdx"],
-    read: async () => ({ text: disk, version: String(version) }),
-    write: async (_path, text, base) => {
-      if (base !== String(version)) {
-        return { ok: false, current: { text: disk, version: String(version) } };
+  const client: SyncClient = {
+    async request(message) {
+      if (message.type === "read") return { text: disk, version: String(version) } as never;
+      if (message.baseVersion !== String(version)) {
+        return { ok: false, current: { text: disk, version: String(version) } } as never;
       }
-      disk = text;
+      disk = message.text as string;
       version++;
-      return { ok: true, version: String(version) };
+      return { ok: true, version: String(version) } as never;
     },
-    watch: (_path, onChange) => {
-      watchers.add(onChange);
-      return () => watchers.delete(onChange);
+    subscribe: (_topic, onChange) => {
+      watchers.add(onChange as (state: { text: string; version: string }) => void);
+      return () => watchers.delete(onChange as never);
     },
+    sendBinary() {},
+    status: () => "online",
+    onStatus: (listener) => {
+      listener("online");
+      return () => {};
+    },
+    close() {},
   };
   const statuses: string[] = [];
-  render({ sync: { transport, path: "doc.mdx", onStatus: (status) => statuses.push(status) } });
+  render({ sync: { client, path: "doc.mdx", onStatus: (status) => statuses.push(status) } });
   await settle(); // the sync chunk loads and the file is read
   await settle();
   const { editor } = await hydrate();

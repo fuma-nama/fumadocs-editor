@@ -33,10 +33,10 @@ reads them directly and the client needs no changes:
 <Tab>
 
 Browser websockets cannot set headers, and query strings leak into logs, so
-the token goes in the first frame instead. Give the transport an `auth`
-function; it is called on every connection attempt:
+the token goes in the first frame instead. Give the client an `auth`
+function; it is called on every connection:
 
-<include meta='title="transport.ts"'>../examples/auth-token-client.ts</include>
+<include meta='title="client.ts"'>../examples/auth-token-client.ts</include>
 
 <include meta='title="editor.tsx"'>../examples/auth-token-editor.tsx</include>
 

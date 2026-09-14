@@ -4,13 +4,14 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import type { SyncClient } from "../../src/sync/client";
+import { connect, list, read, write } from "./helpers";
 import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport, type WsTransport } from "../../src/sync/client";
 
 let root: string;
 let http: Server;
 let sync: SyncServer;
-let transport: WsTransport;
+let transport: SyncClient;
 
 const hashText = (text: string) => createHash("sha1").update(text).digest("hex");
 
@@ -40,7 +41,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => http.listen(0, resolve));
   const { port } = http.address() as { port: number };
-  transport = wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
+  transport = connect(`ws://127.0.0.1:${port}/__fde_sync`);
 });
 
 afterAll(async () => {
@@ -51,37 +52,37 @@ afterAll(async () => {
 });
 
 test("lists only markdown files, recursively", async () => {
-  expect(await transport.list()).toEqual(["docs/guide.mdx", "readme.md"]);
+  expect(await list(transport)).toEqual(["docs/guide.mdx", "readme.md"]);
 });
 
 test("read returns text and its content hash", async () => {
-  const state = await transport.read("docs/guide.mdx");
+  const state = await read(transport, "docs/guide.mdx");
   expect(state.text).toBe("# Guide\n");
   expect(state.version).toBe(hashText("# Guide\n"));
 });
 
 test("compare-and-swap write: stale base loses and sees the current state", async () => {
-  const state = await transport.read("readme.md");
-  const first = await transport.write("readme.md", "# Readme v2\n", state.version);
+  const state = await read(transport, "readme.md");
+  const first = await write(transport, "readme.md", "# Readme v2\n", state.version);
   expect(first).toMatchObject({ ok: true });
 
-  const stale = await transport.write("readme.md", "# clobber\n", state.version);
+  const stale = await write(transport, "readme.md", "# clobber\n", state.version);
   expect(stale.ok).toBe(false);
   if (!stale.ok) expect(stale.current.text).toBe("# Readme v2\n");
   expect(await readFile(path.join(root, "readme.md"), "utf-8")).toBe("# Readme v2\n");
 });
 
 test("path escapes are rejected", async () => {
-  await expect(transport.read("../outside.md")).rejects.toThrow(/escapes/);
+  await expect(read(transport, "../outside.md")).rejects.toThrow(/escapes/);
 });
 
 test("an external file change reaches watchers; own writes do not echo", async () => {
   const events: string[] = [];
-  const stop = transport.watch("docs/guide.mdx", (state) => events.push(state.text));
+  const stop = transport.subscribe("watch:docs/guide.mdx", (state) => events.push(state.text));
 
   // own write: no echo (the writer already knows the result)
-  const state = await transport.read("docs/guide.mdx");
-  await transport.write("docs/guide.mdx", "# Guide, saved\n", state.version);
+  const state = await read(transport, "docs/guide.mdx");
+  await write(transport, "docs/guide.mdx", "# Guide, saved\n", state.version);
 
   // external (direct fs) change: must arrive via chokidar
   await new Promise((resolve) => setTimeout(resolve, 150));
@@ -94,13 +95,13 @@ test("an external file change reaches watchers; own writes do not echo", async (
 
 test("a second client hears another client's write immediately", async () => {
   const { port } = http.address() as { port: number };
-  const other = wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
+  const other = connect(`ws://127.0.0.1:${port}/__fde_sync`);
   const events: string[] = [];
-  other.watch("readme.md", (state) => events.push(state.text));
-  await other.read("readme.md"); // ensures the socket is open and watching
+  other.subscribe("watch:readme.md", (state) => events.push(state.text));
+  await read(other, "readme.md"); // ensures the socket is open and watching
 
-  const state = await transport.read("readme.md");
-  await transport.write("readme.md", "# Readme v3\n", state.version);
+  const state = await read(transport, "readme.md");
+  await write(transport, "readme.md", "# Readme v3\n", state.version);
   await until(() => (events.includes("# Readme v3\n") ? true : undefined));
   other.close();
 });
