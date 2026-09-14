@@ -1,3 +1,5 @@
+import type { TreeCommand, WorkspaceTree } from "./tree";
+
 export interface FileState {
   text: string;
   /** content hash; the compare-and-swap token for writes */
@@ -46,6 +48,14 @@ export interface SyncTransport {
    * in-memory store) omits it.
    */
   onStatus?(listener: (status: ConnectionStatus) => void): () => void;
+  /**
+   * The workspace as a sidebar shows it, in `meta.json` order, kept current;
+   * fires with the current tree once it is known. Optional: a backend
+   * without folders or `meta.json` omits it, together with `command`.
+   */
+  tree?(onChange: (tree: WorkspaceTree) => void): () => void;
+  /** creates pages and folders, deletes pages, reorders a folder; rejects with the reason */
+  command?(command: TreeCommand): Promise<void>;
 }
 
 /** websocket close code for a rejected hello; denied is not offline */

@@ -14,6 +14,14 @@ export interface RawNode {
   value: string;
 }
 
+/** An unregistered JSX element: its tags as authored around Markdown children. */
+export interface JsxSourceNode {
+  type: "jsxSource";
+  open: string;
+  close: string;
+  children: RootContent[];
+}
+
 const raw = (node: RawNode) => node.value;
 raw.peek = (node: RawNode) => node.value.charAt(0) || " ";
 
@@ -69,12 +77,22 @@ const mdxJsxFlowElementTight: HandleWithPeek = (node, parent, state, info) =>
   collapseJsxSiblingGaps(mdxJsxFlowElement(node, parent, state, info));
 mdxJsxFlowElementTight.peek = mdxJsxFlowElement.peek;
 
+const jsxSource: Handle = (node, _parent, state, info) => {
+  const { open, close, children } = node as unknown as JsxSourceNode;
+  const exit = state.enter("mdxJsxFlowElement");
+  const body = state.containerFlow({ type: "root", children }, info);
+  exit();
+  const indented = state.indentLines(body, (line, _index, blank) => (blank ? line : `  ${line}`));
+  return collapseJsxSiblingGaps(body ? `${open}\n${indented}\n${close}` : `${open}\n${close}`);
+};
+
 const stringifyOptions: Options = {
   extensions: [mdxToMarkdown(), gfmToMarkdown(), frontmatterToMarkdown(["yaml"])],
   // 'raw' is our own mdast extension, unknown to the Handlers map; the
   // top-level mdxJsxFlowElement override wins over the extension's handler
   handlers: {
     raw,
+    jsxSource,
     mdxJsxFlowElement: mdxJsxFlowElementTight,
     ...directiveHandlers,
     ...mathHandlers,

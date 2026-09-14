@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
+  FileTree,
   useEditorTheme,
+  useWorkspace,
   admonitionSpec,
   filesFenceSpecs,
   fumadocsUiComponents,
@@ -17,7 +19,7 @@ import {
   wsTransport,
   type SessionStatus,
 } from "@fumadocs-editor/core/sync";
-import { FileText, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { FumadocsIcon } from "./logo";
 
 // static builds have no sync endpoint; never import from docs/ here. Vite
@@ -92,6 +94,7 @@ const media: MediaProvider = {
 const transport = wsTransport({ auth: authToken });
 
 function Playground() {
+  const workspace = useWorkspace({ transport });
   const [files, setFiles] = useState<string[] | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
@@ -101,7 +104,6 @@ function Playground() {
   // consumer wiring for the auth scope: the handshake's `writable` (data the
   // sync layer exposes) drives our own `editable` prop
   const [writable, setWritable] = useState(true);
-  const markdownRef = useRef("");
 
   useEffect(() => {
     let open = true;
@@ -137,28 +139,24 @@ function Playground() {
     };
   }, [active]);
 
-  const sync = useMemo<MdxEditorSync | undefined>(
-    () =>
-      active
-        ? {
-            transport,
-            path: active,
-            collab: collabEnabled && { user: collabUser },
-            onStatus: (next) => {
-              setStatus(next);
-              // our own saves aren't echoed back to us: the badge follows the session
-              if (next === "synced") setDiskText(markdownRef.current);
-            },
-            onOpen: (result) => {
-              markdownRef.current = result.text;
-              setMarkdown(result.text);
-              setDiskText(result.text);
-              setWritable(result.writable ?? true);
-            },
-          }
-        : undefined,
-    [active],
-  );
+  // the editor reads the latest `sync` callbacks; the session itself only restarts on path/transport/collab
+  const sync: MdxEditorSync | undefined = active
+    ? {
+        transport,
+        path: active,
+        collab: collabEnabled && { user: collabUser },
+        onStatus: (next) => {
+          setStatus(next);
+          // our own saves aren't echoed back to us: the badge follows the session
+          if (next === "synced") setDiskText(markdown);
+        },
+        onOpen: (result) => {
+          setMarkdown(result.text);
+          setDiskText(result.text);
+          setWritable(result.writable ?? true);
+        },
+      }
+    : undefined;
 
   // the mirrored files double as reference targets (include, page links);
   // paths are written relative to the open document (all docs sit at the root)
@@ -174,11 +172,6 @@ function Playground() {
       },
     };
   }, [files, active]);
-
-  const onChange = (next: string) => {
-    markdownRef.current = next;
-    setMarkdown(next);
-  };
 
   const identical = markdown === diskText;
 
@@ -218,30 +211,23 @@ function Playground() {
         </div>
       </header>
       <div className="flex flex-col items-start gap-4 md:flex-row">
-        <nav className="w-full shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5 md:w-52">
-          {files?.map((path) => (
-            <button
-              key={path}
-              type="button"
-              onClick={() => setActive(path)}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${
-                path === active
-                  ? "bg-fd-primary/10 font-medium text-fd-primary"
-                  : "text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
-              }`}
-            >
-              <FileText size={14} className="shrink-0" />
-              <span className="truncate">{path}</span>
-            </button>
-          ))}
-        </nav>
+        {workspace.tree && (
+          <nav className="w-full shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5 md:w-56">
+            <FileTree
+              tree={workspace.tree}
+              run={workspace.run}
+              active={active}
+              onSelect={setActive}
+            />
+          </nav>
+        )}
         <div className="w-full min-w-0 flex-1">
           {sync ? (
             <MdxEditor
               sync={sync}
               components={components}
               syntax={syntax}
-              onChange={onChange}
+              onChange={setMarkdown}
               media={media}
               files={fileProvider}
               editable={writable}
@@ -256,7 +242,7 @@ function Playground() {
                 defaultValue={fallbackDoc}
                 components={components}
                 syntax={syntax}
-                onChange={onChange}
+                onChange={setMarkdown}
                 media={media}
               />
             )

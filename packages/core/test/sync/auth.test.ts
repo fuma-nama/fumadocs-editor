@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as Y from "yjs";
-import { createSyncServer, type SyncScope, type SyncServer } from "../../src/sync/node";
+import { createSyncServer, type SyncScope, type SyncServer } from "../../src/sync/node/server";
 import { wsTransport } from "../../src/sync/client";
 import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 import { AUTH_HEADER } from "../../src/sync/transport";

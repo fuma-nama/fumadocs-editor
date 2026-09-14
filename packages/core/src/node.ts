@@ -1,2 +1,7 @@
-export { createSyncServer } from "./sync/node";
-export type { SyncAuthenticate, SyncScope, SyncServer, SyncServerOptions } from "./sync/node";
+export { createSyncServer } from "./sync/node/server";
+export type {
+  SyncAuthenticate,
+  SyncScope,
+  SyncServer,
+  SyncServerOptions,
+} from "./sync/node/server";

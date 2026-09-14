@@ -48,10 +48,6 @@ const styles = stylex.create({
     color: tokens.foreground,
     outline: "none",
     tabSize: 2,
-    boxShadow: {
-      default: null,
-      ":focus-visible": `inset 0 0 0 1px color-mix(in oklab, ${tokens.ring} 40%, transparent)`,
-    },
   },
   textareaFixed: { resize: "none" },
   tabs: {

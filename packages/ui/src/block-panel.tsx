@@ -2,7 +2,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
 import { consts } from "./styles/consts.stylex";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { Editor } from "@tiptap/react";
 import type { Transaction } from "@tiptap/pm/state";
 import type { MdxAttribute } from "@fumadocs-editor/core";
@@ -81,25 +81,41 @@ export interface ActiveComponent {
   attributes: MdxAttribute[];
 }
 
-/** the ⋯ panel's open state; closes when there is no block to act on */
+/**
+ * The ⋯ panel's open state; closes when there is no block to act on.
+ * `forced` is set by Cmd-. (a resting caret summons nothing on its own) and
+ * keeps the bubble rendered until it hides.
+ */
 export function useBlockMenuOpen(
   editor: Editor,
   block: boolean,
-): [boolean, (open: boolean) => void] {
+): {
+  open: boolean;
+  setOpen: Dispatch<SetStateAction<boolean>>;
+  forced: boolean;
+  setForced: Dispatch<SetStateAction<boolean>>;
+} {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
+  const [forced, setForced] = useState(false);
+  const [hadBlock, setHadBlock] = useState(block);
+  if (block !== hadBlock) {
+    setHadBlock(block);
     if (!block) setOpen(false);
-  }, [block]);
+  }
   useEffect(() => {
     const onTransaction = ({ transaction }: { transaction: Transaction }) => {
-      if (transaction.getMeta(OPEN_COMPONENT_MENU)) setOpen(true);
+      const meta = transaction.getMeta(OPEN_COMPONENT_MENU);
+      if (meta === "toggle") {
+        setOpen((current) => !current);
+        setForced(true);
+      } else if (meta) setOpen(true);
     };
     editor.on("transaction", onTransaction);
     return () => {
       editor.off("transaction", onTransaction);
     };
   }, [editor]);
-  return [open, setOpen];
+  return { open, setOpen, forced, setForced };
 }
 
 /** the ⋯ menu for the blocks the selection sits in; a component chip when it is one */
@@ -120,7 +136,7 @@ export function BlockMenu({
   active: ActiveComponent | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  container: HTMLElement | undefined;
+  container: HTMLElement;
   align: "start" | "end";
   chipCls: string;
   iconCls: string;

@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { consts } from "./consts.stylex";
-import { folder, settled } from "./markers.stylex";
+import { folder, jsxHost, settled } from "./markers.stylex";
 import { tokens } from "./tokens.stylex";
 
 const muted = tokens.mutedForeground;
@@ -102,29 +102,28 @@ export const content = stylex.create({
   },
   frontmatter: { borderColor: tokens.ring },
   mdxCode: { borderStyle: "dashed", color: muted },
-  mdxFlow: {
-    position: "relative",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: border,
-    borderRadius: 10,
-    paddingTop: 26,
-    paddingInline: 14,
-    paddingBottom: 10,
-    "::before": {
-      content: '"<" attr(data-component) ">"',
-      position: "absolute",
-      top: 6,
-      left: 12,
-      fontFamily: consts.mono,
-      fontSize: 11,
-      color: muted,
-    },
+  jsxTag: {
+    fontFamily: consts.mono,
+    fontSize: "0.875em",
+    color: muted,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
   },
-  mdxInline: {
-    borderBottomWidth: 1,
-    borderBottomStyle: "dashed",
-    borderBottomColor: tokens.ring,
+  /** a paired tag shows only while the caret is inside its host */
+  jsxTagPaired: {
+    display: { default: null, [stylex.when.ancestor(":not([data-active])", jsxHost)]: "none" },
+  },
+  /** an element's own tags are its first and last child; a lone
+   * self-closing tag has nothing else to stand for it and stays */
+  jsxTagBlock: {
+    display: {
+      default: null,
+      [stylex.when.ancestor(":not([data-active])", jsxHost)]: {
+        default: null,
+        ":first-child": "none",
+        ":last-child": "none",
+      },
+    },
   },
   blockquote: {
     borderInlineStartWidth: 2,
@@ -352,9 +351,12 @@ export const content = stylex.create({
     willChange: "transform",
   },
   dragGhost: {
-    opacity: 0.6,
-    boxShadow: consts.shadowLg,
-    willChange: "transform",
+    boxSizing: "border-box",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: tokens.primary,
+    borderRadius: 6,
+    backgroundColor: `color-mix(in oklab, ${tokens.primary} 10%, transparent)`,
   },
   caret: {
     position: "relative",
@@ -385,14 +387,15 @@ export const content = stylex.create({
 const cls = (...styles: stylex.CompiledStyles[]) => stylex.props(...styles).className!;
 
 const HEADING = [
-  cls(content.block, content.heading, content.h1),
-  cls(content.block, content.heading, content.h2),
-  cls(content.block, content.heading, content.h3),
-  cls(content.block, content.heading, content.h4),
+  cls(content.block, content.heading, content.h1, jsxHost),
+  cls(content.block, content.heading, content.h2, jsxHost),
+  cls(content.block, content.heading, content.h3, jsxHost),
+  cls(content.block, content.heading, content.h4, jsxHost),
 ];
+const JSX_TAG = [cls(content.jsxTag, content.jsxTagPaired), cls(content.jsxTag)];
 
 export const nodeClass = {
-  paragraph: cls(content.block, content.paragraph),
+  paragraph: cls(content.block, content.paragraph, jsxHost),
   bulletList: cls(content.block, content.list, content.ul),
   orderedList: cls(content.block, content.list, content.ol),
   listItem: cls(content.li),
@@ -406,8 +409,8 @@ export const nodeClass = {
   tableCell: cls(content.cell),
   code: cls(content.code),
   link: cls(content.link),
-  mdxJsxFlowElement: cls(content.block, content.mdxFlow),
-  mdxJsxTextElement: cls(content.mdxInline),
+  mdxJsxFlowElement: cls(content.block, jsxHost),
+  mdxJsxTagBlock: cls(content.block, content.jsxTag, content.jsxTagBlock),
   mdxTextExpression: cls(content.code, content.mdxCode),
   verbatimInline: cls(content.code, content.mdxCode),
   mdxFlowExpression: cls(content.block, content.pre),
@@ -419,6 +422,7 @@ export const nodeClass = {
 export const contentClass = {
   ...nodeClass,
   heading: (level: number) => HEADING[Math.min(level, 4) - 1],
+  jsxTag: (self: boolean) => JSX_TAG[self ? 1 : 0],
   root: cls(content.root),
   block: cls(content.block),
   component: cls(content.block, content.component),

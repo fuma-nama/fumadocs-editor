@@ -1,7 +1,7 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "./styles/tokens.stylex";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { TextSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
@@ -9,6 +9,7 @@ import { handleBlock, isList, isTable } from "./components/keymap";
 import { DragHandle } from "./drag-handle";
 
 const GUTTER_BUTTON = 28;
+const noop = () => {};
 
 const styles = stylex.create({
   gutter: {
@@ -84,6 +85,8 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
     },
   });
   const ref = useRef<HTMLDivElement>(null);
+  // the editor's resize observer outlives every target; it calls the latest placement
+  const placeRef = useRef(noop);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -103,22 +106,39 @@ export function BlockGutter({ editor, touch }: { editor: Editor; touch: boolean 
       const row = editor.view.nodeDOM(target.row);
       if (!(row instanceof HTMLElement)) return;
       const rect = gutterRow(row);
+      const box = dom instanceof HTMLElement ? dom.getBoundingClientRect() : rect;
       // beside the dragged block's own edge; an item's marker or checkbox
       // renders in the list's padding, outside the item's box
-      let left = dom instanceof HTMLElement ? dom.getBoundingClientRect().left : rect.left;
+      let left = box.left;
       if (dom instanceof HTMLElement && isList(doc.resolve(target.from).parent.type)) {
         left -= parseFloat(getComputedStyle(dom.parentElement!).paddingInlineStart) || 0;
       }
       // centred on the row, in the 24px gutter of the content's padding
-      const x = left - base.left - (24 + GUTTER_BUTTON) / 2;
-      const y = rect.top - base.top + (rect.height - GUTTER_BUTTON) / 2;
-      el.style.transform = `translate(${x}px, ${y}px)`;
+      const x = left - (24 + GUTTER_BUTTON) / 2;
+      let y = rect.top + (rect.height - GUTTER_BUTTON) / 2;
+      // the row scrolled off, or under a sticky header the selection's
+      // scrollIntoView knows nothing about: the block's first clear row
+      const top = window.visualViewport?.offsetTop ?? 0;
+      if (box.bottom > top) {
+        for (y = Math.max(y, top); y < box.bottom - GUTTER_BUTTON; y += 6) {
+          const hit = document.elementFromPoint(x + GUTTER_BUTTON / 2, y + 1);
+          if (!hit || frame.contains(hit)) break;
+        }
+      }
+      el.style.transform = `translate(${x - base.left}px, ${y - base.top}px)`;
     };
     place();
-    const observer = new ResizeObserver(place);
+    placeRef.current = place;
+    return () => {
+      placeRef.current = noop;
+    };
+  }, [editor, target]);
+
+  useEffect(() => {
+    const observer = new ResizeObserver(() => placeRef.current());
     observer.observe(editor.view.dom);
     return () => observer.disconnect();
-  }, [editor, target]);
+  }, [editor]);
 
   if (!target) return null;
   return (

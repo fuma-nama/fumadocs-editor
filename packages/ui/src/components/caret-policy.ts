@@ -2,12 +2,14 @@
 import "@tiptap/starter-kit";
 import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { NodeSelection, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey, Selection, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { INLINE_REGION_NODE, isComponent } from "@fumadocs-editor/core/extensions";
 import { crossesRegion, deleteAcrossRegions } from "./keymap";
 
 export const OPEN_COMPONENT_MENU = "fdeOpenComponentMenu";
+/** the bubble's plugin: `setMeta(BUBBLE_MENU_KEY, "show" | "updatePosition")` reaches it */
+export const BUBBLE_MENU_KEY = new PluginKey("fdeBubbleMenu");
 
 /**
  * The component whose chrome a mouse event landed on. handleClickOn depends
@@ -48,6 +50,19 @@ export const caretPolicy = Extension.create({
         if (text) editor.view.dispatch(editor.state.tr.setSelection(text));
       }
     });
+  },
+
+  // the ⋯ panel at a resting caret; the bubble shows past its `shouldShow`
+  addKeyboardShortcuts() {
+    return {
+      "Mod-.": () => {
+        const { view, state } = this.editor;
+        view.dispatch(
+          state.tr.setMeta(OPEN_COMPONENT_MENU, "toggle").setMeta(BUBBLE_MENU_KEY, "show"),
+        );
+        return true;
+      },
+    };
   },
 
   addProseMirrorPlugins() {

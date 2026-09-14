@@ -1,4 +1,3 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,15 +8,10 @@ import {
   type Plugin,
   type ViteDevServer,
 } from "vite";
-import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
 import { editorSync } from "@fumadocs-editor/core/vite";
-import type { SyncScope } from "@fumadocs-editor/core/node";
-import { TREE_ENDPOINT, TREE_EVENT, type TreeResponse } from "../app/protocol";
 import type { StudioOptions } from "./load-config";
-import { openWorkspace } from "./tree";
 
-const studioDir = path.resolve(import.meta.dirname, "..");
-const appDir = path.join(studioDir, "app");
+const appDir = path.resolve(import.meta.dirname, "../dist/app");
 
 /**
  * Packages the app and a user config import at runtime, resolved from this
@@ -29,6 +23,7 @@ const PINNED = [
   "@fumadocs-editor/ui",
   "@fumadocs-editor/core",
   "@base-ui/react",
+  "@stylexjs/stylex",
   "react",
   "react-dom",
 ];
@@ -47,10 +42,13 @@ const OPTIMIZE = [
   "@fumadocs-editor/core/extensions",
   "@fumadocs-editor/core/sync",
   "@fumadocs-editor/core/collab",
+  "@base-ui/react/alert-dialog",
   "@base-ui/react/autocomplete",
   "@base-ui/react/collapsible",
   "@base-ui/react/dialog",
+  "@base-ui/react/menu",
   "@base-ui/react/scroll-area",
+  "@stylexjs/stylex",
   "lucide-react",
   "react",
   "react/jsx-runtime",
@@ -63,8 +61,6 @@ const CONFIG_ID = "virtual:fumadocs-studio-config";
 const STYLES_ID = "virtual:fumadocs-studio-styles";
 const EMPTY_CONFIG_ID = "\0fumadocs-studio-config";
 const RESOLVED_STYLES_ID = "\0fumadocs-studio-styles";
-/** editors write in bursts; read a changed file once it settles */
-const SETTLE_MS = 100;
 
 function optimizeInclude(): string[] {
   const include: string[] = [];
@@ -117,43 +113,8 @@ export function baseConfig(projectRoot: string): InlineConfig {
   };
 }
 
-const ALLOW_ALL: SyncScope = { write: true };
-
-function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions): Plugin {
-  const { authenticate } = server;
-  const workspace = openWorkspace(contentRoot);
-
-  const authorize = async (request: IncomingMessage) => {
-    const header = request.headers[AUTH_HEADER];
-    let payload: unknown;
-    if (typeof header === "string") {
-      try {
-        payload = JSON.parse(header);
-      } catch {
-        return null;
-      }
-    }
-    if (!authenticate) return ALLOW_ALL;
-    try {
-      return await authenticate({ request, payload });
-    } catch {
-      return null;
-    }
-  };
-
-  const serveTree = async (request: IncomingMessage, response: ServerResponse) => {
-    const scope = await authorize(request);
-    if (!scope) {
-      response.statusCode = 401;
-      return response.end();
-    }
-    const read = scope.read ?? true;
-    const tree = (await workspace).tree(typeof read === "function" ? read : () => read);
-    response.setHeader("content-type", "application/json");
-    response.setHeader("cache-control", "no-store");
-    response.end(JSON.stringify({ root: path.basename(contentRoot), tree } satisfies TreeResponse));
-  };
-
+/** the config and the user's stylesheets as virtual modules of the app */
+function studioPlugin({ configFile, styles }: StudioOptions): Plugin {
   return {
     name: "fumadocs-studio",
     resolveId(id) {
@@ -169,51 +130,27 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
         return code;
       }
     },
-    configureServer(vite) {
-      // the documents are not modules, so Vite's watcher only feeds the index
-      vite.watcher.add(contentRoot);
-      const pending = new Map<string, NodeJS.Timeout>();
-      let ping: NodeJS.Timeout | undefined;
-      vite.watcher.on("all", (event, file) => {
-        clearTimeout(pending.get(file));
-        pending.set(
-          file,
-          setTimeout(() => {
-            pending.delete(file);
-            workspace
-              .then((ws) => ws.update(event, file))
-              .then((changed) => {
-                if (!changed) return;
-                clearTimeout(ping);
-                ping = setTimeout(() => vite.hot.send(TREE_EVENT), SETTLE_MS);
-              });
-          }, SETTLE_MS),
-        );
-      });
-      vite.middlewares.use(TREE_ENDPOINT, (request, response) => {
-        serveTree(request, response).catch((error: unknown) => {
-          response.statusCode = 500;
-          response.end(String(error));
-        });
-      });
-    },
   };
 }
 
 /** starts the studio's Vite dev server; resolves once it listens */
 export async function startStudio(options: StudioOptions): Promise<ViteDevServer> {
   const { projectRoot, contentRoot, port, host, open, server } = options;
-  const { vite: userConfig = {}, ...sync } = server;
+  const { authenticate, upload, evictAfterMs, helloTimeoutMs } = server;
   const config: InlineConfig = mergeConfig(baseConfig(projectRoot), {
     publicDir: false,
     clearScreen: false,
     // the project's, never this package's: it may be an npx cache
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
-    plugins: [studioPlugin(options), packageAccess(), editorSync({ ...sync, root: contentRoot })],
+    plugins: [
+      studioPlugin(options),
+      editorSync({ root: contentRoot, authenticate, upload, evictAfterMs, helloTimeoutMs }),
+      packageAccess(),
+    ],
     server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },
   } satisfies InlineConfig);
-  const vite = await createServer(mergeConfig(config, userConfig));
+  const vite = await createServer(mergeConfig(config, server.vite ?? {}));
   await vite.listen();
   return vite;
 }

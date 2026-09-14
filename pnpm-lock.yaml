@@ -278,6 +278,9 @@ importers:
       '@fumadocs-editor/ui':
         specifier: workspace:*
         version: link:../ui
+      '@stylexjs/stylex':
+        specifier: 0.19.0
+        version: 0.19.0
       lucide-react:
         specifier: ^1.23.0
         version: 1.38.0(react@19.2.8)
@@ -294,6 +297,9 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      '@stylexjs/rollup-plugin':
+        specifier: 0.19.0
+        version: 0.19.0
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0

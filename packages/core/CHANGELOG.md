@@ -1,3 +1,13 @@
+## @fumadocs-editor/core@0.3.0
+
+### Edit the sidebar from the file list
+
+The studio's file list now edits `meta.json` and the pages it orders.
+
+### Unknown JSX is edited as source
+
+An element with no registered spec keeps its children editable; its tags show as source while the caret is inside. Names and attributes are edited in place, and a tag whose brackets break is removed together with its partner, so the document always re-parses. The `mdxJsxTextElement` node is gone: inline tags carry the `mdxJsxTag` mark and block tags are `mdxJsxTagBlock` blocks around the element's children.
+
 ## @fumadocs-editor/core@0.2.0
 
 ### Studio starts under every install layout

@@ -15,13 +15,13 @@ npx @fumadocs-editor/studio
 
 - edits autosave to disk; changes made on disk (a `git pull`, your IDE)
   merge into the open document, see [Sync](/sync)
-- the file list follows the filesystem: files added, removed or retitled on
-  disk show up as it happens, in the `meta.json` order Fumadocs uses
+- the [file tree](/file-tree) follows the filesystem: files added, removed
+  or retitled on disk show up as it happens, in the `meta.json` order
+  Fumadocs uses, and edits it back
 - `?collab` in the URL turns on [collaborative editing](/collab) for that
   tab; the palette has the same switch
 
-Studio needs Node 24 or later. It browses and edits existing files; creating,
-renaming and deleting stay with your file manager for now.
+Studio needs Node 24 or later.
 
 ## Keyboard
 
@@ -30,6 +30,7 @@ renaming and deleting stay with your file manager for now.
 | `⌘K` / `Ctrl+K`                  | Search files by title or path; switch theme, collaboration or the MDX source view; copy the file path |
 | `⌘S`                             | Save now (autosave runs anyway)                                                                       |
 | `↑` `↓` `←` `→` in the file list | Move between files, close or open a folder                                                            |
+| `Alt+↑` `Alt+↓` in the file list | Move the row within its folder (writes `meta.json`)                                                   |
 | `Esc` in the file list           | Close it. The button in the header opens it again; the choice is remembered                           |
 
 On wide screens the open file list gets its own column; on narrow ones it
@@ -99,20 +100,18 @@ too, as on any host page.
 
 ## File list order
 
-Studio reads the subset of `meta.json` that orders pages:
+The file tree reads the subset of `meta.json` that orders pages, as Fumadocs does:
 
 | Entry              |                                                |
 | ------------------ | ---------------------------------------------- |
-| `"index"`          | a page or folder by name                       |
-| `"---Guides---"`   | a separator                                    |
+| `"index"`          | a folder, or else a page, by name              |
+| `"---Guides---"`   | a separator (`---[Icon]Guides---` keeps icons) |
 | `"..."`, `"z...a"` | the remaining entries, ascending or descending |
 | `"...guides"`      | the folder of that name                        |
 | `"!draft"`         | listed anyway: an editor must reach every file |
-| `"[Text](url)"`    | skipped                                        |
+| `"[Text](url)"`    | a link, opened in a new tab                    |
 
-Entries `pages` does not mention are still appended at the end. Without
-`pages`, `index` comes first and the rest sorts by name. Folder titles come
-from `meta.title`, page titles from frontmatter.
+<Callout>Entries `pages` does not mention are still appended at the end.</Callout>
 
 ## Auth
 

@@ -118,7 +118,7 @@ plain handlers:
 
 ### Options
 
-<auto-type-table path="../../../packages/core/src/sync/node.ts" name="SyncServerOptions" />
+<auto-type-table path="../../../packages/core/src/sync/node/server.ts" name="SyncServerOptions" />
 
 ## Custom backends
 
@@ -132,6 +132,7 @@ or a browser file-system handle needs the same four calls:
   current file state when `baseVersion` no longer matches. That is all the
   session needs to merge and retry.
 - `onStatus` is optional. Omit it for a backend that cannot go offline.
+- `tree` and `command` are optional too; they feed the [file tree](/file-tree).
 
 Pass the transport as `sync.transport` and everything above applies
 unchanged.

@@ -12,3 +12,13 @@ export const folder = stylex.defineMarker();
 export const row = stylex.defineMarker();
 /** the joystick button; `data-dragging` while the pointer holds it */
 export const joystick = stylex.defineMarker();
+/** a JSX element or a textblock with inline tags; `data-active` while the caret is inside */
+export const jsxHost = stylex.defineMarker();
+/** the file tree root; `data-dragging` while a row is being dragged */
+export const fileTree = stylex.defineMarker();
+/** one tree row: hover reveals its controls */
+export const fileRow = stylex.defineMarker();
+/** a folder's trigger; `data-panel-open` turns its chevron */
+export const fileFolder = stylex.defineMarker();
+/** a row-menu item; `data-highlighted` and `data-danger` colour its icon */
+export const fileMenuItem = stylex.defineMarker();

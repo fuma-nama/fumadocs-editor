@@ -1,19 +1,18 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Compose the editor from parts\n\n`MdxEditor` is now a preset over exported parts: `MdxEditor.Root` owns the\ndocument (parse, sync, collab, the ref) and renders no chrome;\n`MdxEditor.Visual`, `MdxEditor.Source`, `MdxEditor.Status` and\n`MdxEditor.Tabs` render inside it, in any layout, both surfaces at once if\nyou want a split view. `useSourceText()`, `useSyncStatus()` and\n`useEditorMode()` back chrome of your own, a CodeMirror source pane for\nexample.\n\nThe document is the truth and the source is a projection: visual edits\nserialize into the text, text edits parse back into the document, and text\nthat does not parse leaves the document alone and reports the error.\n\nUnder the hood the root is now a plain document store; the parts and hooks\nsubscribe to it, so a source-only or a split host pays for nothing it does\nnot render.\n"
-    filename: 2026-09-08-source-editor-slot.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Studio no longer hangs on a white page\n\nOpening the studio while a stale tab was still polling the port could leave\nthe page blank forever: the StyleX plugin compiled the app on every request\nand, for the two style-only modules, loaded their `@stylexjs/stylex` import\nthrough Vite's dependency optimizer, which was itself waiting for those\nrequests to finish before committing. The app is now compiled ahead of time\n(StyleX included), so the dev server serves plain JS and CSS and neither\n`@stylexjs/unplugin` nor Babel is installed with the package.\n"
+    filename: 2026-09-15-studio-precompiled-app.md
     v: 0.0.0
 core:packages:
   - id: npm:@fumadocs-editor/core
     updated: false
-  - id: npm:@fumadocs-editor/studio
-    updated: true
   - changelogIds:
-      - 2026-09-08-source-editor-slot.md
-    id: npm:@fumadocs-editor/ui
+      - 2026-09-15-studio-precompiled-app.md
+    id: npm:@fumadocs-editor/studio
     updated: true
+  - id: npm:@fumadocs-editor/ui
+    updated: false
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
   - id: npm:docs
-  - id: npm:playground

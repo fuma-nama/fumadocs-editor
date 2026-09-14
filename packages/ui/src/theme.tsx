@@ -3,7 +3,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -35,6 +34,25 @@ function subscribeSystemTheme(onChange: () => void): () => void {
   return () => mql.removeEventListener("change", onChange);
 }
 
+// the `storage` event only fires in other tabs; same-tab writes notify here
+const storageListeners = new Set<() => void>();
+
+function subscribeStorage(onChange: () => void): () => void {
+  storageListeners.add(onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    storageListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function readStored(key: string): EditorTheme | null {
+  const stored = window.localStorage.getItem(key);
+  return stored === "light" || stored === "dark" || stored === "system" ? stored : null;
+}
+
+const noStored = () => null;
+
 /**
  * Theme context for standalone hosts (plain React, Storybook, playground).
  * Fumadocs sites already toggle `.dark` via next-themes; the tokens key off
@@ -60,24 +78,25 @@ export function EditorThemeProvider({
   children,
   className,
 }: EditorThemeProviderProps) {
-  const [theme, setThemeState] = useState<EditorTheme>(defaultTheme);
+  // storage is the theme's home when there is a key; state only stands in without one
+  const stored = useSyncExternalStore(
+    subscribeStorage,
+    () => (storageKey ? readStored(storageKey) : null),
+    noStored,
+  );
+  const [local, setLocal] = useState(defaultTheme);
   const system = useSyncExternalStore(subscribeSystemTheme, systemTheme, () => "light" as const);
-
-  // hydrate from storage after mount (avoids an SSR mismatch)
-  useEffect(() => {
-    if (!storageKey) return;
-    const stored = window.localStorage.getItem(storageKey) as EditorTheme | null;
-    if (stored === "light" || stored === "dark" || stored === "system") setThemeState(stored);
-  }, [storageKey]);
 
   const setTheme = useCallback(
     (next: EditorTheme) => {
-      setThemeState(next);
-      if (storageKey) window.localStorage.setItem(storageKey, next);
+      if (!storageKey) return setLocal(next);
+      window.localStorage.setItem(storageKey, next);
+      for (const listener of storageListeners) listener();
     },
     [storageKey],
   );
 
+  const theme = stored ?? local;
   const resolvedTheme = theme === "system" ? system : theme;
   const value = useMemo<ThemeContextValue>(
     () => ({ theme, resolvedTheme, setTheme }),

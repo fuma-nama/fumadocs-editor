@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as Y from "yjs";
-import { createSyncServer, type SyncServer } from "../../src/sync/node";
+import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
 import { wsTransport } from "../../src/sync/client";
 import { createCollabSession, type CollabSession } from "../../src/sync/collab";
 
@@ -133,4 +133,26 @@ test("a chunked oversized body is refused at the cap while streaming", async () 
     req.end();
   });
   expect(status).toBe(413);
+});
+
+test("deleting a page drops its collab doc first: no flush recreates the file", async () => {
+  await writeFile(path.join(root, "gone.mdx"), "keep me\n");
+  const a = openTransport();
+  await a.request({ type: "collab-open", path: "gone.mdx", components: [] });
+  const session = createCollabSession({ transport: a, path: "gone.mdx", components: [] });
+  await session.whenSynced;
+  textAt(session, 0).insert(7, " please");
+
+  await a.command({ type: "delete", path: "gone.mdx" });
+  // the last disconnect would flush a live doc to disk
+  session.destroy();
+  a.close();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await expect(readFile(path.join(root, "gone.mdx"), "utf-8")).rejects.toThrow();
+
+  const b = openTransport();
+  await expect(
+    b.request({ type: "collab-open", path: "gone.mdx", components: [] }),
+  ).rejects.toThrow();
+  b.close();
 });

@@ -18,6 +18,7 @@ import {
   ListTodo,
   Minus,
   Radical,
+  ScrollText,
   Sigma,
   SquareCode,
   TextQuote,
@@ -27,7 +28,13 @@ import {
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { INLINE_REGION_NODE, componentTypeName } from "@fumadocs-editor/core/extensions";
 import type { UiComponentSpec } from "./components/spec";
-import { childOnlyNames, focusAt, insertableChildren, listEntryDepth } from "./components/keymap";
+import {
+  FRONTMATTER_NODE,
+  childOnlyNames,
+  focusAt,
+  insertableChildren,
+  listEntryDepth,
+} from "./components/keymap";
 import "@tiptap/extension-table";
 import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
@@ -122,6 +129,30 @@ const MATH_ITEMS: SlashItem[] = [
       .run(),
   ),
 ];
+
+const FRONTMATTER_SEED = "title: ";
+
+const FRONTMATTER: SlashItem = {
+  title: "Frontmatter",
+  group: "Document",
+  icon: <ScrollText size={15} />,
+  run: (e, r) =>
+    e
+      .chain()
+      .focus()
+      .deleteRange(r)
+      .insertContentAt(0, {
+        type: FRONTMATTER_NODE,
+        content: [{ type: "text", text: FRONTMATTER_SEED }],
+      })
+      .setTextSelection(1 + FRONTMATTER_SEED.length)
+      .run(),
+};
+
+/** document-level items: a frontmatter block, while the document has none */
+export function documentItems(editor: Editor): SlashItem[] {
+  return editor.state.doc.firstChild?.type.name === FRONTMATTER_NODE ? [] : [FRONTMATTER];
+}
 
 function imageItem(providers: EditorProviders): SlashItem {
   return block("Image", <ImageIcon size={15} />, (e, r) => {
@@ -350,7 +381,7 @@ export function slashMenu(
             );
           },
           items: ({ editor, query }) => {
-            const pool = entryItems(editor, specMap) ?? all;
+            const pool = entryItems(editor, specMap) ?? all.concat(documentItems(editor));
             const q = query.toLowerCase();
             return q ? pool.filter((item) => item.title.toLowerCase().includes(q)) : pool;
           },

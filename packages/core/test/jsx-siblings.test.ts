@@ -23,8 +23,8 @@ describe("JSX flow siblings", () => {
     // parsed doc), forcing the block to be re-serialized instead of emitted
     // verbatim from the snapshot.
     const edited = structuredClone(doc);
-    const folder = edited.content![0].content![0];
-    folder.content![0].attrs!.attributes[0].value = "layout.ts";
+    const folder = edited.content![0].content![1];
+    folder.content![1].content![0].text = '<File name="layout.ts" />';
 
     const output = serializeDocToMdx(edited, snapshot);
 

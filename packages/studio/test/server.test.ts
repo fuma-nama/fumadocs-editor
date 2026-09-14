@@ -5,9 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { ViteDevServer } from "vite";
-import { afterAll, beforeAll, expect, test, vi } from "vitest";
-import { AUTH_HEADER } from "@fumadocs-editor/core/sync";
-import { TREE_ENDPOINT, TREE_EVENT } from "../app/protocol";
+import { afterAll, beforeAll, expect, test } from "vitest";
 import { startStudio } from "../src/server";
 
 let dir: string;
@@ -28,10 +26,7 @@ beforeAll(async () => {
     port: 0,
     open: false,
     styles: [path.join(dir, "extra.css")],
-    server: {
-      authenticate: ({ payload }) =>
-        payload === "viewer" ? { write: false, read: (p) => !p.startsWith("guides/") } : null,
-    },
+    server: {},
   });
   const { port } = server.httpServer!.address() as AddressInfo;
   url = `http://localhost:${port}`;
@@ -47,45 +42,18 @@ afterAll(async () => {
 
 test("serves the app", async () => {
   const html = await fetch(`${url}/`).then((r) => r.text());
-  expect(html).toContain('<script type="module" src="/main.tsx">');
+  expect(html).toContain('<script type="module" src="/main.js">');
   const styles = await fetch(`${url}/@id/__x00__fumadocs-studio-styles`).then((r) => r.text());
   expect(styles).toContain("extra.css");
   const config = await fetch(`${url}/@id/__x00__fumadocs-studio-config`).then((r) => r.text());
   expect(config).toContain("export default {}");
 });
 
-test("tree endpoint applies the scope", async () => {
-  const denied = await fetch(url + TREE_ENDPOINT);
-  expect(denied.status).toBe(401);
-  const res = await fetch(url + TREE_ENDPOINT, { headers: { [AUTH_HEADER]: '"viewer"' } });
-  expect(res.headers.get("cache-control")).toBe("no-store");
-  expect(await res.json()).toEqual({
-    root: "content",
-    tree: [{ type: "file", name: "index", path: "index.mdx", title: "Home" }],
-  });
-});
-
-test("the tree follows the filesystem", async () => {
-  const send = vi.spyOn(server.hot, "send");
-  await writeFile(path.join(dir, "content/new.mdx"), "---\ntitle: New\n---\n");
-  const headers = { [AUTH_HEADER]: '"viewer"' };
-  const deadline = Date.now() + 5000;
-  const pinged = () => send.mock.calls.some((call) => call[0] === TREE_EVENT);
-  while (!pinged() && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  expect(pinged()).toBe(true);
-  const { tree } = (await fetch(url + TREE_ENDPOINT, { headers }).then((r) => r.json())) as {
-    tree: { title: string }[];
-  };
-  expect(tree.map((node) => node.title)).toEqual(["Home", "New"]);
-}, 10_000);
-
 test("serves the assets of packages the app loads modules from", async () => {
   // fonts are not modules: the stylesheet's package makes them servable
   const css = realpathSync(createRequire(import.meta.url).resolve("@fontsource-variable/geist"));
   const font = path.join(path.dirname(css), "files/geist-latin-wght-normal.woff2");
-  await fetch(`${url}/main.tsx`);
+  await fetch(`${url}/main.js`);
   await fetch(`${url}/@fs${css}`);
   expect((await fetch(`${url}/@fs${font}`)).status).toBe(200);
   const outside = path.resolve(import.meta.dirname, "../package.json");

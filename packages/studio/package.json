@@ -1,6 +1,6 @@
 {
   "name": "@fumadocs-editor/studio",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "description": "Edit a directory of MDX files in the browser: `npx @fumadocs-editor/studio`",
   "keywords": [
     "cli",
@@ -23,7 +23,6 @@
     "fumadocs-studio": "./dist/cli.js"
   },
   "files": [
-    "app",
     "dist"
   ],
   "type": "module",
@@ -50,6 +49,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fumadocs-editor/core": "workspace:*",
     "@fumadocs-editor/ui": "workspace:*",
+    "@stylexjs/stylex": "0.19.0",
     "lucide-react": "^1.23.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@stylexjs/rollup-plugin": "0.19.0",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",

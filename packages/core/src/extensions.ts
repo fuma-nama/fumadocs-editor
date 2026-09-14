@@ -7,6 +7,7 @@
 export { editorExtensions } from "./extensions/kit";
 export type { EditorExtensionsOptions } from "./extensions/kit";
 export type { MdxAttribute } from "./extensions/mdx-nodes";
+export { JSX_FLOW_ELEMENT, JSX_TAG_MARK } from "./extensions/jsx-tags";
 export { MdxInlineRegion, MdxBlockRegion, componentNodeTypes } from "./components/nodes";
 export {
   INLINE_REGION_NODE,

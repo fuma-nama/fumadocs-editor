@@ -4,11 +4,12 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { createSyntax, editorExtensions } from "@fumadocs-editor/core/extensions";
 import { createIncrementalSerializer } from "@fumadocs-editor/core/serialize";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useState, useSyncExternalStore } from "react";
 import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
 import { useEditorContext } from "./components/context";
 import { mathExtensions } from "./components/math";
+import { activeSource } from "./components/active";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
 import { BlockGutter } from "./block-gutter";
@@ -74,6 +75,7 @@ export const LiveEditor = memo(function LiveEditor({
         imageExtension(store),
         ...componentExtensions(specs),
         ...mathExtensions(syntax?.math === true),
+        activeSource,
         slashMenu(specs, store, syntax?.math),
         fileSuggest(specs, store),
         linkSuggest(store),
@@ -110,28 +112,29 @@ export const LiveEditor = memo(function LiveEditor({
 
   const touch = useSyncExternalStore(subscribeCoarse, isCoarse, noTouch);
 
+  // the frame hosts the bubble and its popovers, so it is state, not a ref
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null);
   // insert animations arm one painted frame after the editor shows: the
   // hydration swap must not move; only real insertions animate
-  const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (hidden || !editor) return;
+    if (hidden || !editor || !frame) return;
     let inner: number;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => frame.current?.setAttribute("data-fde-settled", ""));
+      inner = requestAnimationFrame(() => frame.setAttribute("data-fde-settled", ""));
     });
     return () => {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
     };
-  }, [hidden, editor]);
+  }, [hidden, editor, frame]);
 
   return (
-    <div ref={frame} {...stylex.props(styles.frame, settledMarker)} hidden={hidden}>
+    <div ref={setFrame} {...stylex.props(styles.frame, settledMarker)} hidden={hidden}>
       <EditorContent editor={editor} />
-      {editor && editable && (
+      {editor && editable && frame && (
         <>
           <BlockGutter editor={editor} touch={touch} />
-          <EditorBubble editor={editor} specs={store.specs} touch={touch} />
+          <EditorBubble editor={editor} specs={store.specs} touch={touch} frame={frame} />
         </>
       )}
     </div>

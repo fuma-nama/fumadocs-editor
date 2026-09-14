@@ -45,6 +45,7 @@ import { updateAtomAttributes } from "./components/attributes";
 import { handleBlock, movableIn } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorContext } from "./components/context";
+import { BUBBLE_MENU_KEY } from "./components/caret-policy";
 import { chrome } from "./styles/shared";
 
 type Chain = ReturnType<Editor["chain"]>;
@@ -195,7 +196,7 @@ export function BlockTypePicker({
   block: string;
   side?: "top" | "bottom";
   triggerCls: string;
-  container: HTMLElement | undefined;
+  container: HTMLElement;
 }) {
   const current = TURN_INTO.find((item) => item.value === block);
   return (
@@ -349,7 +350,7 @@ function LinkControl({
 }: {
   editor: Editor;
   href: string | null;
-  container: HTMLElement | undefined;
+  container: HTMLElement;
 }) {
   const { files } = useEditorContext();
   const [open, setOpen] = useState(false);
@@ -358,12 +359,6 @@ function LinkControl({
   // Enter applies the typed draft only while no suggestion is highlighted;
   // a highlighted one commits through Base UI as an item-press instead
   const highlighted = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (open) setDraft(href ?? "");
-  }, [open, href]);
-  useEffect(() => {
-    if (open && files) void files.list().then(setPaths);
-  }, [open, files]);
 
   const apply = (url: string) => {
     const target = url.trim();
@@ -373,7 +368,15 @@ function LinkControl({
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) return;
+        setDraft(href ?? "");
+        void files?.list().then(setPaths);
+      }}
+    >
       <Popover.Trigger
         aria-label="Link"
         {...stylex.props(chrome.button, chrome.iconButton)}
@@ -466,13 +469,7 @@ const TABLE_OPS = [
   { label: "Delete table", run: (c: Chain) => c.deleteTable() },
 ] as const;
 
-function TableControl({
-  editor,
-  container,
-}: {
-  editor: Editor;
-  container: HTMLElement | undefined;
-}) {
+function TableControl({ editor, container }: { editor: Editor; container: HTMLElement }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -572,23 +569,25 @@ export function EditorBubble({
   editor,
   specs,
   touch,
+  frame,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
   touch: boolean;
+  /**
+   * The bubble and its popovers live here. The menu hides on editor blur
+   * unless focus lands inside the bubble's parent; the bubble is positioned
+   * with a transform (would skew a popup measured inside it); and the
+   * element must sit in [data-fde-root] for theme and ::selection. It must
+   * also be React-owned: EditorContent's unmount sweeps every child of
+   * `view.dom.parentElement` into a detached element, and a Base UI portal
+   * node caught in that sweep makes React's own removal throw.
+   */
+  frame: HTMLDivElement;
 }) {
-  // Cmd-. shows the bubble at a resting caret, past `shouldShow`
-  const [forced, setForced] = useState(false);
-  // Portal target: the menu hides on editor blur unless focus lands inside
-  // the bubble's parent, the bubble is positioned with a transform (would
-  // skew a popup measured inside it), and the container must sit in
-  // [data-fde-root] for theme and ::selection. The plugin appends the bubble
-  // to `view.dom.parentElement`, which satisfies all three. Resolved from the
-  // editor, never through refs (a ref-timing miss fell back to a body portal).
   // An object ref, not a callback: BubbleMenu assigns its ref during render,
   // where a state-setter callback would be a cross-component setState.
   const menuRef = useRef<HTMLDivElement>(null);
-  const wrapper = (editor.view.dom.parentElement as HTMLElement | null) ?? undefined;
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -615,20 +614,12 @@ export function EditorBubble({
     },
   });
 
-  const [panelOpen, setPanelOpen] = useBlockMenuOpen(editor, state?.block === true);
-
-  useEffect(() => {
-    const dom = editor.view.dom;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "." || !(event.metaKey || event.ctrlKey)) return;
-      event.preventDefault();
-      editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "show"));
-      setForced(true);
-      setPanelOpen(!panelOpen);
-    };
-    dom.addEventListener("keydown", onKeyDown);
-    return () => dom.removeEventListener("keydown", onKeyDown);
-  }, [editor, panelOpen, setPanelOpen]);
+  const {
+    open: panelOpen,
+    setOpen: setPanelOpen,
+    forced,
+    setForced,
+  } = useBlockMenuOpen(editor, state?.block === true);
 
   // the plugin positions the bubble once on show, before React fills it in,
   // and never again when its size changes (chip ↔ full toolbar). Re-anchor
@@ -637,7 +628,7 @@ export function EditorBubble({
     const el = menuRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
-      editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "updatePosition"));
+      editor.view.dispatch(editor.state.tr.setMeta(BUBBLE_MENU_KEY, "updatePosition"));
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -668,17 +659,17 @@ export function EditorBubble({
         el.style.transition = "";
       },
     }),
-    [touch, setPanelOpen],
+    [touch, setPanelOpen, setForced],
   );
   const shouldShow = useCallback(
     ({ state: editorState, view }: { state: EditorState; view: EditorView }) => {
       // focus in the bubble or a popover it portals into the wrapper keeps it
       // open; chrome inside node views (a table cell, an add button) does not
       const active = document.activeElement;
-      if (!view.hasFocus() && wrapper?.contains(active) && !view.dom.contains(active)) return true;
+      if (!view.hasFocus() && frame.contains(active) && !view.dom.contains(active)) return true;
       return touch ? view.hasFocus() : summoned(editorState);
     },
-    [wrapper, touch],
+    [frame, touch],
   );
   const getReferencedVirtualElement = useCallback(() => {
     const { selection } = editor.state;
@@ -693,8 +684,10 @@ export function EditorBubble({
   return (
     <BubbleMenu
       ref={menuRef}
+      pluginKey={BUBBLE_MENU_KEY}
       editor={editor}
       updateDelay={150}
+      appendTo={frame}
       options={options}
       shouldShow={shouldShow}
       getReferencedVirtualElement={getReferencedVirtualElement}
@@ -706,7 +699,7 @@ export function EditorBubble({
             editor={editor}
             block={state.turnInto}
             triggerCls={ghostSelectClass}
-            container={wrapper}
+            container={frame}
           />
           <span {...stylex.props(chrome.divider)} />
           <MarkButton label="Bold" active={state.bold} onClick={() => run((c) => c.toggleBold())}>
@@ -733,8 +726,8 @@ export function EditorBubble({
           >
             <Code size={15} />
           </MarkButton>
-          <LinkControl editor={editor} href={state.link} container={wrapper} />
-          {state.table && <TableControl editor={editor} container={wrapper} />}
+          <LinkControl editor={editor} href={state.link} container={frame} />
+          {state.table && <TableControl editor={editor} container={frame} />}
         </>
       )}
       {visible && state.atom?.kind === "image" && <ImagePanel editor={editor} />}
@@ -748,7 +741,7 @@ export function EditorBubble({
             active={state.active}
             open={panelOpen}
             onOpenChange={setPanelOpen}
-            container={wrapper}
+            container={frame}
             align="end"
             chipCls={chipClass}
             iconCls={iconClass}
