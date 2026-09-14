@@ -1,7 +1,6 @@
 import "@fontsource-variable/geist";
 import "@fontsource-variable/jetbrains-mono";
 import "@fumadocs-editor/ui/styles.css";
-import "./styles.css";
 import "virtual:fumadocs-studio-styles";
 import config from "virtual:fumadocs-studio-config";
 import { StrictMode } from "react";

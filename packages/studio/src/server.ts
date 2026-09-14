@@ -8,12 +8,10 @@ import {
   type Plugin,
   type ViteDevServer,
 } from "vite";
-import stylex from "@stylexjs/unplugin/vite";
 import { editorSync } from "@fumadocs-editor/core/vite";
 import type { StudioOptions } from "./load-config";
 
-const studioDir = path.resolve(import.meta.dirname, "..");
-const appDir = path.join(studioDir, "app");
+const appDir = path.resolve(import.meta.dirname, "../dist/app");
 
 /**
  * Packages the app and a user config import at runtime, resolved from this
@@ -148,16 +146,6 @@ export async function startStudio(options: StudioOptions): Promise<ViteDevServer
       studioPlugin(options),
       editorSync({ root: contentRoot, authenticate, upload, evictAfterMs, helloTimeoutMs }),
       packageAccess(),
-      // the app's StyleX compiles per request; its CSS is served from a virtual endpoint
-      stylex({
-        dev: false,
-        classNamePrefix: "fds",
-        propertyValidationMode: "throw",
-        unstable_moduleResolution: { type: "commonJS", rootDir: studioDir },
-        lightningcssOptions: {
-          targets: { chrome: 120 << 16, firefox: 120 << 16, safari: 17 << 16 },
-        },
-      }),
     ],
     server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },

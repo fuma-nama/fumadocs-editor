@@ -42,7 +42,7 @@ afterAll(async () => {
 
 test("serves the app", async () => {
   const html = await fetch(`${url}/`).then((r) => r.text());
-  expect(html).toContain('<script type="module" src="/main.tsx">');
+  expect(html).toContain('<script type="module" src="/main.js">');
   const styles = await fetch(`${url}/@id/__x00__fumadocs-studio-styles`).then((r) => r.text());
   expect(styles).toContain("extra.css");
   const config = await fetch(`${url}/@id/__x00__fumadocs-studio-config`).then((r) => r.text());
@@ -53,7 +53,7 @@ test("serves the assets of packages the app loads modules from", async () => {
   // fonts are not modules: the stylesheet's package makes them servable
   const css = realpathSync(createRequire(import.meta.url).resolve("@fontsource-variable/geist"));
   const font = path.join(path.dirname(css), "files/geist-latin-wght-normal.woff2");
-  await fetch(`${url}/main.tsx`);
+  await fetch(`${url}/main.js`);
   await fetch(`${url}/@fs${css}`);
   expect((await fetch(`${url}/@fs${font}`)).status).toBe(200);
   const outside = path.resolve(import.meta.dirname, "../package.json");
