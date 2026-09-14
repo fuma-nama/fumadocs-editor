@@ -9,6 +9,7 @@ import { componentExtensions } from "./components/node-views";
 import { codeBlockExtension } from "./components/code-block";
 import { useEditorContext } from "./components/context";
 import { mathExtensions } from "./components/math";
+import { activeSource } from "./components/active";
 import { slashMenu } from "./slash-menu";
 import { EditorBubble } from "./bubble-menu";
 import { BlockGutter } from "./block-gutter";
@@ -74,6 +75,7 @@ export const LiveEditor = memo(function LiveEditor({
         imageExtension(store),
         ...componentExtensions(specs),
         ...mathExtensions(syntax?.math === true),
+        activeSource,
         slashMenu(specs, store, syntax?.math),
         fileSuggest(specs, store),
         linkSuggest(store),

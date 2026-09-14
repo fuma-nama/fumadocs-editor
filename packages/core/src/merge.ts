@@ -163,3 +163,26 @@ function lcsPairs(a: string[], b: string[]): [number, number][] {
   }
   return pairs;
 }
+
+/** the local children with `ops` applied; indices refer to the pre-merge children */
+export function applyMergeOps(children: JSONContent[], ops: MergeOp[]): JSONContent[] {
+  const replace = new Map<number, JSONContent>();
+  const removed = new Set<number>();
+  const inserts = new Map<number, JSONContent[]>();
+  for (const op of ops) {
+    if (op.type === "replace") replace.set(op.local, op.node);
+    else if (op.type === "delete") removed.add(op.local);
+    else {
+      const list = inserts.get(op.after);
+      if (list) list.push(op.node);
+      else inserts.set(op.after, [op.node]);
+    }
+  }
+  const out: JSONContent[] = inserts.get(-1) ?? [];
+  for (let i = 0; i < children.length; i++) {
+    if (!removed.has(i)) out.push(replace.get(i) ?? children[i]);
+    const after = inserts.get(i);
+    if (after) for (const node of after) out.push(node);
+  }
+  return out;
+}

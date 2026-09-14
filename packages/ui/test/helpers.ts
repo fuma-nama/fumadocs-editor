@@ -68,18 +68,3 @@ export function caret(editor: Editor, text: string, at: "start" | "end" = "end")
   editor.commands.setTextSelection(pos);
   return pos;
 }
-
-/** dispatch a keydown; returns whether a handler consumed it */
-export function press(editor: Editor, key: string, init: KeyboardEventInit = {}) {
-  return !editor.view.dom.dispatchEvent(
-    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }),
-  );
-}
-
-/** node names on the path from doc to the caret */
-export function caretPath(editor: Editor): string[] {
-  const { $from } = editor.state.selection;
-  const path: string[] = [];
-  for (let depth = 1; depth <= $from.depth; depth++) path.push($from.node(depth).type.name);
-  return path;
-}

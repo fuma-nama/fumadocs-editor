@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
+  FileTree,
   useEditorTheme,
+  useWorkspace,
   admonitionSpec,
   filesFenceSpecs,
   fumadocsUiComponents,
@@ -17,7 +19,7 @@ import {
   wsTransport,
   type SessionStatus,
 } from "@fumadocs-editor/core/sync";
-import { FileText, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { FumadocsIcon } from "./logo";
 
 // static builds have no sync endpoint; never import from docs/ here. Vite
@@ -92,6 +94,7 @@ const media: MediaProvider = {
 const transport = wsTransport({ auth: authToken });
 
 function Playground() {
+  const workspace = useWorkspace({ transport });
   const [files, setFiles] = useState<string[] | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
@@ -208,23 +211,16 @@ function Playground() {
         </div>
       </header>
       <div className="flex flex-col items-start gap-4 md:flex-row">
-        <nav className="w-full shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5 md:w-52">
-          {files?.map((path) => (
-            <button
-              key={path}
-              type="button"
-              onClick={() => setActive(path)}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${
-                path === active
-                  ? "bg-fd-primary/10 font-medium text-fd-primary"
-                  : "text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
-              }`}
-            >
-              <FileText size={14} className="shrink-0" />
-              <span className="truncate">{path}</span>
-            </button>
-          ))}
-        </nav>
+        {workspace.tree && (
+          <nav className="w-full shrink-0 rounded-xl border border-fd-border bg-fd-card p-1.5 md:w-56">
+            <FileTree
+              tree={workspace.tree}
+              run={workspace.run}
+              active={active}
+              onSelect={setActive}
+            />
+          </nav>
+        )}
         <div className="w-full min-w-0 flex-1">
           {sync ? (
             <MdxEditor

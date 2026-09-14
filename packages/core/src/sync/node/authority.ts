@@ -17,13 +17,13 @@ import {
   type ComponentSpec,
   type Syntax,
   type SyntaxOptions,
-} from "../components/spec";
-import { parseMdxToDoc, type DocSnapshot } from "../document";
-import { serializeDocToMdx } from "../serializer";
-import { editorExtensions } from "../extensions/kit";
-import { mergeRemote, type MergeOp } from "../merge";
-import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "./wire";
-import type { FileState, SyncUser } from "./transport";
+} from "../../components/spec";
+import { parseMdxToDoc, type DocSnapshot } from "../../document";
+import { serializeDocToMdx } from "../../serializer";
+import { editorExtensions } from "../../extensions/kit";
+import { applyMergeOps, mergeRemote } from "../../merge";
+import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "../wire";
+import type { FileState, SyncUser } from "../transport";
 
 /** origin marker for Y transactions the authority applies from disk state */
 const DISK = "disk";
@@ -77,6 +77,8 @@ export interface DocAuthority<C> {
   handleBinary(conn: C, data: Uint8Array): void;
   /** the file changed on disk (chokidar); merged into the Y.Doc block-wise */
   diskChanged(path: string, state: FileState): void;
+  /** forget the document: unsaved edits are discarded, a running save completes first */
+  drop(path: string): Promise<void>;
   disconnect(conn: C): void;
   /** flush pending writes and drop every document */
   close(): Promise<void>;
@@ -153,7 +155,7 @@ export function createDocAuthority<C>({
       return;
     }
     if (result.ops.length > 0) {
-      const target = applyOps(local.content ?? [], result.ops);
+      const target = applyMergeOps(local.content ?? [], result.ops);
       const next = doc.schema.nodeFromJSON({ type: "doc", content: target });
       doc.ydoc.transact(
         () =>
@@ -310,6 +312,26 @@ export function createDocAuthority<C>({
       });
     },
 
+    async drop(path) {
+      const entry = docs.get(path);
+      if (!entry) return;
+      docs.delete(path);
+      const doc = await entry.catch(() => undefined);
+      if (!doc || !live.delete(doc)) return;
+      // a save in flight may merge disk state, which re-arms the debounce
+      // and can enqueue once more: drain until the queue stands still
+      let queue: Promise<void>;
+      do {
+        clearTimeout(doc.trailing);
+        clearTimeout(doc.maxWait);
+        clearTimeout(doc.evict);
+        queue = doc.queue;
+        await queue;
+      } while (queue !== doc.queue);
+      doc.awareness.destroy();
+      doc.ydoc.destroy();
+    },
+
     disconnect(conn) {
       for (const doc of live) {
         const owned = doc.conns.get(conn);
@@ -364,27 +386,4 @@ function withUser(update: Uint8Array, user: SyncUser): Uint8Array {
     );
   }
   return encoding.toUint8Array(encoder);
-}
-
-/** apply block-level merge ops (indices refer to the pre-merge children) */
-function applyOps(children: JSONContent[], ops: MergeOp[]): JSONContent[] {
-  const replace = new Map<number, JSONContent>();
-  const removed = new Set<number>();
-  const inserts = new Map<number, JSONContent[]>();
-  for (const op of ops) {
-    if (op.type === "replace") replace.set(op.local, op.node);
-    else if (op.type === "delete") removed.add(op.local);
-    else {
-      const list = inserts.get(op.after);
-      if (list) list.push(op.node);
-      else inserts.set(op.after, [op.node]);
-    }
-  }
-  const out: JSONContent[] = inserts.get(-1) ?? [];
-  for (let i = 0; i < children.length; i++) {
-    if (!removed.has(i)) out.push(replace.get(i) ?? children[i]);
-    const after = inserts.get(i);
-    if (after) out.push(...after);
-  }
-  return out;
 }

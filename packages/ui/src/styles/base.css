@@ -143,21 +143,6 @@
   border-radius: 2px;
 }
 
-/* JSX source shares the document's native caret and selection flow. */
-[data-fde-root] code[data-mdx-tag],
-[data-fde-root] pre[data-mdx-tag-block] {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 0.875em;
-  font-weight: 400;
-  color: var(--fde-hl-tag);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-[data-fde-root] pre[data-mdx-tag-block] {
-  margin-block: 0.4em;
-}
-
 /* TipTap wraps document tables; spacing lives on the wrapper */
 [data-fde-root] .tableWrapper {
   overflow-x: auto;

@@ -1,4 +1,5 @@
 import { Extension } from "@tiptap/core";
+import { JSX_TAG_MARK } from "@fumadocs-editor/core/extensions";
 import { contentClass, nodeClass } from "../styles/content";
 
 /** Attaches the content classes to TipTap's rendered DOM: one global
@@ -19,6 +20,10 @@ export const contentStyles = Extension.create({
     all.push({
       types: ["heading"],
       attributes: attribute((attrs) => ({ class: contentClass.heading(attrs.level as number) })),
+    });
+    all.push({
+      types: [JSX_TAG_MARK],
+      attributes: attribute((attrs) => ({ class: contentClass.jsxTag(attrs.self === true) })),
     });
     return all;
   },

@@ -108,7 +108,11 @@ function renderMarks(node: JSONContent, key: number): ReactNode {
         out = <code className={contentClass.code}>{out}</code>;
         break;
       case "mdxJsxTag":
-        out = <code data-mdx-tag="">{out}</code>;
+        out = (
+          <code className={contentClass.jsxTag(mark.attrs?.self === true)} data-mdx-tag="">
+            {out}
+          </code>
+        );
         break;
       case "link":
         out = (
@@ -431,8 +435,8 @@ function renderNode(
       );
     case "mdxJsxTagBlock":
       return (
-        <pre key={key} data-mdx-tag-block="">
-          <code>{children()}</code>
+        <pre key={key} className={contentClass.mdxJsxTagBlock} data-mdx-tag-block="">
+          {children()}
         </pre>
       );
     case "mdxTextExpression":

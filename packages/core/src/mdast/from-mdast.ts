@@ -54,6 +54,18 @@ function withMarks(node: JSONContent, marks: PMMark[]): JSONContent {
   return node;
 }
 
+/** an element's tags as authored: quotes, expressions and self-closing syntax kept */
+function jsxTags(node: MdxJsxFlowElement | MdxJsxTextElement, source: string) {
+  const start = node.position!.start.offset!;
+  const end = node.position!.end.offset!;
+  // attribute positions already cover strings and expressions containing `>`
+  const afterAttributes = node.attributes.at(-1)?.position?.end.offset ?? start + 1;
+  const openEnd = source.indexOf(">", afterAttributes) + 1;
+  const open = source.slice(start, openEnd);
+  const close = open.endsWith("/>") ? "" : source.slice(source.lastIndexOf("</", end - 1), end);
+  return { open, close };
+}
+
 /** estree node, structurally typed just enough for literal extraction */
 interface EstreeNode {
   type: string;
@@ -213,18 +225,15 @@ function phrasingToInline(
       case "mdxTextExpression":
         out.push(withMarks({ type: "mdxTextExpression", attrs: { value: node.value } }, marks));
         break;
-      case "mdxJsxTextElement":
-        out.push(
-          withMarks(
-            {
-              type: "mdxJsxTextElement",
-              attrs: { name: node.name ?? null, attributes: cleanAttributes(node.attributes) },
-              content: phrasingToInline(node.children, [], ctx),
-            },
-            marks,
-          ),
-        );
+      case "mdxJsxTextElement": {
+        const { open, close } = jsxTags(node, ctx.source);
+        const tag = (text: string, self: boolean) =>
+          withMarks({ type: "text", text }, [...marks, { type: "mdxJsxTag", attrs: { self } }]);
+        out.push(tag(open, !close));
+        out.push(...phrasingToInline(node.children, marks, ctx));
+        if (close) out.push(tag(close, false));
         break;
+      }
       default:
         // footnoteReference, linkReference, imageReference, html, ...
         out.push(
@@ -387,10 +396,15 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "mdxJsxFlowElement": {
       const component = blockComponentToNode(node, ctx);
       if (component) return component;
+      const { open, close } = jsxTags(node, ctx.source);
+      const tag = (text: string): JSONContent => ({
+        type: "mdxJsxTagBlock",
+        content: [{ type: "text", text }],
+      });
+      if (!close) return tag(open);
       return {
         type: "mdxJsxFlowElement",
-        attrs: { name: node.name ?? null, attributes: cleanAttributes(node.attributes) },
-        content: mixedChildrenToBlocks(node.children, ctx),
+        content: [tag(open), ...mixedChildrenToBlocks(node.children, ctx), tag(close)],
       };
     }
     case "containerDirective": {

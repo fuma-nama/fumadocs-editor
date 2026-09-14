@@ -1,5 +1,4 @@
 import type { DocSnapshot, ParsedDoc, SyntaxOptions } from "@fumadocs-editor/core/parse";
-import type { MergeOp } from "@fumadocs-editor/core/serialize";
 import type {
   FileSession,
   ReadResult,
@@ -13,6 +12,7 @@ import type { EditorCollab } from "./collab";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { specsByType, type UiComponentSpec } from "./components/spec";
 import { parseDocCached } from "./doc-cache";
+import { loadSync, sharedTransport } from "./transport";
 
 export interface MdxEditorRef {
   /** serialize; unedited blocks are byte-identical */
@@ -104,8 +104,6 @@ const SOURCE_PARSE_MS = 300;
 const SERIALIZE_MS = 250;
 const GUEST_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
 
-let sharedTransport: WsTransport | undefined;
-
 const noop = () => {};
 
 function initialState(options: DocumentOptions, generation: number): DocumentState {
@@ -119,30 +117,6 @@ function initialState(options: DocumentOptions, generation: number): DocumentSta
     collab: null,
     generation,
   };
-}
-
-/** the merge ops applied to a JSON document: index-addressed, so one pass */
-function applyOps(doc: JSONContent, ops: MergeOp[]): JSONContent {
-  const content = doc.content ?? [];
-  const replaced = new Map<number, JSONContent>();
-  const deleted = new Set<number>();
-  const inserted = new Map<number, JSONContent[]>();
-  for (const op of ops) {
-    if (op.type === "replace") replaced.set(op.local, op.node);
-    else if (op.type === "delete") deleted.add(op.local);
-    else {
-      const list = inserted.get(op.after);
-      if (list) list.push(op.node);
-      else inserted.set(op.after, [op.node]);
-    }
-  }
-  const next: JSONContent[] = inserted.get(-1) ?? [];
-  for (let i = 0; i < content.length; i++) {
-    if (!deleted.has(i)) next.push(replaced.get(i) ?? content[i]);
-    const after = inserted.get(i);
-    if (after) for (const node of after) next.push(node);
-  }
-  return { ...doc, content: next };
 }
 
 /**
@@ -236,9 +210,9 @@ export class DocumentStore {
     }
     const { path } = sync;
     const collabOn = Boolean(sync.collab);
-    void import("@fumadocs-editor/core/sync").then((mod) => {
+    void loadSync().then((mod) => {
       if (token !== this.token) return;
-      const transport = sync.transport ?? (sharedTransport ??= mod.wsTransport());
+      const transport = sync.transport ?? sharedTransport(mod);
       const report = (status: SessionStatus) => {
         if (token !== this.token) return;
         this.set({ status });
@@ -437,7 +411,8 @@ export class DocumentStore {
       this.replace(await this.parse(remote), remote);
       return [];
     }
-    const { mergeRemote, serializeDocToMdx } = await import("@fumadocs-editor/core/serialize");
+    const { applyMergeOps, mergeRemote, serializeDocToMdx } =
+      await import("@fumadocs-editor/core/serialize");
     if (this.live) {
       const { editor } = this.live;
       const { doc } = editor.state;
@@ -473,7 +448,7 @@ export class DocumentStore {
     const result = mergeRemote({ base, local, remoteText: remote });
     this.snapshot = result.remote.snapshot;
     if (result.ops.length > 0) {
-      const merged = applyOps(local, result.ops);
+      const merged = { ...local, content: applyMergeOps(local.content ?? [], result.ops) };
       this.markdown = serializeDocToMdx(merged, result.remote.snapshot);
       this.set({ content: merged, text: this.markdown });
     }

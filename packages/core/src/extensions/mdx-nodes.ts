@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { MdxJsxFlowElement, MdxJsxTag, MdxJsxTagBlock } from "./jsx-tags";
 
 /**
  * JSON-safe mirror of mdast-util-mdx-jsx attribute nodes (estree data stripped),
@@ -25,35 +26,6 @@ export interface MdxJsxExpressionAttribute {
 }
 
 export type MdxAttribute = MdxJsxAttribute | MdxJsxExpressionAttribute;
-
-const jsxAttrs = {
-  name: { default: null as string | null },
-  attributes: { default: [] as MdxAttribute[] },
-};
-
-export const MdxJsxFlowElement = Node.create({
-  name: "mdxJsxFlowElement",
-  group: "block",
-  content: "block*",
-  defining: true,
-  addAttributes: () => jsxAttrs,
-  parseHTML: () => [{ tag: "div[data-mdx-flow]" }],
-  renderHTML({ node }) {
-    return ["div", { "data-mdx-flow": "", "data-component": node.attrs.name ?? "Fragment" }, 0];
-  },
-});
-
-export const MdxJsxTextElement = Node.create({
-  name: "mdxJsxTextElement",
-  group: "inline",
-  inline: true,
-  content: "inline*",
-  addAttributes: () => jsxAttrs,
-  parseHTML: () => [{ tag: "span[data-mdx-inline]" }],
-  renderHTML({ node }) {
-    return ["span", { "data-mdx-inline": "", "data-component": node.attrs.name ?? "Fragment" }, 0];
-  },
-});
 
 function codeAtom(name: string, dataAttr: string) {
   return Node.create({
@@ -130,7 +102,8 @@ export const VerbatimInline = Node.create({
 
 export const mdxNodes = [
   MdxJsxFlowElement,
-  MdxJsxTextElement,
+  MdxJsxTag,
+  MdxJsxTagBlock,
   MdxFlowExpression,
   MdxTextExpression,
   MdxjsEsm,

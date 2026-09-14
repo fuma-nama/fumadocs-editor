@@ -8,8 +8,14 @@ import {
   type EditorMode,
   type MdxEditorRef,
   type MdxEditorSync,
+  useWorkspace,
 } from "@fumadocs-editor/ui";
-import type { SessionStatus } from "@fumadocs-editor/core/sync";
+import {
+  frontmatterTitle,
+  type SessionStatus,
+  type TreeNode,
+  type WorkspaceTree,
+} from "@fumadocs-editor/core/sync";
 import {
   Code,
   Copy,
@@ -25,15 +31,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import {
-  frontmatterTitle,
-  TREE_ENDPOINT,
-  TREE_EVENT,
-  type TreeCommand,
-  type TreeNode,
-  type TreeResponse,
-} from "./protocol";
-import { authHeaders, collab, components, media, syntax, transport } from "./providers";
+import { collab, components, media, syntax, transport } from "./providers";
 import { FilePanel } from "./files";
 import { Palette, type PaletteGroup, type PaletteItem } from "./palette";
 
@@ -89,8 +87,12 @@ const styles = stylex.create({
   },
 });
 
-type TreeError = "denied" | "offline";
 type FileNode = Extract<TreeNode, { type: "file" }>;
+/** the open file's title as typed, ahead of the save reaching the tree */
+interface Title {
+  path: string;
+  title: string;
+}
 
 const UNSAVED = new Set<SessionStatus>(["dirty", "saving", "conflict"]);
 const PANEL_KEY = "fde-studio-files";
@@ -111,7 +113,7 @@ function collectFiles(nodes: TreeNode[], into: FileNode[] = []): FileNode[] {
 }
 
 /** the tree with `path` retitled; the same array when nothing changed */
-function retitle(nodes: TreeNode[], path: string, title: string): TreeNode[] {
+function retitle(nodes: TreeNode[], { path, title }: Title): TreeNode[] {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     let next: TreeNode;
@@ -119,7 +121,7 @@ function retitle(nodes: TreeNode[], path: string, title: string): TreeNode[] {
       if (node.title === title) return nodes;
       next = { ...node, title };
     } else if (node.type === "folder" && path.startsWith(`${node.path}/`)) {
-      const children = retitle(node.children, path, title);
+      const children = retitle(node.children, { path, title });
       if (children === node.children) return nodes;
       next = { ...node, children };
     } else continue;
@@ -151,8 +153,8 @@ const openFile = (path: string) => {
 };
 
 export function Studio() {
-  const [response, setResponse] = useState<TreeResponse | null>(null);
-  const [error, setError] = useState<TreeError | null>(null);
+  const workspace = useWorkspace({ transport });
+  const [typed, setTyped] = useState<Title | null>(null);
   const hash = useSyncExternalStore(subscribeHash, readHash);
   const [status, setStatus] = useState<SessionStatus>("synced");
   const [writable, setWritable] = useState(true);
@@ -163,47 +165,6 @@ export function Studio() {
   const { theme, setTheme } = useEditorTheme();
   const editorRef = useRef<MdxEditorRef>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const loads = useRef(0);
-
-  const loadTree = useCallback(async () => {
-    // only the latest response may land
-    const id = ++loads.current;
-    try {
-      const res = await fetch(TREE_ENDPOINT, { headers: await authHeaders(), cache: "no-store" });
-      const body = res.ok ? ((await res.json()) as TreeResponse) : null;
-      if (id !== loads.current) return;
-      if (res.status === 401 || res.status === 403) return setError("denied");
-      if (!body) throw new Error(res.statusText);
-      setResponse(body);
-      setError(null);
-    } catch {
-      if (id === loads.current) setError("offline");
-    }
-  }, []);
-
-  const run = useCallback(async (command: TreeCommand) => {
-    const headers = await authHeaders();
-    headers["content-type"] = "application/json";
-    const res = await fetch(TREE_ENDPOINT, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(command),
-    });
-    if (!res.ok) throw new Error((await res.text()) || res.statusText);
-    const body = (await res.json()) as TreeResponse;
-    // a fetch still in flight would land an older tree over this one
-    loads.current++;
-    setResponse(body);
-    setError(null);
-  }, []);
-
-  // the server pings over Vite's HMR socket whenever the tree changes on disk
-  useEffect(() => {
-    void loadTree();
-    const hot = import.meta.hot;
-    hot?.on(TREE_EVENT, loadTree);
-    return () => hot?.off(TREE_EVENT, loadTree);
-  }, [loadTree]);
 
   const setPanel = useCallback((open: boolean) => {
     setPanelOpen(open);
@@ -226,14 +187,19 @@ export function Studio() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [openPalette]);
 
-  const files = useMemo(() => (response ? collectFiles(response.tree) : []), [response]);
+  const tree = useMemo<WorkspaceTree | null>(() => {
+    if (!workspace.tree || !typed) return workspace.tree;
+    const nodes = retitle(workspace.tree.nodes, typed);
+    return nodes === workspace.tree.nodes ? workspace.tree : { ...workspace.tree, nodes };
+  }, [workspace.tree, typed]);
+  const files = useMemo(() => (tree ? collectFiles(tree.nodes) : []), [tree]);
   // the hash names the open file; a missing or stale one falls back to the first
   const active =
     hash !== null && files.some((file) => file.path === hash) ? hash : (files[0]?.path ?? null);
   // without a file there is no header to open the list from
-  const panelShown = panelOpen || (response !== null && files.length === 0);
+  const panelShown = panelOpen || (tree !== null && files.length === 0);
 
-  const docTitle = active ?? response?.root ?? "Fumadocs Studio";
+  const docTitle = active ?? tree?.root ?? "Fumadocs Studio";
   if (typeof document !== "undefined" && document.title !== docTitle) {
     document.title = docTitle;
   }
@@ -276,11 +242,9 @@ export function Studio() {
     const title =
       frontmatterTitle(markdown) ??
       active.slice(active.lastIndexOf("/") + 1).replace(/\.mdx?$/, "");
-    setResponse((current) => {
-      if (!current) return current;
-      const tree = retitle(current.tree, active, title);
-      return tree === current.tree ? current : { ...current, tree };
-    });
+    setTyped((current) =>
+      current?.path === active && current.title === title ? current : { path: active, title },
+    );
   };
 
   const header = {
@@ -375,9 +339,11 @@ export function Studio() {
   }, [files, panelOpen, active, mode, theme, setTheme, setPanel]);
 
   let message: string | null = null;
-  if (error === "denied") message = "Access denied: this token cannot open the workspace.";
-  else if (error === "offline") message = "The studio server is not reachable.";
-  else if (response && files.length === 0) message = `No .md or .mdx files under ${response.root}.`;
+  if (workspace.status === "denied") {
+    message = "Access denied: this token cannot open the workspace.";
+  } else if (!tree) {
+    if (workspace.status === "offline") message = "The studio server is not reachable.";
+  } else if (files.length === 0) message = `No .md or .mdx files under ${tree.root}.`;
 
   return (
     <div {...stylex.props(panelShown && styles.withPanel)} ref={rootRef}>
@@ -399,15 +365,14 @@ export function Studio() {
           />
         )
       )}
-      {response && (
+      {tree && (
         <FilePanel
-          root={response.root}
-          nodes={response.tree}
+          tree={tree}
+          run={workspace.run}
           active={active}
-          hidden={!panelShown}
           onSelect={openFile}
+          hidden={!panelShown}
           onClose={closePanel}
-          run={run}
           container={rootRef}
         />
       )}

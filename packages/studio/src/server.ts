@@ -1,4 +1,3 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,17 +8,9 @@ import {
   type Plugin,
   type ViteDevServer,
 } from "vite";
-import {
-  ASSET_ENDPOINT,
-  AUTH_HEADER,
-  SYNC_ENDPOINT,
-  UPLOAD_ENDPOINT,
-} from "@fumadocs-editor/core/sync";
 import stylex from "@stylexjs/unplugin/vite";
-import { createSyncServer, type SyncScope } from "@fumadocs-editor/core/node";
-import { TREE_ENDPOINT, TREE_EVENT, type TreeCommand, type TreeResponse } from "../app/protocol";
+import { editorSync } from "@fumadocs-editor/core/vite";
 import type { StudioOptions } from "./load-config";
-import { CommandError, openWorkspace } from "./tree";
 
 const studioDir = path.resolve(import.meta.dirname, "..");
 const appDir = path.join(studioDir, "app");
@@ -72,9 +63,6 @@ const CONFIG_ID = "virtual:fumadocs-studio-config";
 const STYLES_ID = "virtual:fumadocs-studio-styles";
 const EMPTY_CONFIG_ID = "\0fumadocs-studio-config";
 const RESOLVED_STYLES_ID = "\0fumadocs-studio-styles";
-/** editors write in bursts; read a changed file once it settles */
-const SETTLE_MS = 100;
-const MAX_COMMAND_BYTES = 64 * 1024;
 
 function optimizeInclude(): string[] {
   const include: string[] = [];
@@ -127,82 +115,8 @@ export function baseConfig(projectRoot: string): InlineConfig {
   };
 }
 
-const ALLOW_ALL: SyncScope = { write: true };
-
-const allows = (rule: SyncScope["read"], target: string) =>
-  typeof rule === "function" ? rule(target) : rule !== false;
-
-function readJson(request: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    request.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > MAX_COMMAND_BYTES) {
-        reject(new CommandError(413, "command too large"));
-        request.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    request.on("end", () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-      } catch {
-        reject(new CommandError(400, "not a JSON command"));
-      }
-    });
-    request.on("error", reject);
-  });
-}
-
-const isString = (value: unknown): value is string => typeof value === "string";
-
-function parseCommand(body: unknown): TreeCommand {
-  const command = body as Partial<Record<string, unknown>> | null;
-  if (command && typeof command === "object") {
-    const { type, path: target, title, dir, order } = command;
-    if (type === "create" && isString(target) && isString(title)) {
-      return { type, path: target, title };
-    }
-    if (type === "mkdir" && isString(dir) && isString(title)) return { type, dir, title };
-    if (type === "delete" && isString(target)) return { type, path: target };
-    if (type === "order" && isString(dir) && Array.isArray(order) && order.every(isString)) {
-      return { type, dir, order };
-    }
-  }
-  throw new CommandError(400, "not a tree command");
-}
-
-function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions): Plugin {
-  const { authenticate, upload, evictAfterMs, helloTimeoutMs } = server;
-  const workspace = openWorkspace(contentRoot);
-
-  const authorize = async (request: IncomingMessage): Promise<SyncScope | null> => {
-    const header = request.headers[AUTH_HEADER];
-    let payload: unknown;
-    if (typeof header === "string") {
-      try {
-        payload = JSON.parse(header);
-      } catch {
-        return null;
-      }
-    }
-    if (!authenticate) return ALLOW_ALL;
-    try {
-      return await authenticate({ request, payload });
-    } catch {
-      return null;
-    }
-  };
-
-  const sendTree = async (scope: SyncScope, response: ServerResponse) => {
-    const tree = (await workspace).tree((target) => allows(scope.read, target));
-    response.setHeader("content-type", "application/json");
-    response.setHeader("cache-control", "no-store");
-    response.end(JSON.stringify({ root: path.basename(contentRoot), tree } satisfies TreeResponse));
-  };
-
+/** the config and the user's stylesheets as virtual modules of the app */
+function studioPlugin({ configFile, styles }: StudioOptions): Plugin {
   return {
     name: "fumadocs-studio",
     resolveId(id) {
@@ -218,79 +132,13 @@ function studioPlugin({ configFile, styles, contentRoot, server }: StudioOptions
         return code;
       }
     },
-    configureServer(vite) {
-      const sync = createSyncServer({
-        root: contentRoot,
-        authenticate,
-        upload,
-        evictAfterMs,
-        helloTimeoutMs,
-      });
-      vite.httpServer?.on("upgrade", (request, socket, head) => {
-        if (request.url === SYNC_ENDPOINT) sync.handleUpgrade(request, socket, head as Buffer);
-      });
-      vite.httpServer?.once("close", () => void sync.close());
-      vite.middlewares.use(UPLOAD_ENDPOINT, sync.handleUpload);
-      vite.middlewares.use(ASSET_ENDPOINT, sync.handleAsset);
-
-      // the documents are not modules, so Vite's watcher only feeds the index
-      vite.watcher.add(contentRoot);
-      const pending = new Map<string, NodeJS.Timeout>();
-      let ping: NodeJS.Timeout | undefined;
-      vite.watcher.on("all", (event, file) => {
-        clearTimeout(pending.get(file));
-        pending.set(
-          file,
-          setTimeout(() => {
-            pending.delete(file);
-            workspace
-              .then((ws) => ws.update(event, file))
-              .then((changed) => {
-                if (!changed) return;
-                clearTimeout(ping);
-                ping = setTimeout(() => vite.hot.send(TREE_EVENT), SETTLE_MS);
-              });
-          }, SETTLE_MS),
-        );
-      });
-
-      const handle = async (request: IncomingMessage, response: ServerResponse) => {
-        const scope = await authorize(request);
-        if (!scope) throw new CommandError(401, "");
-        if (request.method !== "POST") return sendTree(scope, response);
-        const command = parseCommand(await readJson(request));
-        const ws = await workspace;
-        const target =
-          command.type === "order"
-            ? command.dir
-              ? `${command.dir}/meta.json`
-              : "meta.json"
-            : command.type === "mkdir"
-              ? `${command.dir}/index.mdx`
-              : command.path;
-        if (!allows(scope.write, target))
-          throw new CommandError(403, `no write access to ${target}`);
-        if (command.type === "create") await ws.create(command.path, command.title);
-        else if (command.type === "mkdir") await ws.mkdir(command.dir, command.title);
-        else if (command.type === "delete") {
-          await ws.remove(command.path, () => sync.remove(command.path));
-        } else await ws.order(command.dir, command.order);
-        await sendTree(scope, response);
-      };
-      vite.middlewares.use(TREE_ENDPOINT, (request, response) => {
-        handle(request, response).catch((error: unknown) => {
-          response.statusCode = error instanceof CommandError ? error.status : 500;
-          response.setHeader("content-type", "text/plain");
-          response.end(error instanceof Error ? error.message : String(error));
-        });
-      });
-    },
   };
 }
 
 /** starts the studio's Vite dev server; resolves once it listens */
 export async function startStudio(options: StudioOptions): Promise<ViteDevServer> {
-  const { projectRoot, port, host, open, server } = options;
+  const { projectRoot, contentRoot, port, host, open, server } = options;
+  const { authenticate, upload, evictAfterMs, helloTimeoutMs } = server;
   const config: InlineConfig = mergeConfig(baseConfig(projectRoot), {
     publicDir: false,
     clearScreen: false,
@@ -298,6 +146,7 @@ export async function startStudio(options: StudioOptions): Promise<ViteDevServer
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
     plugins: [
       studioPlugin(options),
+      editorSync({ root: contentRoot, authenticate, upload, evictAfterMs, helloTimeoutMs }),
       packageAccess(),
       // the app's StyleX compiles per request; its CSS is served from a virtual endpoint
       stylex({

@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Plugin } from "vite";
-import { createSyncServer, type SyncServerOptions } from "./node";
+import { createSyncServer, type SyncServerOptions } from "./node/server";
 import { ASSET_ENDPOINT, SYNC_ENDPOINT, UPLOAD_ENDPOINT } from "./transport";
 
 export interface EditorSyncOptions extends Omit<SyncServerOptions, "root"> {

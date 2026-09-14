@@ -16,3 +16,5 @@ export type {
   SyncUser,
   WriteResult,
 } from "./sync/transport";
+export { frontmatterTitle, pagesEntry } from "./sync/tree";
+export type { TreeCommand, TreeNode, WorkspaceTree } from "./sync/tree";

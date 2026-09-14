@@ -2,14 +2,15 @@ import { mkdir, mkdtemp, readFile, rename, rm, unlink, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { frontmatterTitle, pagesEntry, type TreeNode } from "../app/protocol";
 import {
   buildTree,
-  CommandError,
-  openWorkspace,
+  frontmatterTitle,
   orderPages,
+  pagesEntry,
+  type TreeNode,
   type WorkspaceIndex,
-} from "../src/tree";
+} from "../../src/sync/tree";
+import { openWorkspace } from "../../src/sync/node/workspace";
 
 const outline = (nodes: TreeNode[]): unknown[] =>
   nodes.map((node) =>
@@ -141,7 +142,7 @@ describe("frontmatterTitle", () => {
 describe("openWorkspace", () => {
   let root: string;
   beforeAll(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "fde-studio-tree-"));
+    root = await mkdtemp(path.join(tmpdir(), "fde-workspace-"));
     await mkdir(path.join(root, "guides/.hidden"), { recursive: true });
     await mkdir(path.join(root, "node_modules/pkg"), { recursive: true });
     await mkdir(path.join(root, "private"));
@@ -175,30 +176,30 @@ describe("openWorkspace", () => {
     const at = (relative: string) => path.join(root, relative);
 
     await writeFile(at("new.mdx"), "---\ntitle: New\n---\n");
-    expect(await workspace.update("add", at("new.mdx"))).toBe(true);
+    expect(await workspace.update("add", "new.mdx")).toBe(true);
     expect(all()).toContain("New");
     // same title: nothing to announce
-    expect(await workspace.update("change", at("new.mdx"))).toBe(false);
+    expect(await workspace.update("change", "new.mdx")).toBe(false);
     await writeFile(at("new.mdx"), "---\ntitle: Renamed\n---\n");
-    expect(await workspace.update("change", at("new.mdx"))).toBe(true);
+    expect(await workspace.update("change", "new.mdx")).toBe(true);
     expect(all()).toContain("Renamed");
     await unlink(at("new.mdx"));
-    expect(await workspace.update("unlink", at("new.mdx"))).toBe(true);
+    expect(await workspace.update("unlink", "new.mdx")).toBe(true);
     expect(all()).not.toContain("Renamed");
 
     await writeFile(at("meta.json"), JSON.stringify({ pages: ["private", "..."] }));
-    expect(await workspace.update("change", at("meta.json"))).toBe(true);
+    expect(await workspace.update("change", "meta.json")).toBe(true);
     expect(all()[0]).toEqual({ private: ["Secret"] });
 
     // a directory moved in arrives as one addDir; moved out as one unlinkDir
     await rename(at("private"), at("public"));
-    expect(await workspace.update("unlinkDir", at("private"))).toBe(true);
-    expect(await workspace.update("addDir", at("public"))).toBe(true);
+    expect(await workspace.update("unlinkDir", "private")).toBe(true);
+    expect(await workspace.update("addDir", "public")).toBe(true);
     expect(all()).toEqual(["Home", { guides: ["a"] }, { public: ["Secret"] }]);
 
-    expect(await workspace.update("add", at("notes.txt"))).toBe(false);
-    expect(await workspace.update("add", at("guides/.hidden/x.mdx"))).toBe(false);
-    expect(await workspace.update("add", path.join(root, "..", "outside.mdx"))).toBe(false);
+    expect(await workspace.update("add", "notes.txt")).toBe(false);
+    expect(await workspace.update("add", "guides/.hidden/x.mdx")).toBe(false);
+    expect(await workspace.update("add", "../outside.mdx")).toBe(false);
   });
 });
 
@@ -263,7 +264,7 @@ describe("commands", () => {
   const read = (relative: string) => readFile(path.join(root, relative), "utf8");
   const meta = async (relative: string) => JSON.parse(await read(relative)) as unknown;
   beforeAll(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "fde-studio-commands-"));
+    root = await mkdtemp(path.join(tmpdir(), "fde-workspace-commands-"));
     await mkdir(path.join(root, "guides"));
     await writeFile(path.join(root, "index.mdx"), "---\ntitle: Home\n---\n");
     await writeFile(path.join(root, "guides/a.mdx"), "");
@@ -286,11 +287,9 @@ describe("commands", () => {
       { deep: [{ nested: ["Nested"] }] },
       { Guides: ["a", "New: Draft"] },
     ]);
-    await expect(workspace.create("guides/new.mdx", "Again")).rejects.toMatchObject({
-      status: 409,
-    });
-    await expect(workspace.create("../out.mdx", "Out")).rejects.toBeInstanceOf(CommandError);
-    await expect(workspace.create("notes.txt", "Text")).rejects.toMatchObject({ status: 400 });
+    await expect(workspace.create("guides/new.mdx", "Again")).rejects.toThrow(/already exists/);
+    await expect(workspace.create("../out.mdx", "Out")).rejects.toThrow(/not a workspace path/);
+    await expect(workspace.create("notes.txt", "Text")).rejects.toThrow(/not a page path/);
   });
 
   test("mkdir: meta title, index page, listed in an explicit parent, refused twice", async () => {
@@ -305,11 +304,9 @@ describe("commands", () => {
     expect(outline(workspace.tree(() => true))[2]).toEqual({
       Guides: ["a", "New: Draft", { "Advanced Topics": ["Advanced Topics"] }],
     });
-    await expect(workspace.mkdir("guides/advanced", "Again")).rejects.toMatchObject({
-      status: 409,
-    });
-    await expect(workspace.mkdir("guides", "Guides")).rejects.toMatchObject({ status: 409 });
-    await expect(workspace.mkdir("../out", "Out")).rejects.toMatchObject({ status: 400 });
+    await expect(workspace.mkdir("guides/advanced", "Again")).rejects.toThrow(/already exists/);
+    await expect(workspace.mkdir("guides", "Guides")).rejects.toThrow(/already exists/);
+    await expect(workspace.mkdir("../out", "Out")).rejects.toThrow(/not a workspace path/);
   });
 
   test("order: rewrites pages, keeps other fields, refuses unknown keys", async () => {
@@ -323,8 +320,8 @@ describe("commands", () => {
     });
     await workspace.order("", ["guides", "index", "deep"]);
     expect(await meta("meta.json")).toEqual({ pages: ["guides", "..."] });
-    await expect(workspace.order("guides", ["zzz"])).rejects.toMatchObject({ status: 409 });
-    await expect(workspace.order("nope", [])).rejects.toMatchObject({ status: 404 });
+    await expect(workspace.order("guides", ["zzz"])).rejects.toThrow(/no longer under/);
+    await expect(workspace.order("nope", [])).rejects.toThrow(/no pages under/);
   });
 
   test("remove: unlinks through the callback and drops the entry", async () => {
@@ -342,8 +339,6 @@ describe("commands", () => {
     expect(outline(workspace.tree(() => true))[0]).toEqual({
       Guides: ["--- Start", "a", { "Advanced Topics": ["Advanced Topics"] }],
     });
-    await expect(workspace.remove("guides/new.mdx", async () => {})).rejects.toMatchObject({
-      status: 404,
-    });
+    await expect(workspace.remove("guides/new.mdx", async () => {})).rejects.toThrow(/no page at/);
   });
 });

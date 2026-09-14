@@ -7,6 +7,7 @@ import {
   type SyncTransport,
   type WriteResult,
 } from "./transport";
+import type { TreeCommand, WorkspaceTree } from "./tree";
 
 export interface WsTransportOptions {
   /** websocket url; defaults to the dev-server mount on the current host */
@@ -20,6 +21,8 @@ export interface WsTransportOptions {
 }
 
 export interface WsTransport extends SyncTransport {
+  tree(onChange: (tree: WorkspaceTree) => void): () => void;
+  command(command: TreeCommand): Promise<void>;
   close(): void;
   status(): ConnectionStatus;
   /** connection state changes; fires immediately with the current state */
@@ -58,6 +61,8 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
   let backoff = 300;
   const pending = new Map<number, { resolve: (v: never) => void; reject: (e: Error) => void }>();
   const watchers = new Map<string, Set<(state: FileState) => void>>();
+  const treeListeners = new Set<(tree: WorkspaceTree) => void>();
+  let lastTree: WorkspaceTree | undefined;
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
   const binaryListeners = new Set<(data: Uint8Array) => void>();
 
@@ -74,6 +79,14 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
       pending.set(id, { resolve: resolve as (v: never) => void, reject });
     });
   };
+
+  const treeArrived = (tree: WorkspaceTree) => {
+    lastTree = tree;
+    for (const listener of treeListeners) listener(tree);
+  };
+  /** subscribes on the server; its reply is the current tree */
+  const subscribeTree = (ws: WebSocket) =>
+    post<WorkspaceTree>(ws, { type: "tree" }).then(treeArrived, () => {});
 
   const connect = () => {
     if (closed || denied) return;
@@ -96,6 +109,7 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
               ready = true;
               backoff = 300;
               for (const path of watchers.keys()) ws.send(JSON.stringify({ type: "watch", path }));
+              if (treeListeners.size > 0) void subscribeTree(ws);
               settle();
               emitStatus();
             },
@@ -114,6 +128,13 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
       if (message.type === "change") {
         const state = { text: message.text as string, version: message.version as string };
         for (const listener of watchers.get(message.path) ?? []) listener(state);
+        return;
+      }
+      if (message.type === "tree") {
+        treeArrived({
+          root: message.root as string,
+          nodes: message.nodes as WorkspaceTree["nodes"],
+        });
         return;
       }
       const entry = pending.get(message.id);
@@ -167,6 +188,18 @@ export function wsTransport(options: WsTransportOptions = {}): WsTransport {
         }
       };
     },
+    tree(onChange) {
+      if (treeListeners.size === 0 && ready && socket) void subscribeTree(socket);
+      treeListeners.add(onChange);
+      if (lastTree) onChange(lastTree);
+      return () => {
+        treeListeners.delete(onChange);
+        if (treeListeners.size === 0 && ready && socket) {
+          socket.send(JSON.stringify({ type: "untree" }));
+        }
+      };
+    },
+    command: (command) => request<void>(command),
     status,
     onStatus(listener) {
       statusListeners.add(listener);

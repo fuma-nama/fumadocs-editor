@@ -1,21 +1,13 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
 import { tokens } from "../styles/tokens.stylex";
-import {
-  Extension,
-  InputRule,
-  textblockTypeInputRule,
-  type Editor,
-  type Extensions,
-} from "@tiptap/core";
+import { InputRule, textblockTypeInputRule, type Editor, type Extensions } from "@tiptap/core";
 import {
   MATH_BLOCK_NODE,
   MATH_INLINE_NODE,
   MathBlock,
   MathInline,
 } from "@fumadocs-editor/core/extensions";
-import { Plugin } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
   NodeViewContent,
   NodeViewWrapper,
@@ -177,31 +169,6 @@ function MathBlockView(props: NodeViewProps) {
   );
 }
 
-const mathActive = Extension.create({
-  name: "fdeMathActive",
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        props: {
-          decorations(state) {
-            const { $from } = state.selection;
-            for (let depth = $from.depth; depth > 0; depth--) {
-              const node = $from.node(depth);
-              if (node.type.name === MATH_INLINE_NODE || node.type.name === MATH_BLOCK_NODE) {
-                const pos = $from.before(depth);
-                return DecorationSet.create(state.doc, [
-                  Decoration.node(pos, pos + node.nodeSize, { "data-active": "" }),
-                ]);
-              }
-            }
-            return DecorationSet.empty;
-          },
-        },
-      }),
-    ];
-  },
-});
-
 /*
  * Arrow entry into math. Inactive TeX is display:none (preview shows);
  * Chromium and WebKit step into hidden text (activating the node), Firefox
@@ -323,6 +290,5 @@ export function mathExtensions(enabled: boolean): Extensions {
         };
       },
     }),
-    mathActive,
   ];
 }

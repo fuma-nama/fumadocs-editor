@@ -21,7 +21,7 @@ import { inlineMathToMdast, mathToMdast } from "../syntax/math/serialize";
 import { FENCE_FILES } from "../syntax/files";
 import { filesFenceToMdast } from "../syntax/files/serialize";
 import { appendHeadingSuffixes } from "../syntax/heading-suffixes";
-import type { RawNode } from "./stringify";
+import type { RawNode, JsxSourceNode } from "./stringify";
 
 const EMPTY_SYNTAX = createSyntax();
 
@@ -97,13 +97,6 @@ function leafToPhrasing(node: JSONContent): PhrasingContent {
       return { type: "mdxTextExpression", value: String(node.attrs?.value ?? "") };
     case "mathInline":
       return inlineMathToMdast(textOf(node), node.attrs?.delimiter);
-    case "mdxJsxTextElement":
-      return {
-        type: "mdxJsxTextElement",
-        name: (node.attrs?.name as string | null) ?? null,
-        attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
-        children: inlineToPhrasing(node.content),
-      };
     case "verbatimInline":
       return { type: "raw", value: String(node.attrs?.value ?? "") } as unknown as PhrasingContent;
     default:
@@ -131,6 +124,11 @@ function convertRun(items: InlineItem[]): PhrasingContent[] {
 
     if (mark.type === "code") {
       out.push({ type: "inlineCode", value: run.map((r) => textOf(r.node)).join("") });
+    } else if (mark.type === "mdxJsxTag") {
+      out.push({
+        type: "raw",
+        value: run.map((r) => textOf(r.node)).join(""),
+      } as unknown as PhrasingContent);
     } else {
       const inner = convertRun(
         run.map((r) => ({ node: r.node, marks: r.marks.filter((m) => !markEquals(m, mark)) })),
@@ -255,15 +253,18 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
       return mathToMdast(textOf(node), node.attrs?.meta);
     case "table":
       return tableToMdast(node);
-    case "mdxJsxFlowElement":
+    case "mdxJsxFlowElement": {
+      // the tag guard keeps the first and last child as the element's tags
+      const content = node.content!;
       return {
-        type: "mdxJsxFlowElement",
-        name: (node.attrs?.name as string | null) ?? null,
-        attributes: attributesToMdast(node.attrs?.attributes as MdxAttribute[]),
-        children: (node.content ?? []).map(
-          (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
-        ),
-      };
+        type: "jsxSource",
+        open: textOf(content[0]),
+        close: textOf(content[content.length - 1]),
+        children: content.slice(1, -1).map((child) => nodeToMdastBlock(child, syntax)),
+      } satisfies JsxSourceNode as unknown as RootContent;
+    }
+    case "mdxJsxTagBlock":
+      return { type: "raw", value: textOf(node) } as unknown as RootContent;
     case "mdxFlowExpression":
       return { type: "mdxFlowExpression", value: String(node.attrs?.value ?? "") };
     case "mdxjsEsm":
