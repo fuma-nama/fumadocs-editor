@@ -1,14 +1,23 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Compose the editor from parts\n\n`MdxEditor` is now a preset over exported parts: `MdxEditor.Root` owns the\ndocument (parse, sync, collab, the ref) and renders no chrome;\n`MdxEditor.Visual`, `MdxEditor.Source`, `MdxEditor.Status` and\n`MdxEditor.Tabs` render inside it, in any layout, both surfaces at once if\nyou want a split view. `useSourceText()`, `useSyncStatus()` and\n`useEditorMode()` back chrome of your own, a CodeMirror source pane for\nexample.\n\nThe document is the truth and the source is a projection: visual edits\nserialize into the text, text edits parse back into the document, and text\nthat does not parse leaves the document alone and reports the error.\n\nUnder the hood the root is now a plain document store; the parts and hooks\nsubscribe to it, so a source-only or a split host pays for nothing it does\nnot render.\n"
-    filename: 2026-09-08-source-editor-slot.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: minor\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Edit the sidebar from the file list\n\nThe studio's file list now edits `meta.json` and the pages it orders.\n"
+    filename: 2026-09-14-studio-sidebar-editor.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Unknown JSX is edited as source\n\nAn element with no registered spec keeps its children editable; its tags show as source while the caret is inside. Names and attributes are edited in place, and a tag whose brackets break is removed together with its partner, so the document always re-parses. The `mdxJsxTextElement` node is gone: inline tags carry the `mdxJsxTag` mark and block tags are `mdxJsxTagBlock` blocks around the element's children.\n"
+    filename: 2026-09-15-jsx-tags.md
     v: 0.0.0
 core:packages:
-  - id: npm:@fumadocs-editor/core
-    updated: false
-  - id: npm:@fumadocs-editor/studio
+  - changelogIds:
+      - 2026-09-14-studio-sidebar-editor.md
+      - 2026-09-15-jsx-tags.md
+    id: npm:@fumadocs-editor/core
     updated: true
   - changelogIds:
-      - 2026-09-08-source-editor-slot.md
+      - 2026-09-14-studio-sidebar-editor.md
+    id: npm:@fumadocs-editor/studio
+    updated: true
+  - changelogIds:
+      - 2026-09-14-studio-sidebar-editor.md
+      - 2026-09-15-jsx-tags.md
     id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:

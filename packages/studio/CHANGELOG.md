@@ -1,3 +1,9 @@
+## @fumadocs-editor/studio@0.2.0
+
+### Edit the sidebar from the file list
+
+The studio's file list now edits `meta.json` and the pages it orders.
+
 ## @fumadocs-editor/studio@0.1.1
 
 ### Studio starts under every install layout
