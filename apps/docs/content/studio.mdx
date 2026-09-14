@@ -15,8 +15,9 @@ npx @fumadocs-editor/studio
 
 - edits autosave to disk; changes made on disk (a `git pull`, your IDE)
   merge into the open document, see [Sync](/sync)
-- the file list follows the filesystem: files added, removed or retitled on
-  disk show up as it happens, in the `meta.json` order Fumadocs uses
+- the [file tree](/file-tree) follows the filesystem: files added, removed
+  or retitled on disk show up as it happens, in the `meta.json` order
+  Fumadocs uses, and edits it back
 - `?collab` in the URL turns on [collaborative editing](/collab) for that
   tab; the palette has the same switch
 
@@ -99,7 +100,7 @@ too, as on any host page.
 
 ## File list order
 
-Studio reads the subset of `meta.json` that orders pages, as Fumadocs does:
+The file tree reads the subset of `meta.json` that orders pages, as Fumadocs does:
 
 | Entry              |                                                |
 | ------------------ | ---------------------------------------------- |
