@@ -41,7 +41,6 @@ const OPTIMIZE = [
   "@fumadocs-editor/core/serialize",
   "@fumadocs-editor/core/extensions",
   "@fumadocs-editor/core/sync",
-  "@fumadocs-editor/core/collab",
   "@base-ui/react/alert-dialog",
   "@base-ui/react/autocomplete",
   "@base-ui/react/collapsible",

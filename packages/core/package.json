@@ -32,7 +32,6 @@
     "./serialize": "./dist/serialize.js",
     "./extensions": "./dist/extensions.js",
     "./sync": "./dist/sync.js",
-    "./collab": "./dist/collab.js",
     "./node": "./dist/node.js",
     "./vite": "./dist/vite.js",
     "./package.json": "./package.json"

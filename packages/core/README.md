@@ -30,8 +30,8 @@ export default defineConfig({
 });
 ```
 
-Entries: `.` (document API), `./extensions` (TipTap layer), `./sync` (client
-transport and session), `./collab`, `./vite` (dev plugin), `./node`
+Entries: `.` (document API), `./extensions` (TipTap layer), `./sync` (sync
+client, sessions and protocol types), `./vite` (dev plugin), `./node`
 (standalone server).
 
 Docs live in the

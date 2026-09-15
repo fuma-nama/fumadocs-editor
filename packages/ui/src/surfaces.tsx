@@ -2,7 +2,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { Tabs } from "@base-ui/react/tabs";
 import type { Editor } from "@tiptap/core";
-import type { SessionStatus } from "@fumadocs-editor/core/sync";
+import type { DocumentStatus } from "@fumadocs-editor/core/sync";
 import { Suspense, lazy, useEffect, useRef, type ReactNode } from "react";
 import { useDocumentState, useEditorContext } from "./components/context";
 import { useEditorMode, useSourceText, useSyncStatus } from "./root";
@@ -183,7 +183,7 @@ export function VisualSurface({ staticFallback, className }: VisualSurfaceProps)
     capture.current = { keys: [] };
   }, [stage, store]);
 
-  const collabOn = Boolean(store.options.sync?.collab);
+  const { collabOn } = store;
   return (
     <div data-fde-overlay="" className={withClass(styles.body, className)}>
       {content && stage !== "static" && (!collabOn || collab) && (
@@ -257,7 +257,7 @@ export function SourceSurface({ fixed, className }: SourceSurfaceProps) {
   );
 }
 
-const SYNC_LABEL: Record<SessionStatus, string> = {
+const SYNC_LABEL: Record<DocumentStatus, string> = {
   synced: "Saved",
   dirty: "Edited",
   saving: "Saving…",
@@ -266,7 +266,7 @@ const SYNC_LABEL: Record<SessionStatus, string> = {
   denied: "No access",
 };
 
-/** the session status dot and, on a conflict, the two resolutions; nothing without `sync` */
+/** the sync status dot and, on a conflict, the two resolutions; nothing without `sync` */
 export function SyncStatus({ className }: { className?: string }) {
   const sync = useSyncStatus();
   if (!sync) return null;

@@ -1,12 +1,12 @@
 import { bench, describe } from "vitest";
 import * as Y from "yjs";
-import * as encoding from "lib0/encoding";
-import * as syncProtocol from "y-protocols/sync";
 import { parseMdxToDoc } from "../src/document";
 import { mergeRemote } from "../src/merge";
+import { decodeMessage } from "../src/sync/codec";
 import { createDocAuthority } from "../src/sync/node/authority";
-import { hashText } from "../src/sync/node/mirror";
-import { MESSAGE_SYNC, collabFrame, readCollabFrame } from "../src/sync/wire";
+import type { Connection } from "../src/sync/node/connection";
+import { hashText, type Files } from "../src/sync/node/files";
+import { ALLOW } from "../src/sync/node/scope";
 
 const PATH = "doc.mdx";
 
@@ -39,36 +39,34 @@ function corpus(bytes: number): string {
 /** an authority over one in-memory file, and a synced client editing a paragraph in the middle */
 async function authoritySave(text: string) {
   const client = new Y.Doc();
-  const conn = {};
   let saved = () => {};
-  let synced = false;
-  const authority = createDocAuthority<object>({
+  const files = {
+    rel: (path: string) => path,
+    watch() {},
+    lock: (_path: string, task: () => Promise<unknown>) => task(),
     read: async () => ({ text, version: hashText(text) }),
-    async write(_path, next) {
+    async write(_path: string, next: string) {
       text = next;
       saved();
       return hashText(next);
     },
-    send(_conn, data) {
-      const frame = readCollabFrame(data);
-      if (!synced && frame.kind === MESSAGE_SYNC) {
-        syncProtocol.readSyncMessage(frame.decoder, encoding.createEncoder(), client, null);
-      }
+  } as unknown as Files;
+  let synced = false;
+  const conn: Connection = {
+    scope: ALLOW,
+    send(data) {
+      const message = decodeMessage(data);
+      if (!synced && message.id !== undefined) Y.applyUpdate(client, message.yjs as Uint8Array);
     },
-    scope: () => ({ write: () => true }),
-  });
+  };
+  const authority = createDocAuthority({ files });
+  const vector = () => Y.encodeStateVector(client);
 
-  await authority.open(PATH, conn, []);
-  const step1 = collabFrame(PATH, MESSAGE_SYNC);
-  syncProtocol.writeSyncStep1(step1, client);
-  authority.handleBinary(conn, encoding.toUint8Array(step1));
-  await settle();
+  await authority.subscribe(conn, { id: 1, path: PATH, vector: vector(), components: [] });
   synced = true;
   client.on("update", (update: Uint8Array, origin: unknown) => {
     if (origin !== "bench") return;
-    const frame = collabFrame(PATH, MESSAGE_SYNC);
-    syncProtocol.writeUpdate(frame, update);
-    authority.handleBinary(conn, encoding.toUint8Array(frame));
+    void authority.update(conn, { path: PATH, yjs: update });
   });
 
   const fragment = client.getXmlFragment("default");
@@ -86,10 +84,10 @@ async function authoritySave(text: string) {
     await settle();
     const written = new Promise<void>((resolve) => (saved = resolve));
     // the last client leaving flushes without waiting out the debounce
-    authority.disconnect(conn);
+    authority.leave(conn);
     await written;
     await settle();
-    await authority.open(PATH, conn, []);
+    await authority.subscribe(conn, { path: PATH, vector: vector(), components: [] });
   };
 }
 

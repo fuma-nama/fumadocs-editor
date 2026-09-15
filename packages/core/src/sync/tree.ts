@@ -16,7 +16,7 @@ export interface WorkspaceTree {
   nodes: TreeNode[];
 }
 
-/** a change to the workspace; the tree follows through the transport's `tree` subscription */
+/** a change to the workspace, run through the client's `run` */
 export type TreeCommand =
   /** a new page holding a frontmatter `title` */
   | { type: "create"; path: string; title: string }

@@ -1,8 +1,5 @@
-import { wsTransport } from "@fumadocs-editor/core/sync";
+import { createSyncClient } from "@fumadocs-editor/core/sync";
 
 declare function getAccessToken(): Promise<string>;
 
-export const transport = wsTransport({
-  // called on every connection attempt, so reconnects carry a fresh token
-  auth: () => getAccessToken(),
-});
+export const client = createSyncClient({ auth: () => getAccessToken() });

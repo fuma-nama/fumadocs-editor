@@ -17,7 +17,6 @@ export default defineConfig({
     "./src/serialize.ts",
     "./src/extensions.ts",
     "./src/sync.ts",
-    "./src/collab.ts",
     "./src/node.ts",
     "./src/vite.ts",
   ],

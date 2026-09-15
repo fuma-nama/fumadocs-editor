@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import { AUTH_HEADER, type SyncUser } from "../transport";
+import { AUTH_HEADER, type SyncUser } from "../protocol";
 
 /**
  * What one authenticated connection may do. Document identity is the
@@ -19,7 +19,7 @@ export interface SyncScope {
 export type SyncAuthenticate = (ctx: {
   request: IncomingMessage;
   /**
-   * The client transport's `auth()` payload, verbatim. Sent on the
+   * The sync client's `auth()` payload, verbatim. Sent on the
    * connection hello and in {@link AUTH_HEADER} on HTTP media endpoints.
    * Cookie-based consumers ignore it and read the request.
    */

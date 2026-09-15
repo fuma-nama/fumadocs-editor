@@ -2,7 +2,7 @@ export { MdxEditor } from "./editor";
 export type { MdxEditorProps } from "./editor";
 export { useEditorMode, useSourceText, useSyncStatus } from "./root";
 export type { MdxEditorRootProps } from "./root";
-export type { MdxEditorRef, MdxEditorSync, CollabUser, EditorMode } from "./store";
+export type { MdxEditorRef, MdxEditorSync, EditorMode } from "./store";
 export type { VisualSurfaceProps, SourceSurfaceProps } from "./surfaces";
 export type { FileProvider, MediaProvider } from "./components/media";
 export { FileTree } from "./file-tree/file-tree";

@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Plugin } from "vite";
 import { createSyncServer, type SyncServerOptions } from "./node/server";
-import { ASSET_ENDPOINT, SYNC_ENDPOINT, UPLOAD_ENDPOINT } from "./transport";
+import { ASSET_ENDPOINT, SYNC_ENDPOINT, UPLOAD_ENDPOINT } from "./protocol";
 
 export interface EditorSyncOptions extends Omit<SyncServerOptions, "root"> {
   /** the mirrored directory, resolved against the Vite project root; defaults to it */
