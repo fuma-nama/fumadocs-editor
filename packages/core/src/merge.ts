@@ -140,27 +140,40 @@ export function mergeRemote(options: {
 
 /** longest common subsequence as [baseIndex, remoteIndex] pairs, in order */
 function lcsPairs(a: string[], b: string[]): [number, number][] {
-  const n = a.length;
-  const m = b.length;
-  // lengths[i][j] = LCS length of a[i..] and b[j..]
-  const lengths: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
+  const pairs: [number, number][] = [];
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) {
+    pairs.push([head, head]);
+    head++;
+  }
+  let tail = 0;
+  while (head + tail < a.length && head + tail < b.length && a.at(-1 - tail) === b.at(-1 - tail)) {
+    tail++;
+  }
+  const x = a.slice(head, a.length - tail);
+  const y = b.slice(head, b.length - tail);
+  // lengths[i][j] = LCS length of x[i..] and y[j..]
+  const lengths: Uint32Array[] = Array.from(
+    { length: x.length + 1 },
+    () => new Uint32Array(y.length + 1),
+  );
+  for (let i = x.length - 1; i >= 0; i--) {
+    for (let j = y.length - 1; j >= 0; j--) {
       lengths[i][j] =
-        a[i] === b[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+        x[i] === y[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
     }
   }
-  const pairs: [number, number][] = [];
   let i = 0;
   let j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      pairs.push([i, j]);
+  while (i < x.length && j < y.length) {
+    if (x[i] === y[j]) {
+      pairs.push([head + i, head + j]);
       i++;
       j++;
     } else if (lengths[i + 1][j] >= lengths[i][j + 1]) i++;
     else j++;
   }
+  for (let k = tail; k > 0; k--) pairs.push([a.length - k, b.length - k]);
   return pairs;
 }
 

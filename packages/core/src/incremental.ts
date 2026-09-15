@@ -1,5 +1,5 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { assembleMdx, tryNormalize } from "./serializer";
+import { assembleSnapshot, snapshotText, tryNormalize } from "./serializer";
 import type { DocSnapshot } from "./document";
 import { createSyntax, type Syntax } from "./components/spec";
 
@@ -37,7 +37,7 @@ export function createIncrementalSerializer(
     }
     lastDoc = doc;
     lastSnapshot = snapshot;
-    lastOut = assembleMdx(normalized, snapshot);
+    lastOut = snapshotText(assembleSnapshot(normalized, snapshot, syntax));
     return lastOut;
   };
 }

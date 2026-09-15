@@ -19,7 +19,7 @@ import {
   type SyntaxOptions,
 } from "../../components/spec";
 import { parseMdxToDoc, type DocSnapshot } from "../../document";
-import { serializeDocToMdx } from "../../serializer";
+import { assembleSnapshot, snapshotText, tryNormalize } from "../../serializer";
 import { editorExtensions } from "../../extensions/kit";
 import { applyMergeOps, mergeRemote } from "../../merge";
 import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "../wire";
@@ -55,6 +55,8 @@ interface DocState<C> {
   snapshot: DocSnapshot;
   /** version of the disk text the snapshot corresponds to */
   diskVersion: string;
+  /** normalized text per top-level element, dropped when anything inside it changes */
+  normalized: WeakMap<object, string>;
   /** connected clients and the awareness clientIDs each one announced */
   conns: Map<C, Set<number>>;
   /** disk IO runs strictly in sequence per document */
@@ -129,16 +131,32 @@ export function createDocAuthority<C>({
   const docNode = (doc: DocState<C>): PMNode =>
     yXmlFragmentToProseMirrorRootNode(doc.fragment, doc.schema);
 
+  /** the Y.Doc laid out against the snapshot: the text to write and the next merge base */
+  const layout = (doc: DocState<C>): DocSnapshot => {
+    const node = docNode(doc);
+    // read after converting: y-tiptap deletes the elements the schema rejects
+    const elements = doc.fragment.toArray();
+    const normalized: string[] = [];
+    for (let i = 0; i < node.childCount; i++) {
+      let text = doc.normalized.get(elements[i]);
+      if (text === undefined) {
+        text = tryNormalize(node.child(i).toJSON(), doc.syntax) ?? "";
+        doc.normalized.set(elements[i], text);
+      }
+      normalized.push(text);
+    }
+    return assembleSnapshot(normalized, doc.snapshot, doc.syntax);
+  };
+
   const saveTask = async (doc: DocState<C>) => {
     // fold in a disk change chokidar hasn't delivered yet before overwriting
     const current = await read(doc.path).catch(() => undefined);
     if (current) applyDisk(doc, current);
-    const text = serializeDocToMdx(docNode(doc).toJSON(), doc.snapshot, doc.syntax);
+    const snapshot = layout(doc);
+    const text = snapshotText(snapshot);
     if (current && text === current.text) return;
     doc.diskVersion = await write(doc.path, text);
-    // the just-written text is the new merge base; parsing our own output is
-    // the round-trip guarantee and refreshes block sources for byte reuse
-    doc.snapshot = parseMdxToDoc(text, doc.syntax).snapshot;
+    doc.snapshot = snapshot;
   };
 
   /** merge a new disk state into the Y.Doc; same-block conflicts keep Y */
@@ -200,9 +218,14 @@ export function createDocAuthority<C>({
       schema,
       snapshot: parsed.snapshot,
       diskVersion: state.version,
+      normalized: new WeakMap(),
       conns: new Map(),
       queue: Promise.resolve(),
     };
+
+    ydoc.on("afterTransaction", (transaction: Y.Transaction) => {
+      for (const type of transaction.changedParentTypes.keys()) doc.normalized.delete(type);
+    });
 
     ydoc.on("update", (update: Uint8Array, origin: unknown) => {
       const frame = collabFrame(path, MESSAGE_SYNC);
