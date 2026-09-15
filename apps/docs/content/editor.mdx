@@ -1,7 +1,7 @@
 ---
 title: MdxEditor
 icon: BookOpen
-description: Props, ref and sync options
+description: Props, ref, parts and keyboard shortcuts
 ---
 
 ```tsx
@@ -12,90 +12,71 @@ import { MdxEditor } from "@fumadocs-editor/ui";
 
 <auto-type-table path="../../../packages/ui/src/editor.tsx" name="MdxEditorProps" />
 
-## `sync`
+### `sync`
+
+See [Sync](/sync).
 
 <auto-type-table path="../../../packages/ui/src/store.ts" name="MdxEditorSync" />
-
-## Page variant
-
-`variant="page"` makes the editor the page: no frame, the header row with
-the sync status and mode tabs stays at the top, and the document scrolls in
-a column centered on the viewport. `header` puts your own controls in that
-row. Studio is built on it.
-
-<include meta='title="page.tsx"'>../examples/page-variant.tsx</include>
-
-Two custom properties on an ancestor tune the column: `--fde-page-width`
-(default `52rem`) and `--fde-page-inset`, the space at the start the column
-keeps clear of, for a panel floating there. The column stays centered while
-there is room and moves right of the inset when there is not.
-
-## Parts
-
-`MdxEditor` is a preset: sync status, Visual / MDX tabs, one surface at a
-time. When that layout does not fit, compose the parts yourself.
-
-```tsx
-import { MdxEditor, useSourceText } from "@fumadocs-editor/ui";
-
-function Source() {
-  const { value, onChange, error, readOnly } = useSourceText();
-  return <CodeMirror value={value} onChange={onChange} readOnly={readOnly} />;
-}
-
-<MdxEditor.Root sync={{ path }} ref={ref}>
-  <MdxEditor.Status />
-  <div className="split">
-    <MdxEditor.Visual />
-    <Source />
-  </div>
-</MdxEditor.Root>;
-```
-
-| Part               | What it is                                                                             |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| `MdxEditor.Root`   | The document: parse, sync, collab, the ref. Takes the props below minus the frame ones |
-| `MdxEditor.Visual` | The WYSIWYG surface, static paint first                                                |
-| `MdxEditor.Source` | The MDX in a textarea, parse error above it                                            |
-| `MdxEditor.Status` | Sync dot and the keep-mine / take-disk chip; nothing without `sync`                    |
-| `MdxEditor.Tabs`   | Visual / MDX switch for hosts that show one surface at a time                          |
 
 ## Ref
 
 <auto-type-table path="../../../packages/ui/src/store.ts" name="MdxEditorRef" />
 
-The ref satisfies `SyncedDocument`, so it can be handed to
-[`createFileSession`](/sync#your-own-session) directly.
+## Page variant
+
+`variant="page"` makes the editor fill the page, with a sticky header and a
+centered column. `header` adds your own controls to it. [Studio](/studio)
+is built this way.
+
+<include meta='title="page.tsx"'>../examples/page-variant.tsx</include>
+
+| CSS variable       | Default | Sets                                            |
+| ------------------ | ------- | ----------------------------------------------- |
+| `--fde-page-width` | `52rem` | the column width                                |
+| `--fde-page-inset` | `0px`   | space kept clear at the start, for a side panel |
+
+## Parts
+
+`MdxEditor` shows one surface at a time with tabs to switch. For another
+layout, compose the parts:
+
+<include meta='title="split.tsx"'>../examples/parts.tsx</include>
+
+| Part               | Renders                                           |
+| ------------------ | ------------------------------------------------- |
+| `MdxEditor.Root`   | nothing; owns the document, takes the props above |
+| `MdxEditor.Visual` | the WYSIWYG surface                               |
+| `MdxEditor.Source` | the MDX source                                    |
+| `MdxEditor.Status` | the sync status and conflict buttons              |
+| `MdxEditor.Tabs`   | the Visual / MDX switch                           |
+
+For fully custom surfaces, read the document with `useSourceText`,
+`useSyncStatus` and `useEditorMode` inside `MdxEditor.Root`.
 
 ## Keyboard
 
-The toolbar appears over selected text. A resting caret has no chrome, so
-formatting comes from the keyboard:
+| Keys                 | Does                                                   |
+| -------------------- | ------------------------------------------------------ |
+| `⌘B` `⌘I` `⌘E` `⌘⇧S` | bold, italic, code, strikethrough                      |
+| `→` at a line's end  | stop the current formatting                            |
+| `⌘.`                 | open the block menu                                    |
+| `⌥↑` `⌥↓`            | move the block                                         |
+| `Esc`                | select the component around the caret, then its parent |
+| `⌘A`                 | select the region, then wider, then everything         |
+| `Tab` `⇧Tab`         | next or previous region of a component                 |
+| `⌘Enter`             | add the next item (a Step, Tab or File)                |
 
-| Keys                  | Does                                                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `⌘B` `⌘I` `⌘E` `⌘⇧S`  | Toggle bold, italic, code or strikethrough; with no selection, for what you type next    |
-| `→` at the line's end | Stop the marks in force, so the next words come out plain                                |
-| `⌘.`                  | Open the block's menu (attributes, inserts, move, delete)                                |
-| `⌥↑` `⌥↓`             | Move the block                                                                           |
-| `Esc`                 | Select the component around the caret, then its parent                                   |
-| `⌘A`                  | Select the region, then the component around it, then its parent; plain select-all after |
-| `Tab` `⇧Tab`          | Next or previous region of a component                                                   |
-| `⌘Enter`              | Insert the next sibling (a new Step, Tab, File) from anywhere inside one                 |
-
-With a mouse, double-click a component's chrome (its icon, rail or padded
-edge) to select it; its menu and joystick follow. Code blocks and tables
-have no chrome to double-click, so a joystick appears beside them while the
-caret is inside: click it to select the block, drag it to move it.
-
-On a touch screen there are no shortcuts, so the toolbar stays up while
-you type, below the caret or the selection and clear of the system's copy
-menu. The block's joystick sits in the gutter beside the block.
+- **Mouse:** double-click a component's border or icon to select it, then drag
+  its handle to move it.
+- **Touch:** the toolbar stays visible while typing, and each block has a
+  drag handle beside it.
 
 ## EditorThemeProvider
 
-Theme context for standalone hosts. Tracks the choice, persists it and sets
-`.light` or `.dark` on a wrapper so the `--fde-*` tokens resolve. Read or change
-it with `useEditorTheme()`.
+For pages without their own theme: tracks `light`, `dark` or `system`,
+remembers the choice and applies it to the editor. Read or change it with
+`useEditorTheme()`.
+
+<include meta='title="standalone.tsx"'>../examples/theming.tsx</include>
 
 <auto-type-table path="../../../packages/ui/src/theme.tsx" name="EditorThemeProviderProps" />

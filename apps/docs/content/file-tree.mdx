@@ -4,33 +4,28 @@ icon: FolderTree
 description: The sidebar as an editor for pages, folders and meta.json
 ---
 
-`FileTree` shows the mirrored directory the way Fumadocs' sidebar does and
-edits it in place: new pages and folders, deletion, drag and drop order,
-separators. Every change lands on disk as a file or a `meta.json` entry, so
-the site's navigation follows.
+`FileTree` shows the synced directory like a Fumadocs sidebar, and lets you
+create, delete and reorder pages. Every change is written to disk, so the
+site's navigation follows.
 
 <include meta='title="workspace.tsx"'>../examples/file-tree.tsx</include>
 
-`useWorkspace` subscribes to the tree over the same websocket the editor
-uses and hands back `run` for changes. Both come from the
-[sync server](/sync); with no `transport` they share the page's default one.
+`useWorkspace` shares the editors' connection. If you created your own
+[sync client](/sync#sync-client), pass it as `useWorkspace({ client })`.
 
 ## What it edits
 
-| Action                    | On disk                                                      |
-| ------------------------- | ------------------------------------------------------------ |
-| New page                  | `<slug>.mdx` with a frontmatter `title`                      |
-| New folder                | `<slug>/meta.json` with the title and `<slug>/index.mdx`     |
-| Move a row, new separator | the folder's `pages` in `meta.json`, rewritten minimally     |
-| Delete a page             | the file, and its `pages` entry when nothing else answers it |
+| Action     | On disk                                   |
+| ---------- | ----------------------------------------- |
+| New page   | `<slug>.mdx` with a frontmatter `title`   |
+| New folder | `<slug>/meta.json` and `<slug>/index.mdx` |
+| Reorder    | the folder's `pages` in `meta.json`       |
+| Delete     | the file, and its `pages` entry           |
 
-A page or folder typed as `Guides/Getting started` nests: the path is the
-slug of every segment, the title is the last one.
-
-<Callout>
-  A folder without a `meta.json`, or one whose `pages` ends in `...`, keeps listing new pages
-  automatically. Only explicit lists get the new key appended.
-</Callout>
+- A name typed as `Guides/Getting started` nests: it creates
+  `guides/getting-started.mdx`.
+- A folder without a `meta.json`, or whose `pages` ends in `...`, lists new
+  pages automatically.
 
 ## Keyboard
 
@@ -39,33 +34,14 @@ slug of every segment, the title is the last one.
 | `↑` `↓` `Home` `End` | Move between rows              |
 | `←` `→`              | Close or open a folder         |
 | `Alt+↑` `Alt+↓`      | Move the row within its folder |
-| `Enter` in a draft   | Create; `Escape` cancels       |
+| `Enter` / `Escape`   | Create or cancel a new row     |
 
-On touch screens rows drag from the grip; with a mouse any row drags.
+On touch screens, drag rows by their grip.
 
 ## Props
 
 <auto-type-table path="../../../packages/ui/src/file-tree/file-tree.tsx" name="FileTreeProps" />
 
-The row menus and the delete dialog portal into the tree itself. Pass
-`container` when the tree sits inside an animated or transformed element,
-as Studio's floating panel does.
-
-## Permissions
-
-Commands run under the connection's [scope](/auth): creating or deleting a
-page needs `write` on its path, reordering needs `write` on the folder's
-`meta.json`. The tree only lists what `read` allows. A refusal shows at the
-bottom of the tree.
-
-## Custom backends
-
-The tree rides two optional calls on `SyncTransport`. A backend that has
-folders and an order can implement them; one that does not simply omits
-them and `useWorkspace` throws.
-
-<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="SyncTransport" />
-
-`WorkspaceTree`, `TreeNode` and `TreeCommand` are exported from
-`@fumadocs-editor/core/sync`, together with `pagesEntry`, the function that
-turns a node back into its `meta.json` entry.
+<Callout title="Permissions">
+  The tree only lists the pages a user may [read](/auth), and refuses changes they may not write.
+</Callout>

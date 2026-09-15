@@ -4,49 +4,37 @@ icon: ImagePlus
 description: Where uploads go and which files documents can reference
 ---
 
-There is no file system in the browser. The editor does not know where a
-pasted image should be stored, or which documents exist for `<include>` and
-page links. Both are small interfaces your host implements and passes as
-props:
+The editor runs in the browser, so it cannot know where to store a pasted
+image or which pages exist. Your app tells it through two props:
 
-| Prop    | Without it                                                               |
-| ------- | ------------------------------------------------------------------------ |
-| `media` | paste and drop upload are off; images are added by URL                   |
-| `files` | the include picker and `[[` page-link autocomplete are plain text inputs |
-
-Everything else works either way.
+| Prop    | Enables                                     | Without it              |
+| ------- | ------------------------------------------- | ----------------------- |
+| `media` | pasting and dropping images                 | images are added by URL |
+| `files` | autocomplete for `<include>` and `[[` links | paths are typed by hand |
 
 ## Media
 
 <include meta='title="providers.tsx"'>../examples/providers.tsx#media</include>
 
 - `upload` stores the file and returns the `src` written into the document.
-  Keep it relative if that is what your site expects.
-- `resolve` maps a document `src` to a display URL, so relative paths still
-  preview.
+- `resolve` turns a document `src` into a URL the browser can display.
 
-### On the dev server
-
-The [sync dev server](/sync#the-dev-server) has an upload endpoint, so the
-provider only needs to call it:
+<Callout title="With sync">
+The sync server has an upload endpoint, storing files in `<root>/assets`:
 
 <include meta='title="dev-media.tsx"'>../examples/providers-dev.tsx</include>
 
-Uploads land in `<root>/assets`. The server checks the content type against
-`upload.types` (default `image/*`) and the size against `upload.maxBytes`
-(default 10 MiB) before storing anything. With [auth](/auth#media-uploads)
-enabled, the upload also needs `write` on the stored path.
+It accepts `image/*` up to 10 MiB by default; change it with the server's
+`upload` option. With [auth](/auth#media-uploads), uploads need `write`.
+
+</Callout>
 
 ## Files
 
 <include meta='title="providers.tsx"'>../examples/providers.tsx#files</include>
 
-Return the relative paths exactly as they should be written into the
-document, relative to the open one (for example `./shared/props.mdx`). They
-power:
+Return paths exactly as they should be written into the document, relative
+to the open one (for example `./shared/props.mdx`).
 
-- in-place autocomplete of the `<include>` path
-- page-link suggestions when you type `[[`
-
-On the dev server, `transport.list()` minus the open document is usually
-enough.
+With [sync](/sync), build the list from the pages of
+[`useWorkspace().tree`](/file-tree).

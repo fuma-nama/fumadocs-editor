@@ -4,43 +4,34 @@ icon: KeyRound
 description: Decide who may read and write which documents
 ---
 
-Without an `authenticate` hook the sync server trusts everyone who can
-reach it, the same as Vite's own dev socket. That is right for local
-development and wrong for anything shared. Passing `authenticate` puts
-every surface (the websocket, uploads, asset serving) behind your policy.
-
-Enforcement is server-side only. The client sends credentials and reports
-what the server decided; it never restricts itself. Turning "this user
-cannot write" into a read-only editor is [your code](/read-only).
+By default, anyone who can reach the sync server can edit, like Vite's own
+dev server. Pass an `authenticate` hook to the server to put the websocket,
+uploads and assets behind your own policy.
 
 ## Add an `authenticate` hook
 
-`authenticate` runs once per websocket connection (again on every reconnect,
-so refreshed tokens apply) and once per HTTP media request. It maps the
-request to a scope, or returns `null` to reject.
-
-How credentials reach it depends on your setup:
+`authenticate` receives the request and returns a [scope](#scopes), or
+`null` to reject. It runs on every connection and reconnect, so refreshed
+credentials apply.
 
 <Tabs items={["Cookie session", "Bearer token"]}>
 <Tab>
 
-Cookies travel with every request and websocket upgrade, so the server
-reads them directly and the client needs no changes:
+Cookies come with every request, so only the server changes:
 
 <include meta='title="server.ts"'>../examples/auth-cookie.ts</include>
 
 </Tab>
 <Tab>
 
-Browser websockets cannot set headers, and query strings leak into logs, so
-the token goes in the first frame instead. Give the transport an `auth`
-function; it is called on every connection attempt:
+Give the [sync client](/sync#sync-client) an `auth` function. It is called
+on every connection:
 
-<include meta='title="transport.ts"'>../examples/auth-token-client.ts</include>
+<include meta='title="client.ts"'>../examples/auth-token-client.ts</include>
 
 <include meta='title="editor.tsx"'>../examples/auth-token-editor.tsx</include>
 
-On the server, the payload arrives verbatim:
+The server receives its return value as `payload`:
 
 <include meta='title="server.ts"'>../examples/auth-token-server.ts</include>
 
@@ -51,51 +42,37 @@ On the server, the payload arrives verbatim:
 
 <auto-type-table path="../../../packages/core/src/sync/node/scope.ts" name="SyncScope" />
 
-A document is identified by its root-relative posix path, so `read` and
-`write` predicates are per-document permissions. Two rules:
+`read` and `write` can be functions of a document's path, relative to the
+server root:
 
-- Predicates see the **normalized** path. `team-a/../outside.mdx` cannot
-  slip past a `team-a/` rule.
-- Predicates run on the message hot path and must be synchronous. Resolve
-  async policy inside `authenticate` and close over the result, as the token
-  example does. Policy changes apply on the next reconnect.
+- Paths are normalized first, so `team-a/../secret.mdx` does not match a
+  `team-a/` rule.
+- The functions must be synchronous. Fetch what they need inside
+  `authenticate`, as the token example does.
 
-### What each surface checks
+<Accordions>
+<Accordion title="What each permission covers">
 
-| Surface                      | Rule                                                   |
-| ---------------------------- | ------------------------------------------------------ |
-| `list`                       | filtered to readable paths                             |
-| `read`, opening a collab doc | requires `read`                                        |
-| watch / change broadcasts    | withheld for unreadable paths                          |
-| `write` (compare-and-swap)   | requires `write`                                       |
-| the file tree                | filtered to readable paths                             |
-| tree commands                | `write` on the page, or on the folder's `meta.json`    |
-| collab edits (Y updates)     | refused without `write`; read-only peers still receive |
-| media upload                 | requires `write` on `assets/<name>`                    |
-| asset serving                | requires `read` on the asset path                      |
-| presence identity            | a scope `user` overrides the name the client claims    |
+| Needs `read`               | Needs `write`                           |
+| -------------------------- | --------------------------------------- |
+| opening a document         | saving it, or editing it under collab   |
+| seeing it in the file tree | creating, deleting and reordering pages |
+| loading an asset           | uploading to `assets/`                  |
 
-A denied path is a per-request error; the connection stays open. Rejected
-credentials close the connection: the client reports `denied` rather than
-`offline` and stops retrying. A connection that never authenticates is
-closed after `helloTimeoutMs`.
+A scope `user` also overrides the name a collab client shows at its caret.
+
+</Accordion>
+</Accordions>
 
 ## Media uploads
 
-The HTTP endpoints cannot see the websocket hello, so the same payload
-travels in the `x-fde-auth` header (exported as `AUTH_HEADER`),
-JSON-encoded:
+Upload requests do not share the websocket, so send the same payload in the
+`AUTH_HEADER` header. Cookie setups can skip this.
 
 <include meta='title="media.ts"'>../examples/auth-upload.ts</include>
 
-Cookie setups skip the header; the cookie is already on the request.
+## In the editor
 
-## What the client learns
-
-The reply to a read (and the collab handshake) carries the scope data your
-UI needs:
-
-<auto-type-table path="../../../packages/core/src/sync/transport.ts" name="ReadResult" />
-
-`sync.onOpen` hands it to you. See [Read-only](/read-only) for wiring
-`writable` into the editor.
+The server enforces the scope; the editor never restricts itself. When a user
+cannot write, see [Read-only](/read-only) to show the editor as read-only.
+Rejected credentials show the `denied` [status](/sync#saving).

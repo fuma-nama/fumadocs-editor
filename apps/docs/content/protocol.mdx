@@ -1,0 +1,122 @@
+---
+title: Protocol
+icon: Cable
+description: The messages between the sync client and a backend
+---
+
+<Callout>
+  You only need this page to write your own backend or transport. The built-in [sync server](/sync)
+  already speaks the protocol.
+</Callout>
+
+Sync has three layers:
+
+- a **transport** carries messages; `wsTransport` is built in
+- the **client** (`createSyncClient`) connects, reconnects and keeps the state
+- the **server** holds the files, checks permissions and answers
+
+## Messages
+
+Every message is an object with a `type`. Yjs data is a `Uint8Array`, everything else is JSON.
+
+| `type`        | Sent by | Purpose                                    |
+| ------------- | ------- | ------------------------------------------ |
+| `hello`       | both    | open the connection                        |
+| `subscribe`   | client  | follow a resource                          |
+| `unsubscribe` | client  | stop following it                          |
+| `update`      | both    | the state of a resource, or a change to it |
+| `error`       | server  | refuse a message                           |
+
+Both directions are typed as `ClientMessage` and `ServerMessage` in
+`@fumadocs-editor/core/sync`.
+
+<include>../examples/protocol-messages.ts#hello</include>
+
+### Rules
+
+- A connection starts with `hello`. An `error` in reply closes it.
+- A message with an `id` gets exactly one reply with the same `id`: an
+  `update`, or an `error`. A message without an `id` never gets a reply.
+- A change is sent to every other subscriber as an `update` without an `id`.
+- There is no resume. After a reconnect, the client says `hello` and
+  subscribes again.
+
+## Resources
+
+A message targets one resource. Paths are relative to the server root.
+
+| Resource                     | Holds                            |
+| ---------------------------- | -------------------------------- |
+| `{ resource: "file", path }` | a file's text                    |
+| `{ resource: "tree" }`       | the [file tree](/file-tree)      |
+| `{ resource: "doc", path }`  | a [collab](/collab) Yjs document |
+
+<Tabs items={["file", "tree", "doc"]}>
+<Tab>
+
+<include>../examples/protocol-messages.ts#file</include>
+
+- `version` is opaque; `""` means the file does not exist.
+- A save sends `base`, the version it was edited from. The server only
+  writes while `base` is current.
+
+</Tab>
+<Tab>
+
+<include>../examples/protocol-messages.ts#tree</include>
+
+- `command` is a `TreeCommand`: `create`, `mkdir`, `delete` or `order`.
+- A backend without a tree replies to `subscribe` with an `error`.
+
+</Tab>
+<Tab>
+
+<include>../examples/protocol-messages.ts#doc</include>
+
+- The server parses and serializes the file with the `components` and
+  `syntax` the client sent.
+- `epoch` changes when the server rebuilds the document from disk. A client
+  with another epoch drops its document and joins again with an empty vector.
+- A reconnect repeats the join, so offline edits are sent in step 3.
+
+</Tab>
+</Tabs>
+
+## Custom transports
+
+Pass any `SyncTransport` as the client's `transport`. Each `connect` call is
+one connection:
+
+<include meta='title="worker-transport.ts"'>../examples/protocol-transport.ts</include>
+
+- Never call the listener synchronously inside `connect`.
+- Call `close` once per connection, including after `close()`.
+- Drop messages sent while the connection is not open.
+
+<Accordions>
+<Accordion title="The websocket transport">
+
+- The Vite plugin mounts it at `SYNC_ENDPOINT`, where `wsTransport()`
+  connects by default.
+- One message per frame. Messages without bytes are JSON text frames.
+- A message with bytes is a binary frame: a big-endian `u32` header length,
+  the JSON header listing the byte fields as `$bytes: [[field, length]]`,
+  then the bytes in that order.
+- An empty frame is a heartbeat: the client sends one every 20 s and the
+  server echoes it. Either side drops a silent connection.
+
+</Accordion>
+<Accordion title="Media endpoints">
+
+Uploads and assets are plain HTTP, called by your
+[media provider](/providers#media):
+
+| Endpoint                    | Request                                    | Response  |
+| --------------------------- | ------------------------------------------ | --------- |
+| `POST UPLOAD_ENDPOINT`      | the file as body, its name in `x-filename` | `{ src }` |
+| `GET ASSET_ENDPOINT/<path>` |                                            | the file  |
+
+Both read the auth payload from the `AUTH_HEADER` header, JSON-encoded.
+
+</Accordion>
+</Accordions>
