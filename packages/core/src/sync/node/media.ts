@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import type { Mirror } from "./mirror";
+import type { Files } from "./files";
 import { authorizeHttp, type Authorize, type Scope } from "./scope";
 
 export interface UploadLimits {
@@ -27,7 +27,7 @@ const refuse = (response: ServerResponse, scope: Scope | null) => {
 
 /** the HTTP media endpoints: uploads stored under `assets/`, assets served back */
 export function createMediaHandlers(
-  mirror: Mirror,
+  files: Files,
   authorize: Authorize,
   { maxBytes = 10 * 1024 * 1024, types = /^image\// }: UploadLimits,
 ) {
@@ -73,8 +73,8 @@ export function createMediaHandlers(
           const name = `${Date.now().toString(36)}-${original || "upload"}`;
           const scope = await authorizeHttp(authorize, request);
           if (!scope || !scope.write(`assets/${name}`)) return refuse(response, scope);
-          await mkdir(path.join(mirror.root, "assets"), { recursive: true });
-          await writeFile(path.join(mirror.root, "assets", name), Buffer.concat(chunks));
+          await mkdir(path.join(files.root, "assets"), { recursive: true });
+          await writeFile(path.join(files.root, "assets", name), Buffer.concat(chunks));
           response.setHeader("content-type", "application/json");
           response.end(JSON.stringify({ src: `./assets/${name}` }));
         })().catch((error) => {
@@ -87,7 +87,7 @@ export function createMediaHandlers(
     handleAsset(request: IncomingMessage, response: ServerResponse) {
       let relative: string | undefined;
       try {
-        relative = mirror.rel(decodeURIComponent((request.url ?? "/").slice(1)));
+        relative = files.rel(decodeURIComponent((request.url ?? "/").slice(1)));
       } catch {}
       if (request.method !== "GET" || !relative) {
         response.statusCode = 404;
@@ -100,7 +100,7 @@ export function createMediaHandlers(
           "content-type",
           MIME[path.extname(target).toLowerCase()] ?? "application/octet-stream",
         );
-        createReadStream(mirror.resolve(target))
+        createReadStream(files.resolve(target))
           .on("error", () => {
             response.statusCode = 404;
             response.end();

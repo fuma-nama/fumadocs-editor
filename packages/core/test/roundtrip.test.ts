@@ -9,6 +9,8 @@ import {
   parseMdxToDoc,
   serializeDocToMdx,
 } from "../src";
+import { assembleSnapshot, blockNormalized, snapshotText, tryNormalize } from "../src/serializer";
+import type { DocSnapshot } from "../src/document";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(dir, "fixtures");
@@ -29,6 +31,16 @@ describe("fixtures", () => {
       const normalized = serializeDocToMdx(doc);
       const reparsed = parseMdxToDoc(normalized);
       expect(serializeDocToMdx(reparsed.doc)).toBe(normalized);
+    });
+
+    test(`an assembled snapshot matches the parse of its own text: ${name}`, () => {
+      const { doc, snapshot } = parseMdxToDoc(source);
+      const normalized = doc.content!.map((node) => tryNormalize(node, snapshot.syntax) ?? "");
+      normalized[normalized.length >> 1] = "Edited paragraph.";
+      const assembled = assembleSnapshot(normalized, snapshot, snapshot.syntax);
+      const reparsed = parseMdxToDoc(snapshotText(assembled)).snapshot;
+      const blocks = (s: DocSnapshot) => s.blocks.map((block) => blockNormalized(block, s.syntax));
+      expect(blocks(assembled)).toEqual(blocks(reparsed));
     });
   }
 });

@@ -1,26 +1,14 @@
 ---
 title: Known Limits
 icon: TriangleAlert
-description: Engine differences, platform caveats, current boundaries
+description: Platform caveats and current boundaries
 ---
 
-## General
-
-- **React 19 only.** The editor is a client component; SSR apps mount it
-  inside `'use client'`. For a server-rendered first paint, pass your
-  site's rendered MDX as `staticFallback`. The editor swaps in on hydration
-  without a parse on the critical path.
-- **Word pastes** are coerced through the schema, so marks, tables and
-  lists survive. One upstream exception: Word numbered lists arrive as
-  literal `1. Item` paragraphs. That is ProseMirror's clipboard parser.
-- **Not yet editable:** `<CodeBlockTabs>`, plain `<Tabs>` and footnotes are
-  verbatim-only for now ([details](/syntax#not-yet-editable)).
-
-## Collaboration
-
-- A hard kill of the sync server can lose edits still inside its save
-  debounce (under a second). An orderly shutdown flushes.
-- Edits typed **while the server was down** are discarded when it comes
-  back ([restarts](/collab#restarts)). Edits made while merely
-  disconnected converge on reconnect.
-- The raw MDX tab is disabled during collab.
+- **React 19 only.** The editor is a client component. For a server-rendered
+  first paint, pass your site's rendered MDX as `staticFallback`.
+- **Word numbered lists** paste as plain `1. Item` paragraphs. Other
+  formatting survives.
+- **Not yet editable:** `<CodeBlockTabs>`, non-fumadocs `<Tabs>` and
+  footnotes are kept [verbatim](/syntax#not-yet-editable).
+- **Collaboration:** the MDX source tab is disabled, and edits made while the
+  server is down are lost ([restarts](/collab#restarts)).

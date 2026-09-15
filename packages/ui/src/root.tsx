@@ -22,8 +22,8 @@ export interface MdxEditorRootProps {
    */
   syntax?: SyntaxOptions;
   /**
-   * Sync with a file: autosave, live merge of disk edits, conflict chip,
-   * optional collab.
+   * Sync with a file: autosave, live merge of disk edits, conflict chip, or
+   * a shared doc when the client has collab on.
    */
   sync?: MdxEditorSync;
   /**
@@ -51,7 +51,7 @@ export interface MdxEditorRootProps {
 const styles = stylex.create({ root: { display: "contents" } });
 
 /**
- * Owns the document: parse, snapshot, serializer, sync session, collab, and
+ * Owns the document: parse, snapshot, serializer, sync, collab, and
  * the ref API. Renders no chrome; compose `MdxEditor.Visual`,
  * `MdxEditor.Source`, `MdxEditor.Status` and `MdxEditor.Tabs` inside it, or
  * your own through the hooks.
@@ -78,12 +78,11 @@ export function MdxEditorRoot({
   useImperativeHandle(ref, () => store.handle, [store]);
 
   const path = sync?.path;
-  const transport = sync?.transport;
-  const collab = Boolean(sync?.collab);
+  const client = sync?.client;
   useEffect(() => {
     store.open();
     return () => store.close();
-  }, [store, path, transport, collab]);
+  }, [store, path, client]);
 
   const ambient = useEditorTheme();
   const scoped = theme === "system" ? ambient.resolvedTheme : theme;
@@ -123,11 +122,11 @@ export function useEditorMode() {
     /** the visual surface cannot show text that does not parse */
     canShowVisual: sourceError === null,
     /** under collab, a lone source surface cannot reach the shared document */
-    canShowSource: !store.options.sync?.collab,
+    canShowSource: !store.collabOn,
   };
 }
 
-/** session status and the conflict resolutions; null without `sync` */
+/** sync status and the conflict resolutions; null without `sync` */
 export function useSyncStatus() {
   const { store } = useEditorContext();
   const { status } = useDocumentState();

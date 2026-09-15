@@ -35,6 +35,8 @@ import { extractHeadingSuffixes } from "../syntax/heading-suffixes";
 export interface FromMdastContext {
   source: string;
   syntax: Syntax;
+  /** start column of the enclosing block, less one */
+  indent?: number;
 }
 
 interface PMMark {
@@ -46,7 +48,15 @@ function sliceSource(node: MdNode, ctx: FromMdastContext): string {
   const start = node.position?.start.offset;
   const end = node.position?.end.offset;
   if (start == null || end == null) return "";
-  return ctx.source.slice(start, end);
+  return dedent(ctx.source.slice(start, end), ctx);
+}
+
+/**
+ * Continuation lines of sliced source carry the enclosing block's indentation,
+ * which serializing adds again: keeping it would grow the indent every save.
+ */
+function dedent(text: string, { indent = 0 }: FromMdastContext): string {
+  return indent === 0 ? text : text.replace(/\n[ \t]*/g, (lead) => "\n" + lead.slice(1 + indent));
 }
 
 function withMarks(node: JSONContent, marks: PMMark[]): JSONContent {
@@ -55,7 +65,8 @@ function withMarks(node: JSONContent, marks: PMMark[]): JSONContent {
 }
 
 /** an element's tags as authored: quotes, expressions and self-closing syntax kept */
-function jsxTags(node: MdxJsxFlowElement | MdxJsxTextElement, source: string) {
+function jsxTags(node: MdxJsxFlowElement | MdxJsxTextElement, ctx: FromMdastContext) {
+  const { source } = ctx;
   const start = node.position!.start.offset!;
   const end = node.position!.end.offset!;
   // attribute positions already cover strings and expressions containing `>`
@@ -63,7 +74,7 @@ function jsxTags(node: MdxJsxFlowElement | MdxJsxTextElement, source: string) {
   const openEnd = source.indexOf(">", afterAttributes) + 1;
   const open = source.slice(start, openEnd);
   const close = open.endsWith("/>") ? "" : source.slice(source.lastIndexOf("</", end - 1), end);
-  return { open, close };
+  return { open: dedent(open, ctx), close: dedent(close, ctx) };
 }
 
 /** estree node, structurally typed just enough for literal extraction */
@@ -226,7 +237,7 @@ function phrasingToInline(
         out.push(withMarks({ type: "mdxTextExpression", attrs: { value: node.value } }, marks));
         break;
       case "mdxJsxTextElement": {
-        const { open, close } = jsxTags(node, ctx.source);
+        const { open, close } = jsxTags(node, ctx);
         const tag = (text: string, self: boolean) =>
           withMarks({ type: "text", text }, [...marks, { type: "mdxJsxTag", attrs: { self } }]);
         out.push(tag(open, !close));
@@ -339,7 +350,8 @@ function mixedChildrenToBlocks(
   return out;
 }
 
-export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONContent {
+export function blockToNode(node: RootContent, parent: FromMdastContext): JSONContent {
+  const ctx = { ...parent, indent: (node.position?.start.column ?? 1) - 1 };
   switch (node.type) {
     case "paragraph": {
       // a registered element written inline on its own line (MDX parses
@@ -396,7 +408,7 @@ export function blockToNode(node: RootContent, ctx: FromMdastContext): JSONConte
     case "mdxJsxFlowElement": {
       const component = blockComponentToNode(node, ctx);
       if (component) return component;
-      const { open, close } = jsxTags(node, ctx.source);
+      const { open, close } = jsxTags(node, ctx);
       const tag = (text: string): JSONContent => ({
         type: "mdxJsxTagBlock",
         content: [{ type: "text", text }],

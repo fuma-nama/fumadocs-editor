@@ -1,6 +1,7 @@
 import type { SyntaxOptions } from "@fumadocs-editor/core";
 import type { SyncServerOptions } from "@fumadocs-editor/core/node";
-import type { CollabUser, EditorTheme, MediaProvider, UiComponentSpec } from "@fumadocs-editor/ui";
+import type { SyncUser } from "@fumadocs-editor/core/sync";
+import type { EditorTheme, MediaProvider, UiComponentSpec } from "@fumadocs-editor/ui";
 import type { UserConfig } from "vite";
 
 export interface StudioConfig {
@@ -34,7 +35,7 @@ export interface StudioConfig {
    * Collaborative editing for every tab. Off by default; `?collab` in the
    * URL (or the palette's action) turns it on for one tab.
    */
-  collab?: boolean | { user?: CollabUser };
+  collab?: boolean | { user?: SyncUser };
   /**
    * Credential sent on every connection and media request, verbatim, to
    * `server.authenticate`. Default: the `?token=` query parameter, then

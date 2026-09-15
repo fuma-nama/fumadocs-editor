@@ -4,59 +4,48 @@ icon: Users
 description: Real-time collaborative editing over the sync server
 ---
 
-Collaboration runs on the same [sync server](/sync) and the same websocket.
-Set `collab` on the `sync` prop:
+Collaboration runs on the same [sync server](/sync). Turn it on for a
+[sync client](/sync#sync-client) and pass that client to your editors:
 
 <include meta='title="collab-editor.tsx"'>../examples/collab.tsx</include>
 
-`user` is the presence identity shown at your caret on other screens.
-`collab: true` joins as a guest. Yjs is loaded lazily, so editors that
-never enable collab never download it.
+- `user` is the name and color shown at your caret on other screens.
+  `collab: true` joins as a guest.
+- Yjs only loads when the first document opens.
 
-## How it works
+## Sync vs. collab
 
-With collab on, the server owns the file:
+With collab on, the server holds one shared document per file and is the
+only one writing it to disk.
 
-- Every open file has one shared document on the server, and the server is
-  the only writer to disk. Blocks nobody touched still serialize
-  byte-for-byte.
-- Changes on disk (a `git pull` mid-session) merge into the shared
-  document. When the same block changed on both sides, the editor wins and
-  the disk is rewritten. There is no conflict chip: the document is shared,
-  so there is no local side to keep.
-- When the last client leaves, the server flushes and drops the document
-  after `evictAfterMs` (60 s by default).
+|                 | Sync                           | Collab                  |
+| --------------- | ------------------------------ | ----------------------- |
+| Saved by        | each editor                    | the server              |
+| Changes on disk | merged, conflicts need a click | merged, the editor wins |
+| Undo            | full history                   | your own edits only     |
+| MDX source tab  | available                      | disabled                |
 
-## What changes
-
-|                   | Sync                              | Collab                                     |
-| ----------------- | --------------------------------- | ------------------------------------------ |
-| Document lives in | your editor                       | a shared document on the server            |
-| Writes to disk    | each client (compare-and-swap)    | the server only                            |
-| External edits    | merged client-side, conflict chip | merged server-side, editor wins            |
-| Undo              | full local history                | your own edits only                        |
-| Raw MDX tab       | available                         | disabled (no merge with a live shared doc) |
-| Status dot        | session status                    | connectivity only                          |
-
-Presence carets show each peer's name. A server [auth scope](/auth) with a
-`user` overrides whatever name a client claims. Plain sync tabs and collab
-tabs can edit the same file: a sync write reaches the server's document like
-any other disk change.
+Sync and collab editors can open the same file. A sync save reaches collab
+editors like any other change on disk.
 
 ## Restarts
 
-There is no persistence beyond the file. A server restart, or eviction
-followed by a reopen, re-seeds the document from disk, and clients holding
-older state rebuild from the server. Two windows where edits can be lost:
+The file is the only persistence. When the server restarts, the document is
+rebuilt from disk:
 
-- A hard kill can lose edits still inside the save debounce (under a
-  second). An orderly shutdown flushes.
-- Edits typed **while the server was down** are discarded by the reset.
-  Edits made while merely disconnected (server up, network down) are
-  buffered and converge on reconnect.
+- edits made while the server was down are discarded
+- edits made while only the network was down are kept and sent on reconnect
+- a hard kill can lose the last second of edits; a normal shutdown saves them
 
-## Your own session
+## Without `MdxEditor`
 
-`createCollabSession` from `@fumadocs-editor/core/collab` is the collab
-counterpart of [`createFileSession`](/sync#your-own-session): it returns the
-shared document and awareness for a shell that is not React.
+On a collab client, [`client.open`](/sync#without-mdxeditor) joins the
+shared document. `document.collab()` returns its binding once synced:
+
+<auto-type-table path="../../../packages/core/src/sync/collab.ts" name="CollabBinding" />
+
+- Pass the same `components` and `syntax` as your editor to `client.open`;
+  the server parses the file with them.
+- The binding is `null` until the first sync and while the server rebuilds
+  the document. Rebuild your editor whenever `document.subscribe` fires.
+- `extensions()` brings its own undo: turn off StarterKit's `undoRedo`.

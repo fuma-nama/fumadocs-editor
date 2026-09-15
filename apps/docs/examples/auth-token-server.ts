@@ -5,8 +5,7 @@ declare function verifyToken(token: unknown): Promise<{ name: string; teams: str
 export const authenticate: SyncAuthenticate = async ({ payload }) => {
   const claims = await verifyToken(payload);
   if (!claims) return null;
-  // resolve async policy here, once per connection; the predicates below
-  // run on the message hot path and must stay synchronous
+  // `write` must be synchronous: resolve everything async here
   const teams = new Set(claims.teams);
   return {
     user: { name: claims.name },

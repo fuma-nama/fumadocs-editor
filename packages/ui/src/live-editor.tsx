@@ -15,7 +15,8 @@ import { EditorBubble } from "./bubble-menu";
 import { BlockGutter } from "./block-gutter";
 import { imageExtension } from "./components/image-view";
 import { fileSuggest, linkSuggest } from "./components/file-suggest";
-import type { EditorCollab } from "./collab";
+import type { CollabBinding } from "@fumadocs-editor/core/sync";
+import { caret } from "./collab";
 import type { SerializeFn } from "./store";
 import { contentClass } from "./styles/content";
 import { contentStyles } from "./components/content-styles";
@@ -45,7 +46,7 @@ const noTouch = () => false;
 
 export interface LiveEditorProps {
   content: JSONContent;
-  collab?: EditorCollab;
+  collab?: CollabBinding;
   editable: boolean;
   hidden: boolean;
   onReady: (editor: Editor, serialize: SerializeFn) => void;
@@ -79,7 +80,7 @@ export const LiveEditor = memo(function LiveEditor({
         slashMenu(specs, store, syntax?.math),
         fileSuggest(specs, store),
         linkSuggest(store),
-        ...(collab ? collab.extensions : []),
+        ...(collab ? collab.extensions(caret) : []),
       ],
       serialize: createIncrementalSerializer(createSyntax(components, syntax)),
     };
@@ -95,13 +96,7 @@ export const LiveEditor = memo(function LiveEditor({
     shouldRerenderOnTransaction: false,
     editorProps,
     onCreate({ editor }) {
-      if (!collab) {
-        onReady(editor, serialize);
-        return;
-      }
-      void collab.whenSynced.then(() => {
-        if (!editor.isDestroyed) onReady(editor, serialize);
-      });
+      onReady(editor, serialize);
     },
   });
 

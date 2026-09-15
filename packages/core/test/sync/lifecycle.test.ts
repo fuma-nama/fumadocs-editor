@@ -1,75 +1,71 @@
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { createServer, request, type Server } from "node:http";
+import { request } from "node:http";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as Y from "yjs";
-import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport } from "../../src/sync/client";
-import { createCollabSession, type CollabSession } from "../../src/sync/collab";
+import type { CollabBinding } from "../../src/sync/collab";
+import { connect, peer, serve, sleep, textEditor, until } from "./helpers";
 
 let root: string;
-let http: Server;
-let sync: SyncServer;
-let port: number;
+let server: Awaited<ReturnType<typeof serve>>;
 
 const EVICT_MS = 1500;
-
-const until = async <T>(
-  poll: () => T | undefined | Promise<T | undefined>,
-  ms = 4000,
-): Promise<T> => {
-  const started = Date.now();
-  for (;;) {
-    const value = await poll();
-    if (value !== undefined) return value;
-    if (Date.now() - started > ms) throw new Error("timed out");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-};
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), "fde-lifecycle-"));
   await writeFile(path.join(root, "doc.mdx"), "hello\n");
-  sync = createSyncServer({ root, evictAfterMs: EVICT_MS, upload: { maxBytes: 64 } });
-  http = createServer((req, res) => {
-    if (req.url === "/__fde_upload") return sync.handleUpload(req, res);
-    res.statusCode = 404;
-    res.end();
-  });
-  http.on("upgrade", (req, socket, head) => {
-    if (req.url === "/__fde_sync") sync.handleUpgrade(req, socket, head);
-  });
-  await new Promise<void>((resolve) => http.listen(0, resolve));
-  port = (http.address() as { port: number }).port;
+  server = await serve({ root, evictAfterMs: EVICT_MS, upload: { maxBytes: 64 } });
 });
 
 afterAll(async () => {
-  await sync.close();
-  await new Promise((resolve) => http.close(resolve));
+  await server.close();
   await rm(root, { recursive: true, force: true });
 });
 
-const openTransport = () => wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync` });
-const collabOpen = (transport: ReturnType<typeof openTransport>) =>
-  transport.request<{ epoch: string }>({ type: "collab-open", path: "doc.mdx", components: [] });
-
-const textAt = (session: CollabSession, index: number): Y.XmlText => {
-  const child = session.doc.getXmlFragment("default").get(index) as Y.XmlElement;
-  return child.get(0) as Y.XmlText;
+/** the epoch a fresh connection is answered with */
+const epochOf = async (file: string) => {
+  const client = await peer(server.url);
+  await client.hello();
+  const answer = await client.request({
+    type: "subscribe",
+    resource: "doc",
+    path: file,
+    vector: new Uint8Array([0]),
+    components: [],
+  });
+  client.close();
+  return answer;
 };
 
+const join = async (file: string) => {
+  const client = connect(server.url, { collab: true });
+  const session = client.open(file, { editor: textEditor().editor, components: [] });
+  const binding = await until(() => session.collab() ?? undefined, 8000);
+  return {
+    client,
+    binding,
+    close() {
+      session.close();
+      client.close();
+    },
+  };
+};
+
+const textAt = (binding: CollabBinding, index: number): Y.XmlText =>
+  (binding.doc.getXmlFragment("default").get(index) as Y.XmlElement).get(0) as Y.XmlText;
+
 test("last disconnect flushes to disk; the doc survives the grace, then evicts and re-seeds", async () => {
-  const a = openTransport();
-  const first = await collabOpen(a);
-  const session = createCollabSession({ transport: a, path: "doc.mdx", components: [] });
-  await session.whenSynced;
-  textAt(session, 0).insert(5, " evicted-edit");
-  session.destroy();
+  const first = await epochOf("doc.mdx");
+  if (first.type !== "update" || first.resource !== "doc" || !("epoch" in first)) {
+    throw new Error(JSON.stringify(first));
+  }
+  const a = await join("doc.mdx");
+  textAt(a.binding, 0).insert(5, " evicted-edit");
+  await sleep(100);
   a.close();
 
-  // the final state lands on disk straight away. The last disconnect
-  // flushes; it does not wait out the 800ms save debounce.
+  // the last disconnect flushes; it does not wait out the 800ms save debounce
   const flushed = await until(
     () =>
       readFile(path.join(root, "doc.mdx"), "utf-8").then((text) =>
@@ -79,25 +75,20 @@ test("last disconnect flushes to disk; the doc survives the grace, then evicts a
   );
   expect(flushed).toBe("hello evicted-edit\n");
 
-  // returning within the grace finds the same doc (epoch unchanged)
-  const b = openTransport();
-  expect((await collabOpen(b)).epoch).toBe(first.epoch);
-  b.close();
+  // returning within the grace finds the same doc
+  expect(await epochOf("doc.mdx")).toMatchObject({ epoch: first.epoch });
 
-  // once the grace passes with no client, the doc is evicted: the next
-  // opener gets a fresh epoch, re-seeded from the flushed file
-  await new Promise((resolve) => setTimeout(resolve, EVICT_MS + 700));
-  const c = openTransport();
-  expect((await collabOpen(c)).epoch).not.toBe(first.epoch);
-  const fresh = createCollabSession({ transport: c, path: "doc.mdx", components: [] });
-  await fresh.whenSynced;
-  expect(textAt(fresh, 0).toString()).toBe("hello evicted-edit");
-  fresh.destroy();
-  c.close();
+  // once the grace passes with no client, the next opener gets a fresh epoch
+  await sleep(EVICT_MS + 700);
+  const second = await epochOf("doc.mdx");
+  expect(second).not.toMatchObject({ epoch: first.epoch });
+  const fresh = await join("doc.mdx");
+  expect(textAt(fresh.binding, 0).toString()).toBe("hello evicted-edit");
+  fresh.close();
 }, 20000);
 
 test("upload limits: content type and size are enforced before anything is stored", async () => {
-  const base = `http://127.0.0.1:${port}`;
+  const base = `http://127.0.0.1:${server.port}`;
   const post = (body: BodyInit, headers: Record<string, string> = {}) =>
     fetch(`${base}/__fde_upload`, { method: "POST", body, headers });
 
@@ -120,7 +111,7 @@ test("a chunked oversized body is refused at the cap while streaming", async () 
     const req = request(
       {
         host: "127.0.0.1",
-        port,
+        port: server.port,
         path: "/__fde_upload",
         method: "POST",
         headers: { "content-type": "image/png", "transfer-encoding": "chunked" },
@@ -137,22 +128,14 @@ test("a chunked oversized body is refused at the cap while streaming", async () 
 
 test("deleting a page drops its collab doc first: no flush recreates the file", async () => {
   await writeFile(path.join(root, "gone.mdx"), "keep me\n");
-  const a = openTransport();
-  await a.request({ type: "collab-open", path: "gone.mdx", components: [] });
-  const session = createCollabSession({ transport: a, path: "gone.mdx", components: [] });
-  await session.whenSynced;
-  textAt(session, 0).insert(7, " please");
+  const a = await join("gone.mdx");
+  textAt(a.binding, 0).insert(7, " please");
+  await sleep(100);
 
-  await a.command({ type: "delete", path: "gone.mdx" });
+  await a.client.run({ type: "delete", path: "gone.mdx" });
   // the last disconnect would flush a live doc to disk
-  session.destroy();
   a.close();
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await sleep(300);
   await expect(readFile(path.join(root, "gone.mdx"), "utf-8")).rejects.toThrow();
-
-  const b = openTransport();
-  await expect(
-    b.request({ type: "collab-open", path: "gone.mdx", components: [] }),
-  ).rejects.toThrow();
-  b.close();
+  expect(await epochOf("gone.mdx")).toMatchObject({ type: "error" });
 });

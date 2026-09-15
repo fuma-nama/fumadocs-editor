@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   MdxEditor,
   EditorThemeProvider,
@@ -16,8 +16,9 @@ import {
   ASSET_ENDPOINT,
   AUTH_HEADER,
   UPLOAD_ENDPOINT,
-  wsTransport,
-  type SessionStatus,
+  createSyncClient,
+  type DocumentStatus,
+  type TreeNode,
 } from "@fumadocs-editor/core/sync";
 import { Moon, Sun } from "lucide-react";
 import { FumadocsIcon } from "./logo";
@@ -90,70 +91,43 @@ const media: MediaProvider = {
     /^(?:[a-z]+:|\/)/i.test(src) ? src : `${ASSET_ENDPOINT}/${src.replace(/^\.\//, "")}`,
 };
 
-// one transport for the page; the token is read fresh per connection attempt
-const transport = wsTransport({ auth: authToken });
+// one client for the page; the token is read fresh per connection attempt
+const client = createSyncClient({ auth: authToken, collab: collabEnabled && { user: collabUser } });
+
+function collectFiles(nodes: TreeNode[], out: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.type === "file") out.push(node.path);
+    else if (node.type === "folder") collectFiles(node.children, out);
+  }
+  return out;
+}
 
 function Playground() {
-  const workspace = useWorkspace({ transport });
-  const [files, setFiles] = useState<string[] | null>(null);
-  const [active, setActive] = useState<string | null>(null);
-  const [denied, setDenied] = useState(false);
-  const [status, setStatus] = useState<SessionStatus>("synced");
+  const workspace = useWorkspace({ client });
+  const files = useMemo(
+    () => (workspace.tree ? collectFiles(workspace.tree.nodes) : null),
+    [workspace.tree],
+  );
+  const [selected, setSelected] = useState<string | null>(null);
+  const active = selected ?? files?.[0] ?? null;
+  // no sync endpoint (static preview / production build): edit a bundled document
+  const offline = workspace.status === "offline" && files === null;
+  const denied = workspace.status === "denied";
+  const [status, setStatus] = useState<DocumentStatus>("synced");
   const [markdown, setMarkdown] = useState("");
-  const [diskText, setDiskText] = useState("");
   // consumer wiring for the auth scope: the handshake's `writable` (data the
   // sync layer exposes) drives our own `editable` prop
   const [writable, setWritable] = useState(true);
 
-  useEffect(() => {
-    let open = true;
-    void transport.list().then(
-      (paths) => {
-        if (!open) return;
-        setFiles(paths);
-        setActive((current) => current ?? paths[0] ?? null);
-      },
-      () => {
-        if (!open) return;
-        // no sync endpoint (static preview / production build): edit a
-        // bundled document without the mirror
-        setDenied(transport.status() === "denied");
-        setFiles([]);
-      },
-    );
-    return () => {
-      open = false;
-    };
-  }, []);
-
-  // the disk side of the round-trip badge: what the file holds right now
-  useEffect(() => {
-    if (!active) return;
-    let open = true;
-    const stop = transport.watch(active, (state) => {
-      if (open) setDiskText(state.text);
-    });
-    return () => {
-      open = false;
-      stop();
-    };
-  }, [active]);
-
-  // the editor reads the latest `sync` callbacks; the session itself only restarts on path/transport/collab
+  // the editor reads the latest `sync` callbacks; the document only reopens on path/client
   const sync: MdxEditorSync | undefined = active
     ? {
-        transport,
+        client,
         path: active,
-        collab: collabEnabled && { user: collabUser },
-        onStatus: (next) => {
-          setStatus(next);
-          // our own saves aren't echoed back to us: the badge follows the session
-          if (next === "synced") setDiskText(markdown);
-        },
+        onStatus: setStatus,
         onOpen: (result) => {
           setMarkdown(result.text);
-          setDiskText(result.text);
-          setWritable(result.writable ?? true);
+          setWritable(result.writable);
         },
       }
     : undefined;
@@ -173,7 +147,8 @@ function Playground() {
     };
   }, [files, active]);
 
-  const identical = markdown === diskText;
+  // a synced file document has compared the serialized editor with the disk
+  const identical = status === "synced";
 
   return (
     <main className="mx-auto max-w-[1080px] px-4 pt-6 pb-24 md:px-5 md:pt-12">
@@ -198,15 +173,17 @@ function Playground() {
           >
             {collabEnabled ? "collab: on" : "collab: off"}
           </a>
-          <span
-            className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
-              identical
-                ? "border-fd-success/30 bg-fd-success/15 text-fd-success"
-                : "border-fd-warning/30 bg-fd-warning/15 text-fd-warning"
-            }`}
-          >
-            {identical ? "round-trip: byte-identical" : `modified (${status})`}
-          </span>
+          {!collabEnabled && (
+            <span
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
+                identical
+                  ? "border-fd-success/30 bg-fd-success/15 text-fd-success"
+                  : "border-fd-warning/30 bg-fd-warning/15 text-fd-warning"
+              }`}
+            >
+              {identical ? "round-trip: byte-identical" : `modified (${status})`}
+            </span>
+          )}
           <ThemeToggle />
         </div>
       </header>
@@ -217,7 +194,7 @@ function Playground() {
               tree={workspace.tree}
               run={workspace.run}
               active={active}
-              onSelect={setActive}
+              onSelect={setSelected}
             />
           </nav>
         )}
@@ -237,7 +214,7 @@ function Playground() {
               Access denied: this token cannot open the workspace.
             </div>
           ) : (
-            files && (
+            offline && (
               <MdxEditor
                 defaultValue={fallbackDoc}
                 components={components}

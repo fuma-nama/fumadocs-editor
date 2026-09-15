@@ -2,7 +2,11 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/core";
-import type { SyncTransport } from "@fumadocs-editor/core/sync";
+import {
+  createSyncClient,
+  type ServerMessage,
+  type SyncTransport,
+} from "@fumadocs-editor/core/sync";
 import { MdxEditor, type MdxEditorProps, type MdxEditorRef } from "../src/editor";
 import { useSourceText } from "../src/root";
 
@@ -160,25 +164,35 @@ test("sync: a save advances the merge base, so a later disk edit elsewhere merge
   vi.useFakeTimers();
   let disk = "First.\n\nSecond.\n";
   let version = 1;
-  const watchers = new Set<(state: { text: string; version: string }) => void>();
+  let push = (_message: ServerMessage) => {};
+  const file = () =>
+    ({ resource: "file", path: "doc.mdx", text: disk, version: String(version) }) as const;
+  // a backend speaking the protocol for one file
   const transport: SyncTransport = {
-    list: async () => ["doc.mdx"],
-    read: async () => ({ text: disk, version: String(version) }),
-    write: async (_path, text, base) => {
-      if (base !== String(version)) {
-        return { ok: false, current: { text: disk, version: String(version) } };
-      }
-      disk = text;
-      version++;
-      return { ok: true, version: String(version) };
-    },
-    watch: (_path, onChange) => {
-      watchers.add(onChange);
-      return () => watchers.delete(onChange);
+    connect(listener) {
+      const later = (message: ServerMessage) =>
+        void Promise.resolve().then(() => listener.message(message));
+      push = later;
+      void Promise.resolve().then(() => listener.open());
+      return {
+        send(message) {
+          if (message.type === "hello") return later({ type: "hello", id: message.id });
+          if (message.type === "subscribe")
+            return later({ type: "update", id: message.id, ...file() });
+          if (message.type !== "update" || message.resource !== "file") return;
+          if (message.base === String(version)) {
+            disk = message.text;
+            version++;
+          }
+          later({ type: "update", id: message.id, ...file() });
+        },
+        close: () => listener.close(),
+      };
     },
   };
+  const client = createSyncClient({ transport });
   const statuses: string[] = [];
-  render({ sync: { transport, path: "doc.mdx", onStatus: (status) => statuses.push(status) } });
+  render({ sync: { client, path: "doc.mdx", onStatus: (status) => statuses.push(status) } });
   await settle(); // the sync chunk loads and the file is read
   await settle();
   const { editor } = await hydrate();
@@ -197,7 +211,7 @@ test("sync: a save advances the merge base, so a later disk edit elsewhere merge
   disk = disk.replace("Second.", "Second, from disk.");
   version++;
   await act(async () => {
-    for (const notify of watchers) notify({ text: disk, version: String(version) });
+    push({ type: "update", ...file() });
   });
   await settle();
   expect(statuses).not.toContain("conflict");

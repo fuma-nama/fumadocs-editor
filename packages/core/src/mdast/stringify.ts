@@ -29,9 +29,14 @@ type HandleWithPeek = Handle & { peek?: Handle };
 
 const mdxJsxFlowElement = mdxJsxToMarkdown().handlers?.mdxJsxFlowElement as HandleWithPeek;
 
-/** Trailing end of a JSX element line: `... />` or `</Name>`. */
-const JSX_LINE_END = /(?:\/>|<\/[A-Za-z][\w.-]*>)$/;
-const JSX_LINE_START = /^<[A-Za-z>]/;
+/**
+ * Lines that only hold a flow element's edge: a closing tag or the end of a
+ * self-closing one, and an opening tag (possibly continued on the next line).
+ * A line with content between tags is a paragraph, and dropping the blank line
+ * before or after it merges paragraphs.
+ */
+const JSX_LINE_END = /^(?:<\/[\w.-]*>|<?[^<]*\/>)$/;
+const JSX_LINE_START = /^<(?:>|[A-Za-z][^<>]*>?)$/;
 const FENCE = /^(`{3,}|~{3,})/;
 
 /**
@@ -63,8 +68,8 @@ function collapseJsxSiblingGaps(value: string): string {
       stripped === "" &&
       i > 0 &&
       i + 1 < lines.length &&
-      JSX_LINE_END.test(lines[i - 1].trimEnd()) &&
-      JSX_LINE_START.test(lines[i + 1].trimStart())
+      JSX_LINE_END.test(lines[i - 1].trim()) &&
+      JSX_LINE_START.test(lines[i + 1].trim())
     ) {
       continue;
     }

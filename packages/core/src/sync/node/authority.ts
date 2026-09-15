@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
-import * as syncProtocol from "y-protocols/sync";
 import {
   Awareness,
   applyAwarenessUpdate,
@@ -19,11 +18,12 @@ import {
   type SyntaxOptions,
 } from "../../components/spec";
 import { parseMdxToDoc, type DocSnapshot } from "../../document";
-import { serializeDocToMdx } from "../../serializer";
+import { assembleSnapshot, snapshotText, tryNormalize } from "../../serializer";
 import { editorExtensions } from "../../extensions/kit";
 import { applyMergeOps, mergeRemote } from "../../merge";
-import { MESSAGE_AWARENESS, MESSAGE_SYNC, collabFrame, readCollabFrame } from "../wire";
-import type { FileState, SyncUser } from "../transport";
+import type { SyncUser } from "../protocol";
+import { answer, bytes, encode, str, type Connection, type Resource } from "./connection";
+import type { FileState, Files } from "./files";
 
 /** origin marker for Y transactions the authority applies from disk state */
 const DISK = "disk";
@@ -31,18 +31,7 @@ const DISK = "disk";
 const TRAILING_MS = 800;
 const MAX_WAIT_MS = 5000;
 
-export interface DocAuthorityOptions<C> {
-  read(path: string): Promise<FileState>;
-  /** unconditional write (the authority is the single writer); returns the new version */
-  write(path: string, text: string): Promise<string>;
-  send(conn: C, data: Uint8Array): void;
-  /** the connection's resolved permissions; gates Y writes and pins identity */
-  scope(conn: C): { user?: SyncUser; write(path: string): boolean };
-  /** grace period after the last client leaves before the doc is evicted */
-  evictAfterMs?: number;
-}
-
-interface DocState<C> {
+interface DocState {
   path: string;
   epoch: string;
   ydoc: Y.Doc;
@@ -53,10 +42,15 @@ interface DocState<C> {
   schema: Schema;
   /** base of the last disk ⇄ Y sync; merges and byte-preservation key off it */
   snapshot: DocSnapshot;
-  /** version of the disk text the snapshot corresponds to */
+  /** the disk text the snapshot corresponds to, and its version */
+  diskText: string;
   diskVersion: string;
+  /** normalized text per top-level element, dropped when anything inside it changes */
+  normalized: WeakMap<object, string>;
   /** connected clients and the awareness clientIDs each one announced */
-  conns: Map<C, Set<number>>;
+  conns: Map<Connection, Set<number>>;
+  /** changes waiting for the end of the tick, grouped by the connection they came from */
+  outbox: Map<unknown, { yjs: Uint8Array[]; awareness: Set<number> }>;
   /** disk IO runs strictly in sequence per document */
   queue: Promise<void>;
   trailing?: ReturnType<typeof setTimeout>;
@@ -65,84 +59,110 @@ interface DocState<C> {
   evict?: ReturnType<typeof setTimeout>;
 }
 
-export interface DocAuthority<C> {
-  /** get-or-create the document, register the client, greet it with sync + presence */
-  open(
-    path: string,
-    conn: C,
-    components: ComponentSpec[],
-    options?: SyntaxOptions,
-  ): Promise<{ epoch: string }>;
-  /** a binary collab frame arrived from a client */
-  handleBinary(conn: C, data: Uint8Array): void;
-  /** the file changed on disk (chokidar); merged into the Y.Doc block-wise */
-  diskChanged(path: string, state: FileState): void;
-  /** forget the document: unsaved edits are discarded, a running save completes first */
-  drop(path: string): Promise<void>;
-  disconnect(conn: C): void;
-  /** flush pending writes and drop every document */
-  close(): Promise<void>;
-}
-
 /**
- * One Y.Doc per open file. Clients speak y-protocols; this process is the
- * only writer (Y → MDX, debounced, byte-preserving). Disk changes merge in
- * the same way as the single-user mirror.
+ * One Y.Doc per open file. This process is the only writer (Y → MDX,
+ * debounced, byte-preserving); disk changes merge in the same way as a file
+ * session's.
  *
  * Seeded from disk, never stored as Y state. After the last client leaves,
  * flush then evict after a grace (reload shouldn't drop Y history). A later
  * reopen re-seeds via a new epoch, like a restart.
  */
-export function createDocAuthority<C>({
-  read,
-  write,
-  send,
-  scope,
+export function createDocAuthority({
+  files,
   evictAfterMs = 60_000,
-}: DocAuthorityOptions<C>): DocAuthority<C> {
-  const docs = new Map<string, Promise<DocState<C>>>();
-  const live = new Set<DocState<C>>();
+}: {
+  files: Files;
+  /** grace period after the last client leaves before the doc is evicted */
+  evictAfterMs?: number;
+}) {
+  const docs = new Map<string, Promise<DocState>>();
+  /** the documents past seeding, by path: the per-message lookup stays synchronous */
+  const live = new Map<string, DocState>();
 
-  const broadcast = (doc: DocState<C>, data: Uint8Array, except?: unknown) => {
+  const broadcast = (doc: DocState, data: string | Uint8Array, except?: unknown) => {
     for (const conn of doc.conns.keys()) {
-      if (conn !== except) send(conn, data);
+      if (conn !== except) conn.send(data);
     }
   };
 
-  const enqueue = (doc: DocState<C>, task: () => Promise<void> | void) => {
+  /** an edit and the caret move it causes arrive in one tick: they leave as one push */
+  const relay = (doc: DocState, origin: unknown, change: Uint8Array | number[]) => {
+    let batch = doc.outbox.get(origin);
+    if (!batch) {
+      if (doc.outbox.size === 0) queueMicrotask(() => deliver(doc));
+      doc.outbox.set(origin, (batch = { yjs: [], awareness: new Set() }));
+    }
+    if (change instanceof Uint8Array) batch.yjs.push(change);
+    else for (const id of change) batch.awareness.add(id);
+  };
+
+  const deliver = (doc: DocState) => {
+    for (const [origin, { yjs, awareness }] of doc.outbox) {
+      const push = encode({
+        resource: "doc",
+        path: doc.path,
+        ...(yjs.length > 0 ? { yjs: yjs.length === 1 ? yjs[0] : Y.mergeUpdates(yjs) } : {}),
+        ...(awareness.size > 0
+          ? { awareness: encodeAwarenessUpdate(doc.awareness, [...awareness]) }
+          : {}),
+      });
+      broadcast(doc, push, origin);
+    }
+    doc.outbox.clear();
+  };
+
+  const enqueue = (doc: DocState, task: () => Promise<void> | void) => {
     doc.queue = doc.queue.then(task).catch(() => {});
   };
 
-  const flush = (doc: DocState<C>) => {
+  const flush = (doc: DocState) => {
     clearTimeout(doc.trailing);
     clearTimeout(doc.maxWait);
     doc.trailing = doc.maxWait = undefined;
-    enqueue(doc, () => saveTask(doc));
+    enqueue(doc, () => files.lock(doc.path, () => saveTask(doc)));
   };
 
-  const scheduleSave = (doc: DocState<C>) => {
+  const scheduleSave = (doc: DocState) => {
     clearTimeout(doc.trailing);
     doc.trailing = setTimeout(() => flush(doc), TRAILING_MS);
     doc.maxWait ??= setTimeout(() => flush(doc), MAX_WAIT_MS);
   };
 
-  const docNode = (doc: DocState<C>): PMNode =>
+  const docNode = (doc: DocState): PMNode =>
     yXmlFragmentToProseMirrorRootNode(doc.fragment, doc.schema);
 
-  const saveTask = async (doc: DocState<C>) => {
+  /** the Y.Doc laid out against the snapshot: the text to write and the next merge base */
+  const layout = (doc: DocState): DocSnapshot => {
+    const node = docNode(doc);
+    // read after converting: y-tiptap deletes the elements the schema rejects
+    const elements = doc.fragment.toArray();
+    const normalized: string[] = [];
+    for (let i = 0; i < node.childCount; i++) {
+      let text = doc.normalized.get(elements[i]);
+      if (text === undefined) {
+        text = tryNormalize(node.child(i).toJSON(), doc.syntax) ?? "";
+        doc.normalized.set(elements[i], text);
+      }
+      normalized.push(text);
+    }
+    return assembleSnapshot(normalized, doc.snapshot, doc.syntax);
+  };
+
+  const saveTask = async (doc: DocState) => {
     // fold in a disk change chokidar hasn't delivered yet before overwriting
-    const current = await read(doc.path).catch(() => undefined);
+    const current = await files.read(doc.path).catch(() => undefined);
     if (current) applyDisk(doc, current);
-    const text = serializeDocToMdx(docNode(doc).toJSON(), doc.snapshot, doc.syntax);
+    const snapshot = layout(doc);
+    const text = snapshotText(snapshot);
     if (current && text === current.text) return;
-    doc.diskVersion = await write(doc.path, text);
-    // the just-written text is the new merge base; parsing our own output is
-    // the round-trip guarantee and refreshes block sources for byte reuse
-    doc.snapshot = parseMdxToDoc(text, doc.syntax).snapshot;
+    doc.diskVersion = await files.write(doc.path, text);
+    doc.diskText = text;
+    doc.snapshot = snapshot;
   };
 
   /** merge a new disk state into the Y.Doc; same-block conflicts keep Y */
-  const applyDisk = (doc: DocState<C>, state: FileState) => {
+  const applyDisk = (doc: DocState, state: FileState) => {
     if (state.version === doc.diskVersion) return;
     const local = docNode(doc).toJSON() as JSONContent;
     let result;
@@ -164,6 +184,7 @@ export function createDocAuthority<C>({
       );
     }
     doc.snapshot = result.remote.snapshot;
+    doc.diskText = state.text;
     doc.diskVersion = state.version;
   };
 
@@ -171,8 +192,8 @@ export function createDocAuthority<C>({
     path: string,
     components: ComponentSpec[],
     options?: SyntaxOptions,
-  ): Promise<DocState<C>> => {
-    const state = await read(path);
+  ): Promise<DocState> => {
+    const state = await files.read(path);
     // the first opener's syntax wins; every client of one app sends the same
     const syntax = createSyntax(components, options);
     const schema = getSchema(editorExtensions({ components }));
@@ -190,7 +211,7 @@ export function createDocAuthority<C>({
     const awareness = new Awareness(ydoc);
     awareness.setLocalState(null);
 
-    const doc: DocState<C> = {
+    const doc: DocState = {
       path,
       epoch: randomUUID(),
       ydoc,
@@ -199,42 +220,44 @@ export function createDocAuthority<C>({
       syntax,
       schema,
       snapshot: parsed.snapshot,
+      diskText: state.text,
       diskVersion: state.version,
+      normalized: new WeakMap(),
       conns: new Map(),
+      outbox: new Map(),
       queue: Promise.resolve(),
     };
 
+    ydoc.on("afterTransaction", (transaction: Y.Transaction) => {
+      for (const type of transaction.changedParentTypes.keys()) doc.normalized.delete(type);
+    });
+
     ydoc.on("update", (update: Uint8Array, origin: unknown) => {
-      const frame = collabFrame(path, MESSAGE_SYNC);
-      syncProtocol.writeUpdate(frame, update);
-      broadcast(doc, encoding.toUint8Array(frame), origin);
+      relay(doc, origin, update);
       scheduleSave(doc);
     });
 
     awareness.on(
       "update",
       (changes: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
-        const changed = changes.added.concat(changes.updated, changes.removed);
-        const owned = doc.conns.get(origin as C);
+        const owned = doc.conns.get(origin as Connection);
         if (owned) {
           for (const id of changes.added) owned.add(id);
           for (const id of changes.updated) owned.add(id);
           for (const id of changes.removed) owned.delete(id);
         }
-        const frame = collabFrame(path, MESSAGE_AWARENESS);
-        encoding.writeVarUint8Array(frame, encodeAwarenessUpdate(awareness, changed));
-        broadcast(doc, encoding.toUint8Array(frame));
+        relay(doc, origin, changes.added.concat(changes.updated, changes.removed));
       },
     );
 
-    live.add(doc);
+    live.set(path, doc);
     return doc;
   };
 
-  const evict = (doc: DocState<C>) => {
+  const evict = (doc: DocState) => {
     if (doc.conns.size > 0) return;
     docs.delete(doc.path);
-    live.delete(doc);
+    live.delete(doc.path);
     // a disk change during the grace may have re-armed the save debounce
     flush(doc);
     enqueue(doc, () => {
@@ -243,65 +266,92 @@ export function createDocAuthority<C>({
     });
   };
 
-  const open: DocAuthority<C>["open"] = (path, conn, components, options) => {
+  const open = (
+    path: string,
+    components: ComponentSpec[],
+    options?: SyntaxOptions,
+  ): Promise<DocState> => {
     let entry = docs.get(path);
     if (!entry) {
       entry = createDoc(path, components, options);
       docs.set(path, entry);
       entry.catch(() => docs.delete(path));
     }
-    return entry.then((doc) => {
+    return entry.then((doc) =>
       // evicted between lookup and resolution: start over with a fresh doc
-      if (!live.has(doc)) return open(path, conn, components, options);
-      clearTimeout(doc.evict);
-      doc.evict = undefined;
-      if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
-      // writers get our step1 (the reply delivers buffered edits); a
-      // read-only client's reply would be refused. Everyone gets presence.
-      if (scope(conn).write(path)) {
-        const step1 = collabFrame(path, MESSAGE_SYNC);
-        syncProtocol.writeSyncStep1(step1, doc.ydoc);
-        send(conn, encoding.toUint8Array(step1));
-      }
-      const states = doc.awareness.getStates();
-      if (states.size > 0) {
-        const aw = collabFrame(path, MESSAGE_AWARENESS);
-        encoding.writeVarUint8Array(aw, encodeAwarenessUpdate(doc.awareness, [...states.keys()]));
-        send(conn, encoding.toUint8Array(aw));
-      }
-      return { epoch: doc.epoch };
-    });
+      live.get(path) === doc ? doc : open(path, components, options),
+    );
+  };
+
+  const leaveDoc = (doc: DocState, conn: Connection) => {
+    const owned = doc.conns.get(conn);
+    if (!owned) return;
+    doc.conns.delete(conn);
+    if (owned.size > 0) removeAwarenessStates(doc.awareness, [...owned], null);
+    if (doc.conns.size === 0) {
+      flush(doc);
+      doc.evict = setTimeout(() => evict(doc), evictAfterMs);
+    }
   };
 
   return {
-    open,
-
-    handleBinary(conn, data) {
-      const frame = readCollabFrame(data);
-      void docs.get(frame.path)?.then((doc) => {
-        if (!doc.conns.has(conn)) return;
-        if (frame.kind === MESSAGE_SYNC) {
-          // step1 asks for our state (a read); step2 and update frames carry
-          // client edits and are refused without write permission
-          if (
-            decoding.peekVarUint(frame.decoder) !== syncProtocol.messageYjsSyncStep1 &&
-            !scope(conn).write(doc.path)
-          ) {
-            return;
-          }
-          const reply = collabFrame(frame.path, MESSAGE_SYNC);
-          const header = encoding.length(reply);
-          syncProtocol.readSyncMessage(frame.decoder, reply, doc.ydoc, conn);
-          if (encoding.length(reply) > header) send(conn, encoding.toUint8Array(reply));
-        } else if (frame.kind === MESSAGE_AWARENESS) {
-          const update = decoding.readVarUint8Array(frame.decoder);
-          const user = scope(conn).user;
-          applyAwarenessUpdate(doc.awareness, user ? withUser(update, user) : update, conn);
-        }
+    async subscribe(conn, message) {
+      const relative = files.rel(str(message.path));
+      if (!conn.scope.read(relative)) throw new Error(`read denied: ${relative}`);
+      const vector = bytes(message.vector);
+      const components = Array.isArray(message.components)
+        ? (message.components as ComponentSpec[])
+        : [];
+      // external edits must keep flowing into the Y.Doc
+      files.watch();
+      const doc = await open(relative, components, message.syntax as SyntaxOptions | undefined);
+      const update = Y.encodeStateAsUpdate(doc.ydoc, vector);
+      clearTimeout(doc.evict);
+      doc.evict = undefined;
+      if (!doc.conns.has(conn)) doc.conns.set(conn, new Set());
+      answer(conn, message, {
+        resource: "doc",
+        path: relative,
+        text: doc.diskText,
+        epoch: doc.epoch,
+        writable: conn.scope.write(relative),
+        vector: Y.encodeStateVector(doc.ydoc),
+        yjs: update,
       });
+      const states = doc.awareness.getStates();
+      if (states.size > 0) {
+        const presence = encodeAwarenessUpdate(doc.awareness, [...states.keys()]);
+        conn.send(encode({ resource: "doc", path: relative, awareness: presence }));
+      }
     },
 
-    diskChanged(path, state) {
+    unsubscribe(conn, message) {
+      const doc = docs.get(files.rel(str(message.path)));
+      void doc?.then((state) => leaveDoc(state, conn));
+    },
+
+    async update(conn, message) {
+      const path = str(message.path);
+      // keys are normalized paths: a match needs no resolving on every keystroke
+      const doc = live.get(path) ?? live.get(files.rel(path));
+      if (!doc?.conns.has(conn)) return;
+      // client edits are refused without write permission; presence is not
+      if (message.yjs !== undefined && conn.scope.write(doc.path)) {
+        Y.applyUpdate(doc.ydoc, bytes(message.yjs), conn);
+      }
+      if (message.awareness !== undefined) {
+        const update = bytes(message.awareness);
+        const user = conn.scope.user;
+        applyAwarenessUpdate(doc.awareness, user ? withUser(update, user) : update, conn);
+      }
+    },
+
+    leave(conn) {
+      for (const doc of live.values()) leaveDoc(doc, conn);
+    },
+
+    /** the file changed on disk or through a client write; merged into the Y.Doc block-wise */
+    diskChanged(path: string, state: FileState) {
       void docs.get(path)?.then((doc) => {
         enqueue(doc, () => {
           applyDisk(doc, state);
@@ -312,12 +362,14 @@ export function createDocAuthority<C>({
       });
     },
 
-    async drop(path) {
+    /** forget the document: unsaved edits are discarded, a running save completes first */
+    async drop(path: string) {
       const entry = docs.get(path);
       if (!entry) return;
       docs.delete(path);
       const doc = await entry.catch(() => undefined);
-      if (!doc || !live.delete(doc)) return;
+      if (!doc || live.get(path) !== doc) return;
+      live.delete(path);
       // a save in flight may merge disk state, which re-arms the debounce
       // and can enqueue once more: drain until the queue stands still
       let queue: Promise<void>;
@@ -332,25 +384,13 @@ export function createDocAuthority<C>({
       doc.ydoc.destroy();
     },
 
-    disconnect(conn) {
-      for (const doc of live) {
-        const owned = doc.conns.get(conn);
-        if (!owned) continue;
-        doc.conns.delete(conn);
-        if (owned.size > 0) removeAwarenessStates(doc.awareness, [...owned], null);
-        if (doc.conns.size === 0) {
-          flush(doc);
-          doc.evict = setTimeout(() => evict(doc), evictAfterMs);
-        }
-      }
-    },
-
+    /** flush pending writes and drop every document */
     async close() {
-      for (const doc of live) {
+      for (const doc of live.values()) {
         clearTimeout(doc.evict);
         flush(doc);
       }
-      for (const doc of live) {
+      for (const doc of live.values()) {
         await doc.queue;
         doc.awareness.destroy();
         doc.ydoc.destroy();
@@ -358,7 +398,7 @@ export function createDocAuthority<C>({
       live.clear();
       docs.clear();
     },
-  };
+  } satisfies Resource & Record<string, unknown>;
 }
 
 /**

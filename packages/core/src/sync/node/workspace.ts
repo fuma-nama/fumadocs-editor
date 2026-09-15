@@ -13,6 +13,8 @@ import {
   type TreeNode,
   type WorkspaceIndex,
 } from "../tree";
+import { answer, encode, str, type Connection, type Incoming, type Resource } from "./connection";
+import type { Files } from "./files";
 
 export interface Workspace {
   /** the tree of the files `canRead` allows */
@@ -274,4 +276,111 @@ export async function openWorkspace(root: string): Promise<Workspace> {
       await writeMeta(dir, next);
     },
   };
+}
+
+/** many files change at once (a `git pull`): one tree for the burst */
+const TREE_SETTLE_MS = 100;
+
+/**
+ * The `tree` resource: the workspace indexed on first use, every subscriber
+ * sent the tree its scope may read, commands run one at a time.
+ */
+export function createTreeResource(files: Files, remove: (relative: string) => Promise<void>) {
+  const subscribers = new Set<Connection>();
+  let workspace: Promise<Workspace> | undefined;
+  let timer: NodeJS.Timeout | undefined;
+  let queue = Promise.resolve();
+
+  const open = () => {
+    files.watch();
+    return (workspace ??= openWorkspace(files.root));
+  };
+  const treeFor = (conn: Connection, ws: Workspace) => ({
+    root: path.basename(files.root),
+    nodes: ws.tree(conn.scope.read),
+  });
+  const push = async (except?: Connection) => {
+    clearTimeout(timer);
+    timer = undefined;
+    const ws = await workspace!;
+    for (const conn of subscribers) {
+      if (conn !== except) conn.send(encode({ resource: "tree", tree: treeFor(conn, ws) }));
+    }
+  };
+
+  /** validates a command against the scope; the returned task changes the workspace */
+  const command = (conn: Connection, value: unknown): ((ws: Workspace) => Promise<void>) => {
+    if (!value || typeof value !== "object") throw new Error("malformed message");
+    const body = value as Incoming;
+    const writable = (relative: string) => {
+      if (!conn.scope.write(relative)) throw new Error(`write denied: ${relative}`);
+      return relative;
+    };
+    switch (body.type) {
+      case "create": {
+        const relative = writable(files.rel(str(body.path)));
+        const title = str(body.title);
+        return (ws) => ws.create(relative, title);
+      }
+      case "mkdir": {
+        const dir = files.rel(str(body.dir));
+        writable(dir ? `${dir}/index.mdx` : "index.mdx");
+        const title = str(body.title);
+        return (ws) => ws.mkdir(dir, title);
+      }
+      case "delete": {
+        const relative = writable(files.rel(str(body.path)));
+        return (ws) => ws.remove(relative, () => remove(relative));
+      }
+      case "order": {
+        const dir = files.rel(str(body.dir));
+        writable(dir ? `${dir}/meta.json` : "meta.json");
+        if (!Array.isArray(body.order)) throw new Error("malformed message");
+        const entries: string[] = [];
+        for (const item of body.order) entries.push(str(item));
+        return (ws) => ws.order(dir, entries);
+      }
+      default:
+        throw new Error(`unknown command: ${String(body.type)}`);
+    }
+  };
+
+  return {
+    /** a watcher event under the root; the tree follows once the workspace is open */
+    event(event: string, relative: string) {
+      if (!workspace) return;
+      void workspace.then(async (ws) => {
+        if (await ws.update(event, relative)) timer ??= setTimeout(push, TREE_SETTLE_MS);
+      });
+    },
+
+    async subscribe(conn, message) {
+      const ws = await open();
+      subscribers.add(conn);
+      answer(conn, message, { resource: "tree", tree: treeFor(conn, ws) });
+    },
+
+    unsubscribe(conn) {
+      subscribers.delete(conn);
+    },
+
+    async update(conn, message) {
+      const task = command(conn, message.command);
+      const ws = await open();
+      // commands read and rewrite meta.json: two at once would lose an entry
+      const run = queue.then(() => task(ws));
+      queue = run.catch(() => {});
+      await run;
+      await push(conn);
+      answer(conn, message, { resource: "tree", tree: treeFor(conn, ws) });
+    },
+
+    leave(conn) {
+      subscribers.delete(conn);
+    },
+
+    close() {
+      clearTimeout(timer);
+    },
+  } satisfies Resource & Record<string, unknown>;
 }

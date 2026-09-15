@@ -10,7 +10,6 @@ export const media: MediaProvider = {
       body: file,
       headers: {
         "x-filename": encodeURIComponent(file.name),
-        // the same payload the transport sends on hello, JSON-encoded
         [AUTH_HEADER]: JSON.stringify(await getAccessToken()),
       },
     });

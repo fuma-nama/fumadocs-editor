@@ -1,74 +1,78 @@
-import type { TreeCommand, WorkspaceTree } from "./tree";
+import { decodeMessage, encodeMessage } from "./codec";
+import { SYNC_ENDPOINT, type ClientMessage, type ServerMessage } from "./protocol";
 
-export interface FileState {
-  text: string;
-  /** content hash; the compare-and-swap token for writes */
-  version: string;
+export interface TransportListener {
+  open(): void;
+  message(message: ServerMessage): void;
+  /** fires once per connection, also after `close()` */
+  close(): void;
 }
 
-/** the authenticated identity a server scope may pin to a connection */
-export interface SyncUser {
-  name: string;
-  color?: string;
+export interface TransportConnection {
+  /** dropped unless the connection is open */
+  send(message: ClientMessage): void;
+  close(): void;
 }
 
 /**
- * A read reply: file state plus scope-derived data. The client never acts
- * on it; consumers wire it into their own props.
- */
-export interface ReadResult extends FileState {
-  user?: SyncUser;
-  /** whether this connection may write the path; absent when the backend has no notion of scope */
-  writable?: boolean;
-}
-
-export type WriteResult =
-  | { ok: true; version: string }
-  /** the write lost a race: here is what the file holds now */
-  | { ok: false; current: FileState };
-
-/** "denied" is terminal: the server rejected the credentials, no retry loop runs */
-export type ConnectionStatus = "online" | "offline" | "denied";
-
-/**
- * A place markdown files live, addressed by root-relative posix paths. The
- * dev-server transport speaks this over a websocket; other backends (a real
- * filesystem handle, a database) only need these four calls.
+ * Carries protocol messages. Each `connect` opens one connection; the client
+ * reconnects by calling it again. Listener callbacks never fire
+ * synchronously inside `connect`.
  */
 export interface SyncTransport {
-  /** every file path in the workspace (filtered to what this connection may read) */
-  list(): Promise<string[]>;
-  read(path: string): Promise<ReadResult>;
-  write(path: string, text: string, baseVersion: string): Promise<WriteResult>;
-  /** change notifications for one path; returns unsubscribe */
-  watch(path: string, onChange: (state: FileState) => void): () => void;
-  /**
-   * Connection state changes, firing immediately with the current state;
-   * returns unsubscribe. Optional: a backend that cannot go offline (an
-   * in-memory store) omits it.
-   */
-  onStatus?(listener: (status: ConnectionStatus) => void): () => void;
-  /**
-   * The workspace as a sidebar shows it, in `meta.json` order, kept current;
-   * fires with the current tree once it is known. Optional: a backend
-   * without folders or `meta.json` omits it, together with `command`.
-   */
-  tree?(onChange: (tree: WorkspaceTree) => void): () => void;
-  /** creates pages and folders, deletes pages, reorders a folder; rejects with the reason */
-  command?(command: TreeCommand): Promise<void>;
+  connect(listener: TransportListener): TransportConnection;
 }
 
-/** websocket close code for a rejected hello; denied is not offline */
-export const CLOSE_DENIED = 4403;
+const HEARTBEAT_MS = 20_000;
 
-/** request header carrying the JSON-encoded auth payload on the HTTP media endpoints */
-export const AUTH_HEADER = "x-fde-auth";
-
-/** where the vite plugin mounts the sync websocket */
-export const SYNC_ENDPOINT = "/__fde_sync";
-
-/** where the vite plugin mounts the media upload endpoint (POST) */
-export const UPLOAD_ENDPOINT = "/__fde_upload";
-
-/** where the vite plugin serves stored assets (`ASSET_ENDPOINT/<relative>`) */
-export const ASSET_ENDPOINT = "/__fde_asset";
+/**
+ * `SyncTransport` over a websocket, one message per frame (see `codec.ts`);
+ * defaults to the dev-server mount on the current host. Empty text frames
+ * are the heartbeat: sent every 20 s and echoed by the server, since a
+ * half-open socket never fires `close`.
+ */
+export function wsTransport(url?: string): SyncTransport {
+  return {
+    connect(listener) {
+      const ws = new WebSocket(
+        url ??
+          `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${SYNC_ENDPOINT}`,
+      );
+      ws.binaryType = "arraybuffer";
+      let done = false;
+      let waiting = false;
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      const close = () => {
+        if (done) return;
+        done = true;
+        clearInterval(heartbeat);
+        ws.close();
+        listener.close();
+      };
+      ws.addEventListener("open", () => {
+        heartbeat = setInterval(() => {
+          if (waiting) return close();
+          waiting = true;
+          ws.send("");
+        }, HEARTBEAT_MS);
+        listener.open();
+      });
+      ws.addEventListener("message", (event) => {
+        waiting = false;
+        const data = event.data as string | ArrayBuffer;
+        if (data === "") return;
+        listener.message(
+          decodeMessage(typeof data === "string" ? data : new Uint8Array(data)) as ServerMessage,
+        );
+      });
+      ws.addEventListener("close", close);
+      ws.addEventListener("error", close);
+      return {
+        send(message) {
+          if (!done && ws.readyState === WebSocket.OPEN) ws.send(encodeMessage(message));
+        },
+        close,
+      };
+    },
+  };
+}

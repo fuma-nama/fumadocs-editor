@@ -8,7 +8,7 @@ const EMPTY_SYNTAX = createSyntax();
 
 /** a snapshot block's lossless-round-trip serialization, computed once */
 export function blockNormalized(block: SnapshotBlock, syntax: Syntax): string {
-  return (block._normalized ??= tryNormalize(block.node, syntax) ?? block.source);
+  return (block._normalized ??= tryNormalize(block.node!, syntax) ?? block.source);
 }
 
 /**
@@ -64,50 +64,52 @@ export function serializeDocToMdx(
   for (const node of doc.content ?? []) {
     normalized.push(tryNormalize(node, syntax) ?? "");
   }
-  return assembleMdx(normalized, snapshot);
+  return snapshotText(assembleSnapshot(normalized, snapshot, syntax));
 }
 
 /**
- * Match per-block normalized texts against the snapshot and reassemble the
- * document, emitting untouched blocks (and the whitespace around them)
- * byte-for-byte from their original source.
+ * Match per-block normalized texts against the snapshot and lay out the
+ * document they form: untouched blocks (and the whitespace around them) keep
+ * their original source, edited ones take their normalized text.
  */
-export function assembleMdx(normalized: string[], snapshot?: DocSnapshot): string {
-  const matches = snapshot ? matchBlocks(normalized, snapshot) : normalized.map(() => null);
-  const parts: { text: string; index: number | null }[] = [];
+export function assembleSnapshot(
+  normalized: string[],
+  snapshot: DocSnapshot | undefined,
+  syntax: Syntax,
+): DocSnapshot {
+  const matches = snapshot ? matchBlocks(normalized, snapshot) : undefined;
+  const next: DocSnapshot = {
+    syntax,
+    blocks: [],
+    gaps: [],
+    leading: snapshot?.blocks.length === 0 ? snapshot.leading : "",
+    trailing: "",
+  };
+  let prev: number | null = null;
+
   for (let i = 0; i < normalized.length; i++) {
-    const index = matches[i];
-    parts.push(
+    const index = matches?.[i] ?? null;
+    const block =
       index != null
-        ? { text: snapshot!.blocks[index].source, index }
-        : { text: normalized[i], index: null },
-    );
+        ? snapshot!.blocks[index]
+        : { source: normalized[i], _normalized: normalized[i] };
+    if (block.source === "") continue;
+    if (next.blocks.length === 0) next.leading = index === 0 ? snapshot!.leading : "";
+    else if (index != null && index - 1 === prev) next.gaps.push(snapshot!.gaps[prev]);
+    else next.gaps.push("\n\n");
+    next.blocks.push(block);
+    prev = index;
   }
 
-  const filtered = parts.filter((part) => part.text !== "");
+  const last = next.blocks.at(-1);
+  if (snapshot && prev === snapshot.blocks.length - 1) next.trailing = snapshot.trailing;
+  else if (last && !last.source.endsWith("\n")) next.trailing = "\n";
+  return next;
+}
 
-  if (filtered.length === 0) return snapshot?.blocks.length === 0 ? snapshot.leading : "";
-
-  let out = snapshot && filtered[0].index === 0 ? snapshot.leading : "";
-
-  for (let i = 0; i < filtered.length; i++) {
-    out += filtered[i].text;
-    if (i < filtered.length - 1) {
-      const current = filtered[i].index;
-      const next = filtered[i + 1].index;
-      if (snapshot && current != null && next === current + 1) {
-        out += snapshot.gaps[current];
-      } else {
-        out += "\n\n";
-      }
-    }
-  }
-
-  if (snapshot && filtered[filtered.length - 1].index === snapshot.blocks.length - 1) {
-    out += snapshot.trailing;
-  } else if (!out.endsWith("\n")) {
-    out += "\n";
-  }
-
-  return out;
+/** the text a snapshot describes */
+export function snapshotText({ leading, blocks, gaps, trailing }: DocSnapshot): string {
+  let out = leading;
+  for (let i = 0; i < blocks.length; i++) out += (i > 0 ? gaps[i - 1] : "") + blocks[i].source;
+  return out + trailing;
 }

@@ -12,7 +12,7 @@ import {
 } from "@fumadocs-editor/ui";
 import {
   frontmatterTitle,
-  type SessionStatus,
+  type DocumentStatus,
   type TreeNode,
   type WorkspaceTree,
 } from "@fumadocs-editor/core/sync";
@@ -31,7 +31,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { collab, components, media, syntax, transport } from "./providers";
+import { client, components, media, syntax } from "./providers";
 import { FilePanel } from "./files";
 import { Palette, type PaletteGroup, type PaletteItem } from "./palette";
 
@@ -94,7 +94,7 @@ interface Title {
   title: string;
 }
 
-const UNSAVED = new Set<SessionStatus>(["dirty", "saving", "conflict"]);
+const UNSAVED = new Set<DocumentStatus>(["dirty", "saving", "conflict"]);
 const PANEL_KEY = "fde-studio-files";
 const THEMES: [EditorTheme, string, LucideIcon][] = [
   ["light", "Light", Sun],
@@ -153,10 +153,10 @@ const openFile = (path: string) => {
 };
 
 export function Studio() {
-  const workspace = useWorkspace({ transport });
+  const workspace = useWorkspace({ client });
   const [typed, setTyped] = useState<Title | null>(null);
   const hash = useSyncExternalStore(subscribeHash, readHash);
-  const [status, setStatus] = useState<SessionStatus>("synced");
+  const [status, setStatus] = useState<DocumentStatus>("synced");
   const [writable, setWritable] = useState(true);
   const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem(PANEL_KEY) === "1");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -211,16 +211,15 @@ export function Studio() {
     return () => window.removeEventListener("beforeunload", guard);
   }, [status]);
 
-  // the editor reads the latest callbacks; the session only restarts on path/transport/collab
+  // the editor reads the latest callbacks; the document only reopens on path/client
   const sync: MdxEditorSync | undefined =
     active === null
       ? undefined
       : {
-          transport,
+          client,
           path: active,
-          collab,
           onStatus: setStatus,
-          onOpen: (result) => setWritable(result.writable ?? true),
+          onOpen: (result) => setWritable(result.writable),
         };
 
   // identity matters: the editor lists paths again for a new provider
@@ -312,10 +311,10 @@ export function Studio() {
         },
       );
     }
-    const collabHref = `${collab ? location.pathname : "?collab"}${location.hash}`;
+    const collabHref = `${client.collab ? location.pathname : "?collab"}${location.hash}`;
     actions.push({
       id: "collab",
-      label: collab ? "Turn off collaboration" : "Turn on collaboration",
+      label: client.collab ? "Turn off collaboration" : "Turn on collaboration",
       icon: Users,
       run: () => location.assign(collabHref),
     });

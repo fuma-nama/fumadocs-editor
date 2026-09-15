@@ -1,26 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { createServer, type Server } from "node:http";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createSyncServer, type SyncServer } from "../../src/sync/node/server";
-import { wsTransport, type WsTransport } from "../../src/sync/client";
+import type { SyncClient } from "../../src/sync/client";
 import type { TreeNode, WorkspaceTree } from "../../src/sync/tree";
+import { connect, peer, serve, until } from "./helpers";
 
 let root: string;
-let http: Server;
-let sync: SyncServer;
-let port: number;
-
-const until = async <T>(poll: () => T | undefined, ms = 4000): Promise<T> => {
-  const started = Date.now();
-  for (;;) {
-    const value = poll();
-    if (value !== undefined) return value;
-    if (Date.now() - started > ms) throw new Error("timed out");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-};
+let server: Awaited<ReturnType<typeof serve>>;
 
 const titles = (tree: WorkspaceTree) => {
   const out: string[] = [];
@@ -35,34 +22,26 @@ beforeAll(async () => {
   await writeFile(path.join(root, "index.mdx"), "---\ntitle: Home\n---\n# Home\n");
   await writeFile(path.join(root, "guides/setup.mdx"), "# Setup\n");
   await writeFile(path.join(root, "meta.json"), JSON.stringify({ pages: ["guides", "index"] }));
-  sync = createSyncServer({
+  server = await serve({
     root,
     authenticate: ({ payload }) => {
       if (payload === "editor") return { write: true };
       return payload === "viewer" ? { write: false, read: (p) => !p.startsWith("guides/") } : null;
     },
   });
-  http = createServer();
-  http.on("upgrade", (request, socket, head) => {
-    if (request.url === "/__fde_sync") sync.handleUpgrade(request, socket, head);
-  });
-  await new Promise<void>((resolve) => http.listen(0, resolve));
-  port = (http.address() as { port: number }).port;
 });
 
 afterAll(async () => {
-  await sync.close();
-  await new Promise((resolve) => http.close(resolve));
+  await server.close();
   await rm(path.dirname(root), { recursive: true, force: true });
 });
 
-const open = (token: string) =>
-  wsTransport({ url: `ws://127.0.0.1:${port}/__fde_sync`, auth: () => token });
+const open = (token: string) => connect(server.url, { auth: () => token });
 
-/** the tree as each transport sees it, latest last */
-function follow(transport: WsTransport) {
+/** the tree as each client sees it, latest last */
+function follow(client: SyncClient) {
   const seen: WorkspaceTree[] = [];
-  const stop = transport.tree((tree) => seen.push(tree));
+  const stop = client.onTree((tree) => seen.push(tree));
   return { seen, stop, latest: () => seen.at(-1) };
 }
 
@@ -84,42 +63,47 @@ test("the tree applies the scope and follows the filesystem", async () => {
     "Home",
     "New",
   ]);
-
-  // a second subscriber on the same transport gets the tree it already holds
-  const again: WorkspaceTree[] = [];
-  viewer.tree((tree) => again.push(tree))();
-  expect(again).toEqual([v.latest()]);
+  expect(viewer.tree()).toEqual(v.latest());
 
   v.stop();
   e.stop();
+  expect(viewer.tree()).toBeNull();
   viewer.close();
   editor.close();
 }, 10_000);
 
 test("commands need write access and a well-formed body", async () => {
   const viewer = open("viewer");
-  await expect(viewer.command({ type: "order", dir: "", order: [] })).rejects.toThrow(
+  await until(() => (viewer.status() === "online" ? true : undefined));
+  await expect(viewer.run({ type: "order", dir: "", order: [] })).rejects.toThrow(
     /write denied: meta.json/,
   );
-  await expect(
-    viewer.request({ type: "create", path: "guides/x.mdx", title: "X" }),
-  ).rejects.toThrow(/write denied/);
+  await expect(viewer.run({ type: "create", path: "guides/x.mdx", title: "X" })).rejects.toThrow(
+    /write denied/,
+  );
   viewer.close();
 
-  const editor = open("editor");
-  await expect(editor.request({ type: "order", dir: "" })).rejects.toThrow(/malformed/);
-  await expect(
-    editor.command({ type: "create", path: "../out.mdx", title: "Out" }),
-  ).rejects.toThrow(/escapes/);
+  const editor = await peer(server.url, "editor");
+  await editor.hello();
+  expect(
+    await editor.request({ type: "update", resource: "tree", command: { type: "order", dir: "" } }),
+  ).toMatchObject({ type: "error", message: "malformed message" });
+  expect(
+    await editor.request({
+      type: "update",
+      resource: "tree",
+      command: { type: "create", path: "../out.mdx", title: "Out" },
+    }),
+  ).toMatchObject({ type: "error", message: expect.stringMatching(/escapes/) });
   editor.close();
 });
 
-test("create, order, mkdir and delete touch disk; subscribers see the tree before the reply", async () => {
+test("create, order, mkdir and delete touch disk; the answer carries the new tree", async () => {
   const editor = open("editor");
   const e = follow(editor);
   await until(e.latest);
 
-  await editor.command({ type: "create", path: "guides/intro.mdx", title: "Intro" });
+  await editor.run({ type: "create", path: "guides/intro.mdx", title: "Intro" });
   const guides = e.latest()!.nodes[0] as Extract<TreeNode, { type: "folder" }>;
   expect(guides).toMatchObject({ type: "folder", name: "guides" });
   expect(titles({ root: "", nodes: guides.children })).toEqual(["Intro", "setup"]);
@@ -127,16 +111,16 @@ test("create, order, mkdir and delete touch disk; subscribers see the tree befor
     "---\ntitle: Intro\n---\n",
   );
 
-  await editor.command({ type: "order", dir: "", order: ["index", "---More---", "new", "guides"] });
+  await editor.run({ type: "order", dir: "", order: ["index", "---More---", "new", "guides"] });
   expect(JSON.parse(await readFile(path.join(root, "meta.json"), "utf8"))).toEqual({
     pages: ["index", "---More---", "new", "guides"],
   });
   expect(titles(e.latest()!)).toEqual(["Home", "More", "New", "guides"]);
-  await expect(editor.command({ type: "order", dir: "", order: ["ghost"] })).rejects.toThrow(
+  await expect(editor.run({ type: "order", dir: "", order: ["ghost"] })).rejects.toThrow(
     /no longer under/,
   );
 
-  await editor.command({ type: "mkdir", dir: "reference", title: "Reference" });
+  await editor.run({ type: "mkdir", dir: "reference", title: "Reference" });
   expect(await readFile(path.join(root, "reference/meta.json"), "utf8")).toBe(
     '{\n  "title": "Reference"\n}\n',
   );
@@ -144,11 +128,24 @@ test("create, order, mkdir and delete touch disk; subscribers see the tree befor
     pages: ["index", "---More---", "new", "guides", "reference"],
   });
 
-  await editor.command({ type: "delete", path: "guides/intro.mdx" });
+  await editor.run({ type: "delete", path: "guides/intro.mdx" });
   await expect(stat(path.join(root, "guides/intro.mdx"))).rejects.toThrow();
-  await expect(editor.command({ type: "delete", path: "guides/intro.mdx" })).rejects.toThrow(
+  await expect(editor.run({ type: "delete", path: "guides/intro.mdx" })).rejects.toThrow(
     /no page at/,
   );
   e.stop();
+  editor.close();
+});
+
+test("a watcher hears another client's command as a push", async () => {
+  const watcher = open("editor");
+  const w = follow(watcher);
+  await until(w.latest);
+  const editor = open("editor");
+  await until(() => (editor.status() === "online" ? true : undefined));
+  await editor.run({ type: "create", path: "pushed.mdx", title: "Pushed" });
+  await until(() => (w.latest() && titles(w.latest()!).includes("Pushed") ? true : undefined));
+  w.stop();
+  watcher.close();
   editor.close();
 });

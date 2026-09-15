@@ -12,9 +12,10 @@ export interface SnapshotBlock {
    * Parsed PM JSON of the block. The serialize side stringifies it lazily
    * (see `blockNormalized`) to decide whether a save-time block was edited.
    * Parse pays nothing; the first serialize pays once. The parse chunk never
-   * loads the markdown serializer.
+   * loads the markdown serializer. Absent on blocks a serializer laid out,
+   * which carry their normalization instead.
    */
-  readonly node: JSONContent;
+  readonly node?: JSONContent;
   /** cache slot for the lazy normalization; owned by the serialize module */
   _normalized?: string;
 }

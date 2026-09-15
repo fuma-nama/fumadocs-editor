@@ -1,18 +1,23 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Studio no longer hangs on a white page\n\nOpening the studio while a stale tab was still polling the port could leave\nthe page blank forever: the StyleX plugin compiled the app on every request\nand, for the two style-only modules, loaded their `@stylexjs/stylex` import\nthrough Vite's dependency optimizer, which was itself waiting for those\nrequests to finish before committing. The app is now compiled ahead of time\n(StyleX included), so the dev server serves plain JS and CSS and neither\n`@stylexjs/unplugin` nor Babel is installed with the package.\n"
-    filename: 2026-09-15-studio-precompiled-app.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Sync speaks one protocol\n\nSync is now three layers: a transport that only carries messages, a sync\nclient that owns the connection (hello, reconnect, subscriptions) and the\nsynced state, and the server. Files, the tree and collab docs are resources\nof one small protocol over one connection, documented for anyone writing a\nbackend or a transport. There is no client-side storage interface anymore:\na custom backend speaks the protocol.\n\n- `wsTransport({ auth })` becomes `createSyncClient({ auth })`; a custom URL\n  goes in `createSyncClient({ transport: wsTransport(url) })`.\n- `sync={{ transport }}` and `useWorkspace({ transport })` take `client`\n  instead. Without it, the page shares one default client.\n- `sync={{ collab }}` becomes `createSyncClient({ collab })`.\n- `createFileSession` becomes `client.open(path, { editor })`, returning a\n  `SyncDocument`; `document.opened` resolves `{ text, writable }`. The client\n  holds one document per path. `SessionStatus` is now `DocumentStatus` and\n  `SyncedDocument` is `DocumentEditor`.\n- `createCollabSession`, the `@fumadocs-editor/core/collab` entry and the\n  `CollabUser` type are removed: `client.open` on a collab client, then\n  `document.collab()`; the user type is `SyncUser`.\n- `ConnectionStatus` is `connecting`, `online`, `offline` or `denied`.\n"
+    filename: 2026-09-15-sync-protocol.md
     v: 0.0.0
 core:packages:
-  - id: npm:@fumadocs-editor/core
-    updated: false
   - changelogIds:
-      - 2026-09-15-studio-precompiled-app.md
+      - 2026-09-15-sync-protocol.md
+    id: npm:@fumadocs-editor/core
+    updated: true
+  - changelogIds:
+      - 2026-09-15-sync-protocol.md
     id: npm:@fumadocs-editor/studio
     updated: true
-  - id: npm:@fumadocs-editor/ui
-    updated: false
+  - changelogIds:
+      - 2026-09-15-sync-protocol.md
+    id: npm:@fumadocs-editor/ui
+    updated: true
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
+  - id: npm:playground
   - id: npm:docs

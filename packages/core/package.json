@@ -1,6 +1,6 @@
 {
   "name": "@fumadocs-editor/core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Headless MDX editor engine for Fumadocs: TipTap schema, lossless MDX round-trip, file sync and collaboration",
   "keywords": [
     "collaboration",
@@ -32,7 +32,6 @@
     "./serialize": "./dist/serialize.js",
     "./extensions": "./dist/extensions.js",
     "./sync": "./dist/sync.js",
-    "./collab": "./dist/collab.js",
     "./node": "./dist/node.js",
     "./vite": "./dist/vite.js",
     "./package.json": "./package.json"

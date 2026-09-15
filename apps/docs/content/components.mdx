@@ -4,57 +4,43 @@ icon: Puzzle
 description: Make your own MDX components editable in place
 ---
 
-A component without a spec already round-trips byte-for-byte: it renders as
-a neutral card and is edited as source. A spec is what turns
-`<Feature title="…">` into a block edited in place, with its own slash-menu
-entry and attributes panel.
+Without a spec, a component's children stay editable and its tags are
+edited as text. A spec makes it a real block, with editable regions, a
+slash-menu entry and an attributes panel.
 
-## Why a spec
+The editor never renders your real components. Each one gets:
 
-The editor never renders your real components. Each one gets two things
-instead:
+- a **spec** describing which attributes and children are editable
+- a **renderer**, a lightweight look-alike drawn around them
 
-- a **spec**: data describing how attributes and children map to editable
-  regions
-- a **renderer**: a lightweight mirror that draws the look around those
-  regions
-
-Because the spec is data, the editor keeps the declared shape on every
-edit, and a renderer that throws falls back to a source card without
-losing the document.
-
-## A worked example
+## Example
 
 Take a `<Feature title="…" soon={true}>` card.
 
 <Steps>
 <Step>
 
-### Declare the shape
+### Declare the spec
 
 <include meta='title="feature.tsx"'>../examples/component.tsx#spec</include>
 
-- `attributeRegions` turns the `title` attribute into an inline editable
-  region.
-- `childrenRegion` turns the children into a block region: paragraphs,
-  lists, code, nested components.
-- `props` lists the remaining attributes for the attributes panel. A
-  `boolean` prop becomes a toggle.
-- `insert` is the fragment the slash menu inserts. `emptyComponent` builds
-  it: every region present, all empty.
-- `regions` gives each region a class name. Regions render outside the
-  renderer's tree, so this is where their typography lives.
+| Field              | Does                                                  |
+| ------------------ | ----------------------------------------------------- |
+| `attributeRegions` | makes the `title` attribute an inline editable region |
+| `childrenRegion`   | makes the children a block region                     |
+| `props`            | other attributes, in the attributes panel             |
+| `insert`           | what the slash menu inserts                           |
+| `regions`          | a class name per region                               |
 
 </Step>
 <Step>
 
-### Draw the chrome
+### Draw the renderer
 
 <include meta='title="feature.tsx"'>../examples/component.tsx#renderer</include>
 
-`children` holds the editable regions. Everything else is chrome. Style it
-however your app styles things: the editor's own chrome is StyleX and never
-depends on your CSS setup.
+`children` holds the editable regions. Style the rest however your app
+styles things.
 
 </Step>
 <Step>
@@ -63,49 +49,44 @@ depends on your CSS setup.
 
 <include meta='title="editor.tsx"'>../examples/component.tsx#usage</include>
 
-Every `<Feature>` in a document is now editable in place.
-
 </Step>
 </Steps>
 
 ## Regions
 
-`children` in the render props is **all regions, in document order**: here
-the `title` inline region, then the `body` block region. You place them
-once; there is no separate slot per region.
+`children` contains every region in document order: here `title`, then
+`body`.
 
-- Style a region by name with `regions`, or target `data-region="<name>"`
-  from the wrapper.
-- Mark chrome `contentEditable={false}` (the "Soon" badge) so the caret
-  cannot enter it. Double-clicking chrome selects the component, so give
-  every component some: an icon, a rail, a padded edge.
-- A component that nests in another (a row, a card) reserves a spot for the
-  touch joystick in its own chrome: an empty element with
-  `data-fde-controls`. The built-in rows, cards, steps, tabs and accordions
-  do.
+- Style a region with `regions`, or with `[data-region="<name>"]`.
+- Mark decorations `contentEditable={false}` so the caret cannot enter them.
+- Leave some chrome around the regions (an icon, a border, padding):
+  double-clicking it selects the component.
+
+<Callout title="Nested components">
+  A component that sits inside another one needs a spot for the touch drag handle: an empty element
+  with `data-fde-controls` in its chrome.
+</Callout>
 
 ## Props and literals
 
-JSX attributes reach the renderer in two forms:
+Attributes reach the renderer in two forms:
 
-| Render prop | Holds                                  | Example                                  |
-| ----------- | -------------------------------------- | ---------------------------------------- |
-| `props`     | plain-string attributes                | `type="info"` → `props.type === "info"`  |
-| `literals`  | static values of expression attributes | `soon={true}` → `literals.soon === true` |
+| Render prop | Holds                    | Example                                  |
+| ----------- | ------------------------ | ---------------------------------------- |
+| `props`     | string attributes        | `type="info"` → `props.type === "info"`  |
+| `literals`  | static expression values | `soon={true}` → `literals.soon === true` |
 
-`setProp(name, value)` writes a string attribute. `setLiteral(name, value)`
-rewrites an expression from a literal value; the source text is derived.
-Use them for controls the renderer owns, like the Callout type picker. An
-expression that is not a static literal (a variable, a call) stays out of
-`literals` and is edited as source in the attributes panel.
+Change them from the renderer with `setProp(name, value)` and
+`setLiteral(name, value)`. Expressions that are not literals, like a
+variable, are edited as source in the attributes panel.
 
-## Spec reference
+## Reference
 
-Structural fields on `ComponentSpec` (from `@fumadocs-editor/core`):
+`ComponentSpec` from `@fumadocs-editor/core`:
 
 <auto-type-table path="../../../packages/core/src/components/spec.ts" name="ComponentSpec" />
 
-`UiComponentSpec` (from `@fumadocs-editor/ui`) adds the UI half:
+`UiComponentSpec` from `@fumadocs-editor/ui` adds:
 
 <auto-type-table
   path="../../../packages/ui/src/components/spec.tsx"
@@ -113,9 +94,6 @@ Structural fields on `ComponentSpec` (from `@fumadocs-editor/core`):
   type='Pick<UiComponentSpec, "render" | "icon" | "filePathRegion">'
 />
 
-`contentRegion`, `childrenRegion` and `childComponent` are mutually
-exclusive. A spec with none of them is a leaf: props only, like
-`GithubInfo`. For containers, the
+For containers like Cards, Files and Tabs, the
 [built-in specs](https://github.com/fuma-nama/fumadocs-editor/blob/dev/packages/ui/src/components/fumadocs-ui.tsx)
-are the reference: Cards and Card, Files (`listLike`), Tabs
-(`itemsAttribute`).
+are the best reference.
