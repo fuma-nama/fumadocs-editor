@@ -1,23 +1,19 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: minor\n  \"@fumadocs-editor/ui\":\n    type: minor\n  \"@fumadocs-editor/studio\":\n    type: patch\n---\n\n### Sync speaks one protocol\n\nSync is now three layers: a transport that only carries messages, a sync\nclient that owns the connection (hello, reconnect, subscriptions) and the\nsynced state, and the server. Files, the tree and collab docs are resources\nof one small protocol over one connection, documented for anyone writing a\nbackend or a transport. There is no client-side storage interface anymore:\na custom backend speaks the protocol.\n\n- `wsTransport({ auth })` becomes `createSyncClient({ auth })`; a custom URL\n  goes in `createSyncClient({ transport: wsTransport(url) })`.\n- `sync={{ transport }}` and `useWorkspace({ transport })` take `client`\n  instead. Without it, the page shares one default client.\n- `sync={{ collab }}` becomes `createSyncClient({ collab })`.\n- `createFileSession` becomes `client.open(path, { editor })`, returning a\n  `SyncDocument`; `document.opened` resolves `{ text, writable }`. The client\n  holds one document per path. `SessionStatus` is now `DocumentStatus` and\n  `SyncedDocument` is `DocumentEditor`.\n- `createCollabSession`, the `@fumadocs-editor/core/collab` entry and the\n  `CollabUser` type are removed: `client.open` on a collab client, then\n  `document.collab()`; the user type is `SyncUser`.\n- `ConnectionStatus` is `connecting`, `online`, `offline` or `denied`.\n"
-    filename: 2026-09-15-sync-protocol.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Code block tabs\n\nConsecutive fences with a `tab=\"…\"` meta are one tab group, as fumadocs\nrenders them. The editor draws them as one box with an editable label per\ntab: `⌘Enter` in a tab adds the next one, the block menu has **Add tab**,\nand the slash menu has **Code tabs**. Clearing a label leaves the group.\n\nThe block menu now also edits the raw meta string, so `twoslash`,\n`tab-group` and other flags no longer need the source view.\n"
+    filename: 2026-09-21-code-block-tabs.md
     v: 0.0.0
 core:packages:
-  - changelogIds:
-      - 2026-09-15-sync-protocol.md
-    id: npm:@fumadocs-editor/core
+  - id: npm:@fumadocs-editor/core
+    updated: false
+  - id: npm:@fumadocs-editor/studio
     updated: true
   - changelogIds:
-      - 2026-09-15-sync-protocol.md
-    id: npm:@fumadocs-editor/studio
-    updated: true
-  - changelogIds:
-      - 2026-09-15-sync-protocol.md
+      - 2026-09-21-code-block-tabs.md
     id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
-  - id: npm:playground
   - id: npm:docs
+  - id: npm:playground

@@ -168,13 +168,18 @@ export const content = stylex.create({
   },
   th: { backgroundColor: tokens.muted, fontWeight: 600 },
 
+  // the margins and corners follow `--fde-code-*` so a tab group (base.css)
+  // can join consecutive blocks into one box
   codeBlock: {
     position: "relative",
-    marginTop: "1rem",
-    marginBottom: "1rem",
+    marginTop: "var(--fde-code-mt, 1rem)",
+    marginBottom: "var(--fde-code-mb, 1rem)",
     marginInline: 0,
     overflow: "hidden",
-    borderRadius: "0.75rem",
+    borderStartStartRadius: "var(--fde-code-rt, 0.75rem)",
+    borderStartEndRadius: "var(--fde-code-rt, 0.75rem)",
+    borderEndStartRadius: "var(--fde-code-rb, 0.75rem)",
+    borderEndEndRadius: "var(--fde-code-rb, 0.75rem)",
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: border,
@@ -199,6 +204,24 @@ export const content = stylex.create({
     userSelect: "none",
   },
   codeHeaderIcon: { flexShrink: 0, opacity: 0.7 },
+  codeTabLabel: {
+    boxSizing: "border-box",
+    flexShrink: 0,
+    height: "1.5rem",
+    maxWidth: "12rem",
+    fieldSizing: "content",
+    paddingInline: "0.375rem",
+    borderBottomWidth: 2,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.primary,
+    fontSize: tokens.fieldSize,
+    fontWeight: 500,
+    color: tokens.primary,
+    outline: "none",
+    "::placeholder": {
+      color: `color-mix(in oklab, ${tokens.mutedForeground} 50%, transparent)`,
+    },
+  },
   codeScroll: { minWidth: 0, flex: 1, overflow: "auto" },
   codePre: {
     boxSizing: "border-box",

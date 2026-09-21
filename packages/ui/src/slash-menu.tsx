@@ -21,6 +21,7 @@ import {
   ScrollText,
   Sigma,
   SquareCode,
+  SquareDashedBottomCode,
   TextQuote,
   ImageIcon,
   Table2,
@@ -38,6 +39,7 @@ import {
 import "@tiptap/extension-table";
 import { chrome } from "./styles/shared";
 import { insertImages } from "./components/image-view";
+import { addCodeTab } from "./components/code-block";
 import type { EditorProviders } from "./components/media";
 
 const muted = tokens.mutedForeground;
@@ -107,6 +109,10 @@ const BLOCKS: SlashItem[] = [
   block("Code block", <SquareCode size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).toggleCodeBlock().run(),
   ),
+  block("Code tabs", <SquareDashedBottomCode size={15} />, (e, r) => {
+    e.chain().focus().deleteRange(r).toggleCodeBlock().run();
+    addCodeTab(e, e.state.selection.$from.before());
+  }),
   block("Divider", <Minus size={15} />, (e, r) =>
     e.chain().focus().deleteRange(r).setHorizontalRule().run(),
   ),

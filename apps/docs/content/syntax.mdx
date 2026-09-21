@@ -59,9 +59,18 @@ A `mermaid` code block renders its diagram below the source. Nothing to
 turn on.
 
 </Accordion>
+<Accordion title="Code block tabs">
+
+Consecutive fences with a `tab="…"` meta are one tab group, as in
+[fumadocs](https://fumadocs.dev/docs/ui/markdown#codeblock-tabs). The editor
+draws them as one box with an editable label per tab: `⌘Enter` in a tab adds
+the next one, and a code block's `⚙` menu has **Add tab** and the raw meta
+string.
+
+</Accordion>
 </Accordions>
 
 ## Not yet editable
 
-`<CodeBlockTabs>`, non-fumadocs `<Tabs>` and footnotes are kept verbatim for
-now.
+Explicit `<CodeBlockTabs>`, non-fumadocs `<Tabs>` and footnotes are kept
+verbatim for now.

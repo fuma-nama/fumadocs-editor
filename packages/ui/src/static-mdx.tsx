@@ -8,6 +8,7 @@ import { SquareCode } from "lucide-react";
 import { Component as ReactComponent, Fragment, memo, type ReactNode } from "react";
 import type { UiComponentSpec } from "./components/spec";
 import { readLiterals, readStringProps } from "./components/attr-values";
+import { parseCodeMeta } from "./components/code-meta";
 import { resolveSrc } from "./components/media";
 import { useEditorContext } from "./components/context";
 import { content, contentClass } from "./styles/content";
@@ -146,13 +147,16 @@ function Shell({
   type,
   className,
   children,
+  ...attrs
 }: {
   type: string;
   className?: string;
   children: ReactNode;
+  [data: `data-${string}`]: string;
 }) {
   return (
     <div
+      {...attrs}
       className={
         className ? `react-renderer node-${type} ${className}` : `react-renderer node-${type}`
       }
@@ -252,15 +256,20 @@ function hasText(node: JSONContent): boolean {
 
 function StaticCodeBlock({ node }: { node: JSONContent }) {
   const language = (node.attrs?.language as string | null) ?? "";
+  const meta = parseCodeMeta((node.attrs?.meta as string | null) ?? null);
   return (
-    <Shell type="codeBlock" className={contentClass.block}>
+    <Shell type="codeBlock" className={contentClass.block} data-code-tab={String(meta.tab != null)}>
       <figure
         data-node-view-wrapper=""
         dir="ltr"
         {...stylex.props(content.codeBlock, styles.wrapper)}
       >
         <div {...stylex.props(content.codeHeader)}>
-          <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+          {meta.tab == null ? (
+            <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+          ) : (
+            <span {...stylex.props(content.codeTabLabel)}>{meta.tab}</span>
+          )}
           <div {...stylex.props(styles.spacer)} />
           <span {...stylex.props(styles.codeLang)}>{language || "plaintext"}</span>
         </div>
