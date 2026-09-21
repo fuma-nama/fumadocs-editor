@@ -143,6 +143,19 @@
   border-radius: 2px;
 }
 
+/* Consecutive `tab` fences are one tab group in fumadocs: draw them as one
+ * box. The flag sits on TipTap's wrapper; the figure inside reads the
+ * variables (`content.codeBlock`). */
+[data-fde-root] [data-code-tab="true"]:has(+ [data-code-tab="true"]) {
+  --fde-code-mb: 0px;
+  --fde-code-rb: 0px;
+}
+[data-fde-root] [data-code-tab="true"] + [data-code-tab="true"] {
+  --fde-gap: -1px;
+  --fde-code-mt: 0px;
+  --fde-code-rt: 0px;
+}
+
 /* TipTap wraps document tables; spacing lives on the wrapper */
 [data-fde-root] .tableWrapper {
   overflow-x: auto;

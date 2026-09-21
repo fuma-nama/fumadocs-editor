@@ -14,8 +14,9 @@ import { createLowlight } from "lowlight";
 import { Popover } from "@base-ui/react/popover";
 import { Switch } from "@base-ui/react/switch";
 import { memo, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Clipboard, Settings2, SquareCode } from "lucide-react";
+import { Check, ChevronDown, Clipboard, Plus, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 import { chrome } from "../styles/shared";
 import { BlockActions } from "../block-panel";
 import { content, contentClass } from "../styles/content";
@@ -162,15 +163,15 @@ const styles = stylex.create({
     textAlign: "end",
     fontSize: tokens.fieldSize,
   },
-  rest: {
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: tokens.border,
-    paddingTop: "0.5rem",
-    fontFamily: consts.mono,
-    fontSize: 11,
-    color: tokens.mutedForeground,
+  metaField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.25rem",
+    fontSize: 12.5,
+    color: tokens.foreground,
   },
+  metaInput: { fontFamily: consts.mono, fontSize: 11.5 },
+  actionIcon: { width: "1rem", flexShrink: 0 },
   actions: {
     display: "flex",
     flexDirection: "column",
@@ -242,18 +243,21 @@ function LanguageSelect({ value, onChange }: { value: string; onChange: (value: 
 function MetaSettings({
   editor,
   getPos,
+  raw,
   meta,
-  onChange,
+  updateAttributes,
 }: {
   editor: Editor;
   getPos: () => number | undefined;
+  raw: string | null;
   meta: CodeMeta;
-  onChange: (next: CodeMeta) => void;
+  updateAttributes: NodeViewProps["updateAttributes"];
 }) {
   const { anchorRef, container } = useEditorPortal();
   const [open, setOpen] = useState(false);
   const denseSwitch = stylex.props(chrome.switchRoot, styles.denseSwitch);
   const thumb = stylex.props(chrome.switchThumb);
+  const onChange = (next: CodeMeta) => updateAttributes({ meta: buildCodeMeta(next) });
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
@@ -302,8 +306,29 @@ function MetaSettings({
                 <Switch.Thumb {...thumb} />
               </Switch.Root>
             </label>
-            {meta.rest && <p {...stylex.props(styles.rest)}>{meta.rest}</p>}
+            <label {...stylex.props(styles.metaField)}>
+              Meta
+              <input
+                {...stylex.props(chrome.input, chrome.field, styles.metaInput)}
+                value={raw ?? ""}
+                placeholder='title="…" lineNumbers'
+                spellCheck={false}
+                onChange={(event) => updateAttributes({ meta: event.target.value || null })}
+              />
+            </label>
             <div {...stylex.props(styles.actions)}>
+              <button
+                type="button"
+                {...stylex.props(chrome.button, chrome.item, styles.actionItem)}
+                onClick={() => {
+                  const pos = getPos();
+                  if (pos != null) addCodeTab(editor, pos);
+                  setOpen(false);
+                }}
+              >
+                <Plus size={13} {...stylex.props(styles.actionIcon)} />
+                <span>Add tab</span>
+              </button>
               <BlockActions
                 editor={editor}
                 range={() => {
@@ -327,12 +352,14 @@ const Header = memo(function Header({
   editor,
   getPos,
   language,
+  raw,
   meta,
   updateAttributes,
 }: {
   editor: Editor;
   getPos: () => number | undefined;
   language: string | null;
+  raw: string | null;
   meta: CodeMeta;
   updateAttributes: NodeViewProps["updateAttributes"];
 }) {
@@ -342,7 +369,25 @@ const Header = memo(function Header({
       contentEditable={false}
       data-fde-row=""
     >
-      <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+      {meta.tab == null ? (
+        <SquareCode size={15} {...stylex.props(content.codeHeaderIcon)} />
+      ) : (
+        <input
+          {...stylex.props(chrome.input, content.codeTabLabel)}
+          data-code-tab-label=""
+          value={meta.tab}
+          placeholder="Tab…"
+          spellCheck={false}
+          tabIndex={-1}
+          onChange={(event) =>
+            updateAttributes({ meta: buildCodeMeta({ ...meta, tab: event.target.value }) })
+          }
+          // an unnamed tab renders a blank trigger: leaving it empty leaves the group
+          onBlur={() => {
+            if (meta.tab === "") updateAttributes({ meta: buildCodeMeta({ ...meta, tab: null }) });
+          }}
+        />
+      )}
       <input
         {...stylex.props(chrome.input, styles.titleInput)}
         value={meta.title}
@@ -356,8 +401,9 @@ const Header = memo(function Header({
       <MetaSettings
         editor={editor}
         getPos={getPos}
+        raw={raw}
         meta={meta}
-        onChange={(next) => updateAttributes({ meta: buildCodeMeta(next) })}
+        updateAttributes={updateAttributes}
       />
       <LanguageSelect
         value={language ?? ""}
@@ -404,6 +450,7 @@ function CodeBlockView(props: NodeViewProps) {
         editor={editor}
         getPos={getPos}
         language={language}
+        raw={raw}
         meta={meta}
         updateAttributes={updateAttributes}
       />
@@ -428,18 +475,78 @@ function CodeBlockView(props: NodeViewProps) {
   );
 }
 
+/**
+ * Insert the next tab after the code block at `pos`, naming this block's tab
+ * first when it has none, and select the new label. Consecutive `tab` fences
+ * are one group, so the new tab is numbered after the group.
+ */
+export function addCodeTab(editor: Editor, pos: number): boolean {
+  const { state } = editor;
+  const $pos = state.doc.resolve(pos);
+  const block = $pos.nodeAfter;
+  if (!block?.type.spec.code) return false;
+  const { parent } = $pos;
+  const index = $pos.index();
+  const tabbed = (i: number) => {
+    const node = parent.child(i);
+    return node.type === block.type && parseCodeMeta(node.attrs.meta).tab != null;
+  };
+  let count = 1;
+  for (let i = index - 1; i >= 0 && tabbed(i); i--) count++;
+  for (let i = index + 1; i < parent.childCount && tabbed(i); i++) count++;
+  const named = (meta: CodeMeta, n: number) => buildCodeMeta({ ...meta, tab: `Tab ${n}` });
+
+  const tr = state.tr;
+  const meta = parseCodeMeta(block.attrs.meta);
+  if (meta.tab == null)
+    tr.setNodeMarkup(pos, undefined, { ...block.attrs, meta: named(meta, count) });
+  const at = pos + block.nodeSize;
+  const next = block.type.create({
+    language: block.attrs.language,
+    meta: named(parseCodeMeta(null), count + 1),
+  });
+  tr.insert(at, next).setSelection(TextSelection.create(tr.doc, at + 1));
+  editor.view.dispatch(tr.scrollIntoView());
+  requestAnimationFrame(() => {
+    const dom = editor.isDestroyed ? null : editor.view.nodeDOM(at);
+    if (dom instanceof Element)
+      dom.querySelector<HTMLInputElement>("[data-code-tab-label]")?.select();
+  });
+  return true;
+}
+
 export function codeBlockExtension(): Extension {
   return CodeBlockLowlight.extend({
+    // above the component keymap: in a tabbed block, Mod-Enter adds a code tab
+    // before it adds the surrounding Tab or Step
+    priority: 110,
     addAttributes() {
       return {
         ...this.parent?.(),
         meta: { default: null },
       };
     },
+    addKeyboardShortcuts() {
+      return {
+        ...this.parent?.(),
+        "Mod-Enter": () => {
+          const { $from } = this.editor.state.selection;
+          return (
+            $from.parent.type === this.type &&
+            parseCodeMeta($from.parent.attrs.meta).tab != null &&
+            addCodeTab(this.editor, $from.before())
+          );
+        },
+      };
+    },
     addNodeView() {
       return ReactNodeViewRenderer(CodeBlockView, {
         ...nodeViewOptions,
         className: contentClass.block,
+        // consecutive tabbed blocks join through a sibling rule in base.css
+        attrs: ({ node }) => ({
+          "data-code-tab": String(parseCodeMeta(node.attrs.meta).tab != null),
+        }),
       });
     },
   }).configure({ lowlight }) as unknown as Extension;
