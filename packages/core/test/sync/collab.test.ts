@@ -123,8 +123,9 @@ test("a file session's write reaches the collab doc", async () => {
   await session.flush();
   await until(() => {
     const fragment = a.binding.doc.getXmlFragment("default");
-    const last = fragment.get(fragment.length - 1) as Y.XmlElement;
-    return last.toString().includes("file block") ? true : undefined;
+    // Empty until the doc syncs: keep polling rather than throw.
+    const last = fragment.get(fragment.length - 1) as Y.XmlElement | undefined;
+    return last?.toString().includes("file block") ? true : undefined;
   }, 6000);
   session.close();
   plain.close();
