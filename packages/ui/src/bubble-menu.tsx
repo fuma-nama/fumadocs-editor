@@ -42,6 +42,7 @@ import type { UiComponentSpec } from "./components/spec";
 import { BlockMenu, useBlockMenuOpen, type ActiveComponent } from "./block-panel";
 import { DragHandle } from "./drag-handle";
 import { updateAtomAttributes } from "./components/attributes";
+import { uploadFile } from "./components/media";
 import { handleBlock, movableIn } from "./components/keymap";
 import { Picker } from "./components/picker";
 import { useEditorContext } from "./components/context";
@@ -545,8 +546,9 @@ function ImagePanel({ editor }: { editor: Editor }) {
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (!file) return;
-              void media.upload(file).then((src) => {
-                if (!editor.isDestroyed) updateAtomAttributes(editor, "image", { src });
+              void uploadFile(media, file).then((src) => {
+                if (src !== undefined && !editor.isDestroyed)
+                  updateAtomAttributes(editor, "image", { src });
               });
               event.target.value = "";
             }}
