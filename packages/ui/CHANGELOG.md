@@ -1,3 +1,22 @@
+## @fumadocs-editor/ui@0.5.1
+
+### Images no longer request their raw src
+
+When the image node view is not mounted, the image renders from the
+schema's HTML, which used the document's `src` as written. `@tiptap/react`
+clears node views when `EditorContent` unmounts (and on React's StrictMode
+double effect in development), so each image was requested at its raw,
+often relative, `src`. The schema's HTML now uses `media.resolve`, and keeps
+the document's `src` in `data-src` so that copying and pasting an image
+inside the editor keeps its path.
+
+### Report failed uploads
+
+`MediaProvider` has an optional `onError(error, file)`, called when `upload`
+rejects from paste, drop, the slash menu or the image panel, so the host can
+show the failure. The slash menu's `/image` text is now replaced only once
+the upload succeeds.
+
 ## @fumadocs-editor/ui@0.5.0
 
 ### Code block tabs
