@@ -169,8 +169,10 @@ function imageItem(providers: EditorProviders): SlashItem {
       input.accept = "image/*";
       input.onchange = () => {
         const file = input.files?.[0];
-        e.chain().focus().deleteRange(r).run();
-        if (file) void insertImages(e, media, [file], r.from);
+        e.commands.focus();
+        // the command text is replaced by the image, but only on successful upload
+        if (file) void insertImages(e, media, [file], r);
+        else e.commands.deleteRange(r);
       };
       input.click();
       return;
