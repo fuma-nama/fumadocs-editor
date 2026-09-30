@@ -102,6 +102,24 @@ function imageFiles(transfer: DataTransfer | null): File[] {
 
 export function imageExtension(providers: EditorProviders): Extension {
   return Image.extend({
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        // the schema's HTML is what renders when the node view is not
+        // mounted (@tiptap/react clears node views on unmount), and what is
+        // copied: load the resolved URL, but keep the document's src in
+        // data-src so a paste back into the editor restores it
+        src: {
+          default: null,
+          parseHTML: (element) => element.getAttribute("data-src") ?? element.getAttribute("src"),
+          renderHTML: ({ src }) => {
+            if (typeof src !== "string") return {};
+            const resolved = resolveSrc(providers.media, src);
+            return resolved === src ? { src } : { src: resolved, "data-src": src };
+          },
+        },
+      };
+    },
     addNodeView: () => ReactNodeViewRenderer(ImageView, nodeViewOptions),
     addProseMirrorPlugins() {
       const editor = this.editor;
