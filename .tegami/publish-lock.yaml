@@ -1,28 +1,19 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: patch\n---\n\n### Blocks after a nested list stay in their list item\n\nAn edited list is written tight, so a paragraph or other block after a\nnested list inside a list item lost its blank line and re-parsed as part\nof the nested list's last item. The serializer now keeps one blank line\nbetween a nested list and the next block in the same item.\n"
-    filename: 2026-09-30-nested-list-blank-line.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Images no longer request their raw src\n\nWhen the image node view is not mounted, the image renders from the\nschema's HTML, which used the document's `src` as written. `@tiptap/react`\nclears node views when `EditorContent` unmounts (and on React's StrictMode\ndouble effect in development), so each image was requested at its raw,\noften relative, `src`. The schema's HTML now uses `media.resolve`, and keeps\nthe document's `src` in `data-src` so that copying and pasting an image\ninside the editor keeps its path.\n"
-    filename: 2026-09-30-image-resolved-src.md
-    v: 0.0.0
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Report failed uploads\n\n`MediaProvider` has an optional `onError(error, file)`, called when `upload`\nrejects from paste, drop, the slash menu or the image panel, so the host can\nshow the failure. The slash menu's `/image` text is now replaced only once\nthe upload succeeds.\n"
-    filename: 2026-09-30-upload-errors.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: patch\n---\n\n### `mkdir` checks write access to the folder's `meta.json`\n\nThe tree `mkdir` command creates both `<dir>/meta.json` and `<dir>/index.mdx`,\nbut only checked `SyncScope.write` on `index.mdx`. A scope that allowed\n`index.mdx` and denied `meta.json` could still create `meta.json` this way.\n`mkdir` now requires write access to both paths before it creates anything.\n"
+    filename: 2026-10-20-mkdir-scope.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-09-30-nested-list-blank-line.md
+      - 2026-10-20-mkdir-scope.md
     id: npm:@fumadocs-editor/core
     updated: true
   - id: npm:@fumadocs-editor/studio
     updated: true
-  - changelogIds:
-      - 2026-09-30-image-resolved-src.md
-      - 2026-09-30-upload-errors.md
-    id: npm:@fumadocs-editor/ui
+  - id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
-  - id: npm:playground
   - id: npm:docs
+  - id: npm:playground
