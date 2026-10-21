@@ -1,15 +1,19 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: patch\n---\n\n### `mkdir` checks write access to the folder's `meta.json`\n\nThe tree `mkdir` command creates both `<dir>/meta.json` and `<dir>/index.mdx`,\nbut only checked `SyncScope.write` on `index.mdx`. A scope that allowed\n`index.mdx` and denied `meta.json` could still create `meta.json` this way.\n`mkdir` now requires write access to both paths before it creates anything.\n"
-    filename: 2026-10-20-mkdir-scope.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Uploaded images go where they were dropped\n\n`insertImages` read the insert position before awaiting `MediaProvider.upload()`\nand used it unchanged afterwards. If the document changed during the upload\n(typing, a collaborator, a sync merge), the image landed at a stale offset:\nin the wrong place, replacing the wrong text for the slash command, or\nfailing with `RangeError: Position N out of range` once the document had\nshrunk, leaving the uploaded file without an image. The position now follows\nevery change made while the uploads run. Several dropped images also keep\ntheir order instead of being inserted in reverse.\n"
+    filename: 2026-10-21-insert-images-position.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Mermaid diagrams render with Pele\n\n`mermaid` code blocks are now drawn by [Pele](https://pele.run) instead of\n`mermaid`. Pele has no runtime dependencies and loads each diagram type on\nfirst use. Diagrams update as you type instead of 300 ms after, use the\neditor's font (or Pele's `--pele-font` variable when the page sets it), and\nfollow its light and dark theme. Pele has its own layout and visual style, so\ndiagrams look different from Mermaid's output.\n"
+    filename: 2026-10-21-pele-diagrams.md
     v: 0.0.0
 core:packages:
-  - changelogIds:
-      - 2026-10-20-mkdir-scope.md
-    id: npm:@fumadocs-editor/core
-    updated: true
+  - id: npm:@fumadocs-editor/core
+    updated: false
   - id: npm:@fumadocs-editor/studio
     updated: true
-  - id: npm:@fumadocs-editor/ui
+  - changelogIds:
+      - 2026-10-21-insert-images-position.md
+      - 2026-10-21-pele-diagrams.md
+    id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
   - id: npm:@fumadocs-editor/core
