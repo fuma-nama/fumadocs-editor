@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 // entry html loads before any interaction; everything editor-shaped must
 // stay in lazy chunks.
 const EAGER_BUDGET = 100 * 1024; // gzip bytes, react vendor chunk excluded
-const LAZY_CHUNKS = ["parse", "live-editor", "code-languages", "katex", "mermaid", "collab"];
+const LAZY_CHUNKS = ["parse", "live-editor", "code-languages", "katex", "collab"];
 // a string only the yjs runtime contains: it may live in the collab chunk and
 // nowhere else (not eager, not live-editor, not a shared chunk they pull in)
 const YJS_MARKER = "Yjs was already imported";
@@ -31,10 +31,8 @@ const all = readdirSync(path.join(dist, "assets")).filter((f) => f.endsWith(".js
 const failures = [];
 
 for (const name of LAZY_CHUNKS) {
-  // chunks are named after the module rolldown split out, so a package whose
-  // entry is `<name>.core.mjs` (mermaid) lands as `<name>.core-<hash>.js`;
-  // a sibling like `mermaid-parser.core-<hash>.js` must not satisfy the match
-  const chunk = all.find((f) => new RegExp(`^${name}(\\.[\\w.]+)?-[\\w-]+\\.js$`).test(f));
+  // chunks are named after the module rolldown split out: `<name>-<hash>.js`
+  const chunk = all.find((f) => new RegExp(`^${name}-[\\w-]+\\.js$`).test(f));
   if (!chunk) failures.push(`expected a lazy "${name}" chunk; splitting has regressed`);
   else if (eager.includes(`assets/${chunk}`)) failures.push(`"${name}" chunk is loaded eagerly`);
   else

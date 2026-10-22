@@ -1,5 +1,5 @@
 import type { Root, RootContent } from "mdast";
-import { toMarkdown, type Handle, type Options } from "mdast-util-to-markdown";
+import { toMarkdown, type Handle, type Join, type Options } from "mdast-util-to-markdown";
 import { mdxToMarkdown } from "mdast-util-mdx";
 import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { gfmToMarkdown } from "mdast-util-gfm";
@@ -91,6 +91,14 @@ const jsxSource: Handle = (node, _parent, state, info) => {
   return collapseJsxSiblingGaps(body ? `${open}\n${indented}\n${close}` : `${open}\n${close}`);
 };
 
+/**
+ * Lists are written tight, but a block after a nested list inside a list item
+ * needs a blank line before it, or it re-parses as a lazy continuation of the
+ * nested list's last item.
+ */
+const blankLineAfterNestedList: Join = (left, _right, parent) =>
+  parent.type === "listItem" && left.type === "list" ? 1 : undefined;
+
 const stringifyOptions: Options = {
   extensions: [mdxToMarkdown(), gfmToMarkdown(), frontmatterToMarkdown(["yaml"])],
   // 'raw' is our own mdast extension, unknown to the Handlers map; the
@@ -107,6 +115,7 @@ const stringifyOptions: Options = {
   emphasis: "*",
   strong: "*",
   fences: true,
+  join: [blankLineAfterNestedList],
 };
 
 /**

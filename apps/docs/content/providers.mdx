@@ -18,6 +18,8 @@ image or which pages exist. Your app tells it through two props:
 
 - `upload` stores the file and returns the `src` written into the document.
 - `resolve` turns a document `src` into a URL the browser can display.
+- `onError` receives the error and the file when `upload` rejects, so your app
+  can show it.
 
 <Callout title="With sync">
 The sync server has an upload endpoint, storing files in `<root>/assets`:

@@ -13,7 +13,7 @@ import {
 import { createLowlight } from "lowlight";
 import { Popover } from "@base-ui/react/popover";
 import { Switch } from "@base-ui/react/switch";
-import { memo, useEffect, useMemo, useState } from "react";
+import { Suspense, memo, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Clipboard, Plus, Settings2, SquareCode } from "lucide-react";
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
@@ -470,7 +470,11 @@ function CodeBlockView(props: NodeViewProps) {
           </pre>
         </div>
       </div>
-      {normalize(language) === "mermaid" && <MermaidDiagram code={text} />}
+      {normalize(language) === "mermaid" && (
+        <Suspense fallback={null}>
+          <MermaidDiagram code={text} editor={editor} />
+        </Suspense>
+      )}
     </NodeViewWrapper>
   );
 }

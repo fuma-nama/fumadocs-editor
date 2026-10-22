@@ -7,10 +7,28 @@ export interface MediaProvider {
   upload(file: File): Promise<string>;
   /** turn a document src (often relative) into a displayable URL */
   resolve?(src: string): string;
+  /** show a failed upload */
+  onError?(error: unknown, file: File): void;
 }
 
 export const resolveSrc = (media: MediaProvider | undefined, src: string): string =>
   media?.resolve?.(src) ?? src;
+
+/**
+ * error-handling wrapper for MediaProvider.upload().
+ * call `onError` and return undefined if it fails.
+ * if `onError` is not provided, the error is rethrown.
+ * return the image path on success, to be inserted into the markdown.
+ */
+export async function uploadFile(media: MediaProvider, file: File): Promise<string | undefined> {
+  try {
+    return await media.upload(file);
+  } catch (error) {
+    if (!media.onError) throw error;
+    media.onError(error, file);
+    return undefined;
+  }
+}
 
 /**
  * Paths the document can reference. There is no filesystem in the browser,

@@ -1,3 +1,44 @@
+## @fumadocs-editor/ui@0.6.0
+
+### Uploaded images go where they were dropped
+
+`insertImages` read the insert position before awaiting `MediaProvider.upload()`
+and used it unchanged afterwards. If the document changed during the upload
+(typing, a collaborator, a sync merge), the image landed at a stale offset:
+in the wrong place, replacing the wrong text for the slash command, or
+failing with `RangeError: Position N out of range` once the document had
+shrunk, leaving the uploaded file without an image. The position now follows
+every change made while the uploads run. Several dropped images also keep
+their order instead of being inserted in reverse.
+
+### Mermaid diagrams render with Pele
+
+`mermaid` code blocks are now drawn by [Pele](https://pele.run) instead of
+`mermaid`. Pele has no runtime dependencies and loads each diagram type on
+first use. Diagrams update as you type instead of 300 ms after, use the
+editor's font (or Pele's `--pele-font` variable when the page sets it), and
+follow its light and dark theme. Pele has its own layout and visual style, so
+diagrams look different from Mermaid's output.
+
+## @fumadocs-editor/ui@0.5.1
+
+### Images no longer request their raw src
+
+When the image node view is not mounted, the image renders from the
+schema's HTML, which used the document's `src` as written. `@tiptap/react`
+clears node views when `EditorContent` unmounts (and on React's StrictMode
+double effect in development), so each image was requested at its raw,
+often relative, `src`. The schema's HTML now uses `media.resolve`, and keeps
+the document's `src` in `data-src` so that copying and pasting an image
+inside the editor keeps its path.
+
+### Report failed uploads
+
+`MediaProvider` has an optional `onError(error, file)`, called when `upload`
+rejects from paste, drop, the slash menu or the image panel, so the host can
+show the failure. The slash menu's `/image` text is now replaced only once
+the upload succeeds.
+
 ## @fumadocs-editor/ui@0.5.0
 
 ### Code block tabs

@@ -156,6 +156,20 @@
   --fde-code-rt: 0px;
 }
 
+/* Pele's palette is light-only: derive one from the code block's card. A
+ * block, so it centres whatever the host's reset makes an svg. */
+[data-fde-root] svg.pele {
+  --pele-bg: var(--fde-card);
+  --pele-fg: var(--fde-card-foreground);
+  --pele-muted: var(--fde-muted-foreground);
+  --pele-line: var(--fde-card-foreground);
+  --pele-surface: color-mix(in oklab, var(--fde-card-foreground) 5%, var(--fde-card));
+  --pele-surface-alt: color-mix(in oklab, var(--fde-card-foreground) 10%, var(--fde-card));
+  --pele-border: var(--fde-ring);
+  display: block;
+  margin-inline: auto;
+}
+
 /* TipTap wraps document tables; spacing lives on the wrapper */
 [data-fde-root] .tableWrapper {
   overflow-x: auto;

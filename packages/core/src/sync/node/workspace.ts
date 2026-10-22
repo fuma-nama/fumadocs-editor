@@ -324,6 +324,7 @@ export function createTreeResource(files: Files, remove: (relative: string) => P
       }
       case "mkdir": {
         const dir = files.rel(str(body.dir));
+        writable(dir ? `${dir}/meta.json` : "meta.json");
         writable(dir ? `${dir}/index.mdx` : "index.mdx");
         const title = str(body.title);
         return (ws) => ws.mkdir(dir, title);

@@ -26,6 +26,7 @@ beforeAll(async () => {
     root,
     authenticate: ({ payload }) => {
       if (payload === "editor") return { write: true };
+      if (payload === "mdx") return { write: (p) => p.endsWith(".mdx") };
       return payload === "viewer" ? { write: false, read: (p) => !p.startsWith("guides/") } : null;
     },
   });
@@ -96,6 +97,16 @@ test("commands need write access and a well-formed body", async () => {
     }),
   ).toMatchObject({ type: "error", message: expect.stringMatching(/escapes/) });
   editor.close();
+});
+
+test("mkdir needs write access to the folder's meta.json", async () => {
+  const writer = open("mdx");
+  await until(() => (writer.status() === "online" ? true : undefined));
+  await expect(writer.run({ type: "mkdir", dir: "notes", title: "Notes" })).rejects.toThrow(
+    /write denied: notes\/meta.json/,
+  );
+  await expect(stat(path.join(root, "notes"))).rejects.toThrow();
+  writer.close();
 });
 
 test("create, order, mkdir and delete touch disk; the answer carries the new tree", async () => {

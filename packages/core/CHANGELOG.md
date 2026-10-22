@@ -1,3 +1,21 @@
+## @fumadocs-editor/core@0.4.2
+
+### `mkdir` checks write access to the folder's `meta.json`
+
+The tree `mkdir` command creates both `<dir>/meta.json` and `<dir>/index.mdx`,
+but only checked `SyncScope.write` on `index.mdx`. A scope that allowed
+`index.mdx` and denied `meta.json` could still create `meta.json` this way.
+`mkdir` now requires write access to both paths before it creates anything.
+
+## @fumadocs-editor/core@0.4.1
+
+### Blocks after a nested list stay in their list item
+
+An edited list is written tight, so a paragraph or other block after a
+nested list inside a list item lost its blank line and re-parsed as part
+of the nested list's last item. The serializer now keeps one blank line
+between a nested list and the next block in the same item.
+
 ## @fumadocs-editor/core@0.4.0
 
 ### Sync speaks one protocol
