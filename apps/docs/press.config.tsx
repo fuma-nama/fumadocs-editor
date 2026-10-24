@@ -10,6 +10,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import { FumadocsIcon } from "./src/logo";
 import { EditorDemo } from "./src/demo";
+import { ExtensionsDemo } from "./src/extensions-demo";
 
 const docs = defineDocs({
   dir: "content",
@@ -74,6 +75,7 @@ export default defineConfig({
         Accordions,
         TypeTable,
         EditorDemo,
+        ExtensionsDemo,
         a: createRelativeLink(await this.getLoader(), page),
       };
     },

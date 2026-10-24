@@ -5,12 +5,13 @@ import type {
   SyncClient,
   SyncDocument,
 } from "@fumadocs-editor/core/sync";
-import type { Editor, JSONContent } from "@tiptap/core";
+import type { AnyExtension, Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { loadSync, sharedClient } from "./client";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { specsByType, type UiComponentSpec } from "./components/spec";
 import { parseDocCached } from "./doc-cache";
+import type { BubbleItem } from "./bubble-items";
 
 export interface MdxEditorRef {
   /** serialize; unedited blocks are byte-identical */
@@ -59,6 +60,12 @@ export interface MdxEditorSync {
 }
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
+
+/** what the host adds to the live editor; fixed for the life of the root */
+export interface HostAdditions {
+  extensions?: AnyExtension[];
+  bubbleItems?: BubbleItem[];
+}
 
 /** the root's props the store reads when it acts */
 export interface DocumentOptions {
@@ -111,6 +118,8 @@ export class DocumentStore {
   readonly components: UiComponentSpec[];
   readonly specs: Map<string, UiComponentSpec>;
   readonly syntax: SyntaxOptions | undefined;
+  readonly extensions: AnyExtension[];
+  readonly bubbleItems: BubbleItem[];
   /** the root's latest props */
   options: DocumentOptions;
   media: MediaProvider | undefined;
@@ -134,10 +143,13 @@ export class DocumentStore {
     components: UiComponentSpec[],
     syntax: SyntaxOptions | undefined,
     options: DocumentOptions,
+    { extensions = [], bubbleItems = [] }: HostAdditions = {},
   ) {
     this.components = components;
     this.specs = specsByType(components);
     this.syntax = syntax;
+    this.extensions = extensions;
+    this.bubbleItems = bubbleItems;
     this.options = options;
     this.state = initialState(options, 0);
     this.markdown = this.state.text;

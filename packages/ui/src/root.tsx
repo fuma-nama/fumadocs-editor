@@ -1,11 +1,13 @@
 "use client";
 import * as stylex from "@stylexjs/stylex";
 import type { SyntaxOptions } from "@fumadocs-editor/core/parse";
+import type { AnyExtension } from "@tiptap/core";
 import { useEffect, useImperativeHandle, useMemo, useState, type ReactNode, type Ref } from "react";
 import { EditorContext, useDocumentState, useEditorContext } from "./components/context";
 import { fumadocsUiComponents } from "./components/fumadocs-ui";
 import type { FileProvider, MediaProvider } from "./components/media";
 import type { UiComponentSpec } from "./components/spec";
+import type { BubbleItem } from "./bubble-items";
 import { DocumentStore, type MdxEditorRef, type MdxEditorSync } from "./store";
 import { useEditorTheme, type EditorTheme } from "./theme";
 
@@ -21,6 +23,23 @@ export interface MdxEditorRootProps {
    * Combined with `components` into the document's `Syntax`.
    */
   syntax?: SyntaxOptions;
+  /**
+   * TipTap extensions that add behaviour to the visual editor: decorations,
+   * keyboard shortcuts, plugin state, commands. Fixed for the life of the
+   * root; applied each time the live editor is built (first paint, a switch
+   * back from source), also when it is read-only. Not on the static paint
+   * or the source surface. Built-in shortcuts and plugins win a tie in
+   * `priority`. An extension that adds a node or a mark, or takes a name or
+   * a command already in use, is left out with a console error. See the
+   * Extensions page.
+   */
+  extensions?: AnyExtension[];
+  /**
+   * Buttons in the format bubble, after the built-in ones, while text is
+   * selected. Fixed for the life of the root. Bind a shortcut in
+   * `extensions`; `shortcut` only shows it in the tooltip.
+   */
+  bubbleItems?: BubbleItem[];
   /**
    * Sync with a file: autosave, live merge of disk edits, conflict chip, or
    * a shared doc when the client has collab on.
@@ -61,6 +80,8 @@ export function MdxEditorRoot({
   onChange,
   components = fumadocsUiComponents,
   syntax,
+  extensions,
+  bubbleItems,
   sync,
   cacheKey,
   theme,
@@ -71,7 +92,9 @@ export function MdxEditorRoot({
   children,
 }: MdxEditorRootProps) {
   const options = { defaultValue, sync, cacheKey, onChange };
-  const [store] = useState(() => new DocumentStore(components, syntax, options));
+  const [store] = useState(
+    () => new DocumentStore(components, syntax, options, { extensions, bubbleItems }),
+  );
   store.options = options;
   store.media = media;
   store.files = files;
