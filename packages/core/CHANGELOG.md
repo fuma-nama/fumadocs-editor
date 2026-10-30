@@ -1,3 +1,24 @@
+## @fumadocs-editor/core@0.4.3
+
+### Edited loose lists stay loose
+
+A list that was not touched kept its source, but once anything inside it
+changed, the whole list was written tight: the blank lines between its items
+(and between the blocks of an item) were dropped. The list and item nodes
+now keep mdast's `spread` as an attribute, so an edited list is written back
+the way it was parsed. Lists made in the editor are still tight, and a new
+item in a loose list is loose like its neighbours.
+
+### A document opened while the client is offline settles `opened`
+
+`opened` settled when the client went offline or was denied after the
+document was opened, but not when it was already offline: the status
+listener only hears changes, and a failed reconnect keeps the status at
+`offline`. Such a document stayed loading until the client came back online,
+which may be never. `opened` now rejects at once when the client is already
+offline or denied, so the editor falls back to its own content, and a later
+answer still merges in after a reconnect.
+
 ## @fumadocs-editor/core@0.4.2
 
 ### `mkdir` checks write access to the folder's `meta.json`

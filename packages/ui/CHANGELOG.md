@@ -1,3 +1,33 @@
+## @fumadocs-editor/ui@0.7.0
+
+### `sync.onStatus` reports the status a document opens with
+
+`onStatus` only fired when the status differed from the last value the root
+held, which starts as `synced`. A document that opened clean was never
+reported, and after `path` changed the host kept the previous document's
+status (for example `dirty`) for the new one. `onStatus` is now called with
+the current status once the document for `path` is open, again after `path`
+changes, and then on every change, as before.
+
+### Add behaviour with `extensions`
+
+`MdxEditor.Root` (and `MdxEditor`) take `extensions`: TipTap extensions
+for behaviour on top of the document, such as decorations over text,
+keyboard shortcuts, plugin state or commands. Like `components`, the list
+is fixed for the life of the root. It is applied to every live editor the
+root builds, also after a switch back from the MDX tab and in a read-only
+editor. Built-in shortcuts and plugins, TipTap's core ones included, win a
+tie in `priority`. An extension that adds a node or a mark, or takes a name
+or a command already in use, is left out with a console error. See the new
+Extensions page.
+
+### Buttons in the format bubble with `bubbleItems`
+
+`bubbleItems` adds host buttons to the format bubble, after the built-in
+ones, while text is selected: a label, an icon, an optional shortcut for
+the tooltip, `isActive` / `isEnabled`, and `run(editor)`. They share the
+bubble's look and focus handling, on touch screens too.
+
 ## @fumadocs-editor/ui@0.6.0
 
 ### Uploaded images go where they were dropped
