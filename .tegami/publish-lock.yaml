@@ -1,23 +1,32 @@
 core:changelogs:
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### Uploaded images go where they were dropped\n\n`insertImages` read the insert position before awaiting `MediaProvider.upload()`\nand used it unchanged afterwards. If the document changed during the upload\n(typing, a collaborator, a sync merge), the image landed at a stale offset:\nin the wrong place, replacing the wrong text for the slash command, or\nfailing with `RangeError: Position N out of range` once the document had\nshrunk, leaving the uploaded file without an image. The position now follows\nevery change made while the uploads run. Several dropped images also keep\ntheir order instead of being inserted in reverse.\n"
-    filename: 2026-10-21-insert-images-position.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: patch\n---\n\n### Edited loose lists stay loose\n\nA list that was not touched kept its source, but once anything inside it\nchanged, the whole list was written tight: the blank lines between its items\n(and between the blocks of an item) were dropped. The list and item nodes\nnow keep mdast's `spread` as an attribute, so an edited list is written back\nthe way it was parsed. Lists made in the editor are still tight, and a new\nitem in a loose list is loose like its neighbours.\n"
+    filename: 2026-10-22-keep-loose-lists.md
     v: 0.0.0
-  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Mermaid diagrams render with Pele\n\n`mermaid` code blocks are now drawn by [Pele](https://pele.run) instead of\n`mermaid`. Pele has no runtime dependencies and loads each diagram type on\nfirst use. Diagrams update as you type instead of 300 ms after, use the\neditor's font (or Pele's `--pele-font` variable when the page sets it), and\nfollow its light and dark theme. Pele has its own layout and visual style, so\ndiagrams look different from Mermaid's output.\n"
-    filename: 2026-10-21-pele-diagrams.md
+  - content: "---\npackages:\n  \"@fumadocs-editor/core\":\n    type: patch\n---\n\n### A document opened while the client is offline settles `opened`\n\n`opened` settled when the client went offline or was denied after the\ndocument was opened, but not when it was already offline: the status\nlistener only hears changes, and a failed reconnect keeps the status at\n`offline`. Such a document stayed loading until the client came back online,\nwhich may be never. `opened` now rejects at once when the client is already\noffline or denied, so the editor falls back to its own content, and a later\nanswer still merges in after a reconnect.\n"
+    filename: 2026-10-30-open-while-offline.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: patch\n---\n\n### `sync.onStatus` reports the status a document opens with\n\n`onStatus` only fired when the status differed from the last value the root\nheld, which starts as `synced`. A document that opened clean was never\nreported, and after `path` changed the host kept the previous document's\nstatus (for example `dirty`) for the new one. `onStatus` is now called with\nthe current status once the document for `path` is open, again after `path`\nchanges, and then on every change, as before.\n"
+    filename: 2026-10-22-onstatus-opening-status.md
+    v: 0.0.0
+  - content: "---\npackages:\n  \"@fumadocs-editor/ui\":\n    type: minor\n---\n\n### Add behaviour with `extensions`\n\n`MdxEditor.Root` (and `MdxEditor`) take `extensions`: TipTap extensions\nfor behaviour on top of the document, such as decorations over text,\nkeyboard shortcuts, plugin state or commands. Like `components`, the list\nis fixed for the life of the root. It is applied to every live editor the\nroot builds, also after a switch back from the MDX tab and in a read-only\neditor. Built-in shortcuts and plugins, TipTap's core ones included, win a\ntie in `priority`. An extension that adds a node or a mark, or takes a name\nor a command already in use, is left out with a console error. See the new\nExtensions page.\n\n### Buttons in the format bubble with `bubbleItems`\n\n`bubbleItems` adds host buttons to the format bubble, after the built-in\nones, while text is selected: a label, an icon, an optional shortcut for\nthe tooltip, `isActive` / `isEnabled`, and `run(editor)`. They share the\nbubble's look and focus handling, on touch screens too.\n"
+    filename: 2026-10-24-host-extensions.md
     v: 0.0.0
 core:packages:
-  - id: npm:@fumadocs-editor/core
-    updated: false
+  - changelogIds:
+      - 2026-10-22-keep-loose-lists.md
+      - 2026-10-30-open-while-offline.md
+    id: npm:@fumadocs-editor/core
+    updated: true
   - id: npm:@fumadocs-editor/studio
     updated: true
   - changelogIds:
-      - 2026-10-21-insert-images-position.md
-      - 2026-10-21-pele-diagrams.md
+      - 2026-10-22-onstatus-opening-status.md
+      - 2026-10-24-host-extensions.md
     id: npm:@fumadocs-editor/ui
     updated: true
 npm:packages:
   - id: npm:@fumadocs-editor/core
   - id: npm:@fumadocs-editor/studio
   - id: npm:@fumadocs-editor/ui
-  - id: npm:docs
   - id: npm:playground
+  - id: npm:docs
