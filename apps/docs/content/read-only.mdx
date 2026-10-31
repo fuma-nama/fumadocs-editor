@@ -15,9 +15,15 @@ You can flip it at any time without remounting the editor.
 ## With auth
 
 When the server's [scope](/auth) denies `write`, `sync.onOpen` reports
-`writable: false`. Pass it to `editable`:
+`writable: false`. If access changes later, for example the person signs in
+again as a reader and the client reconnects, `sync.onWritable` reports the new
+value. Pass both to `editable`:
 
 <include meta='title="scoped-editor.tsx"'>../examples/read-only.tsx</include>
+
+Edits made while the document is not writable stay in the editor and are not
+saved; they are saved once write access comes back. `MdxEditor.Status` shows
+**Read only** meanwhile, even when `editable` is left on.
 
 <Callout type="info" title="Not a security boundary">
   `editable` only changes the UI. The server refuses writes from a read-only user even if they

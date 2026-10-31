@@ -46,8 +46,12 @@ async function hydrate() {
   return editor!;
 }
 
-/** a backend speaking the protocol for a few files; saves always land */
-function backend(files: Record<string, string>) {
+/**
+ * A backend speaking the protocol for a few files; saves always land.
+ * `access.writable` goes into each subscribe answer; `access.drop()` ends the
+ * connection, and the client reconnects.
+ */
+function backend(files: Record<string, string>, access = { writable: true, drop() {} }) {
   const versions = new Map<string, number>();
   const file = (path: string) =>
     ({
@@ -61,11 +65,17 @@ function backend(files: Record<string, string>) {
       const later = (message: Parameters<typeof listener.message>[0]) =>
         void Promise.resolve().then(() => listener.message(message));
       void Promise.resolve().then(() => listener.open());
+      access.drop = () => listener.close();
       return {
         send(message) {
           if (message.type === "hello") return later({ type: "hello", id: message.id });
           if (message.type === "subscribe" && message.resource === "file")
-            return later({ type: "update", id: message.id, ...file(message.path) });
+            return later({
+              type: "update",
+              id: message.id,
+              ...file(message.path),
+              writable: access.writable,
+            });
           if (message.type !== "update" || message.resource !== "file") return;
           if (message.base === file(message.path).version) {
             files[message.path] = message.text;
@@ -143,4 +153,79 @@ test("onStatus still reports every change of an open document", async () => {
   act(() => void vi.advanceTimersByTime(2000)); // the change debounce, then the autosave
   await settle();
   expect(statuses.slice(statuses.indexOf("dirty"))).toEqual(["dirty", "saving", "synced"]);
+});
+
+test("onWritable reports a change of write access after a reconnect, not the opening value", async () => {
+  vi.useFakeTimers();
+  const access = { writable: true, drop() {} };
+  const client = backend({ "a.mdx": "First.\n" }, access);
+  const opened: boolean[] = [];
+  const writable: boolean[] = [];
+  render({
+    sync: {
+      client,
+      path: "a.mdx",
+      onOpen: (result) => void opened.push(result.writable),
+      onWritable: (next) => void writable.push(next),
+    },
+  });
+  await settle();
+  await settle();
+  expect(opened).toEqual([true]);
+  expect(writable).toEqual([]);
+
+  const reconnect = async () => {
+    act(() => access.drop());
+    act(() => void vi.advanceTimersByTime(1000)); // the reconnect backoff
+    await settle();
+    await settle();
+  };
+  access.writable = false;
+  await reconnect();
+  expect(writable).toEqual([false]);
+  await reconnect(); // unchanged: not reported again
+  expect(writable).toEqual([false]);
+  access.writable = true;
+  await reconnect();
+  expect(writable).toEqual([false, true]);
+  expect(opened).toEqual([true]);
+});
+
+test("the status shows a document that lost write access as read only", async () => {
+  vi.useFakeTimers();
+  const access = { writable: true, drop() {} };
+  const client = backend({ "a.mdx": "First.\n" }, access);
+  render({ sync: { client, path: "a.mdx" } });
+  await settle();
+  await settle();
+  const label = () => host!.textContent;
+  expect(label()).toContain("Saved");
+
+  const reconnect = async () => {
+    act(() => access.drop());
+    act(() => void vi.advanceTimersByTime(1000)); // the reconnect backoff
+    await settle();
+    await settle();
+  };
+  access.writable = false;
+  await reconnect();
+  expect(label()).toContain("Read only");
+  expect(label()).not.toContain("Saved");
+
+  // an edit the host let through is kept, and the status says it is not saved
+  const editor = await hydrate();
+  act(() => {
+    editor.commands.setTextSelection(1);
+    editor.commands.insertContent("LOCAL ");
+  });
+  act(() => void vi.advanceTimersByTime(2000));
+  await settle();
+  expect(label()).toContain("Read only, not saved");
+
+  access.writable = true;
+  await reconnect();
+  act(() => void vi.advanceTimersByTime(2000)); // the autosave
+  await settle();
+  expect(label()).not.toContain("Read only");
+  expect(label()).toContain("Saved");
 });

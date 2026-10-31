@@ -109,6 +109,7 @@ const styles = stylex.create({
   conflict: { backgroundColor: tokens.error },
   offline: { backgroundColor: tokens.mutedForeground },
   denied: { backgroundColor: tokens.error },
+  readonly: { backgroundColor: tokens.mutedForeground },
   label: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   actions: { display: "flex", flexShrink: 0, alignItems: "center", gap: "0.25rem" },
   conflictBtn: {
@@ -266,14 +267,25 @@ const SYNC_LABEL: Record<DocumentStatus, string> = {
   denied: "No access",
 };
 
+/** the label and dot of a document that lost write access, or null to show its status */
+const readOnlyState = (status: DocumentStatus, writable: boolean) => {
+  if (writable) return null;
+  if (status === "synced") return { label: "Read only", dot: styles.readonly };
+  // edits made since are kept but not saved
+  if (status === "dirty" || status === "saving")
+    return { label: "Read only, not saved", dot: styles.dirty };
+  return null;
+};
+
 /** the sync status dot and, on a conflict, the two resolutions; nothing without `sync` */
 export function SyncStatus({ className }: { className?: string }) {
   const sync = useSyncStatus();
   if (!sync) return null;
+  const readOnly = readOnlyState(sync.status, sync.writable);
   return (
     <div className={withClass(styles.status, className)}>
-      <span aria-hidden {...stylex.props(styles.dot, styles[sync.status])} />
-      <span {...stylex.props(styles.label)}>{SYNC_LABEL[sync.status]}</span>
+      <span aria-hidden {...stylex.props(styles.dot, readOnly?.dot ?? styles[sync.status])} />
+      <span {...stylex.props(styles.label)}>{readOnly?.label ?? SYNC_LABEL[sync.status]}</span>
       {sync.status === "conflict" && (
         <span {...stylex.props(styles.actions)}>
           <button

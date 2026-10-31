@@ -152,10 +152,10 @@ export function useEditorMode() {
 /** sync status and the conflict resolutions; null without `sync` */
 export function useSyncStatus() {
   const { store } = useEditorContext();
-  const { status } = useDocumentState();
+  const { status, writable } = useDocumentState();
   return status === null
     ? null
-    : { status, keepMine: store.keepMine, takeDisk: store.takeDisk, flush: store.flush };
+    : { status, writable, keepMine: store.keepMine, takeDisk: store.takeDisk, flush: store.flush };
 }
 
 /**

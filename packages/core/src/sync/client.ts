@@ -60,9 +60,15 @@ export interface SyncDocument {
   /** the file as first received; rejects when the server refuses it or the client is offline first */
   opened: Promise<{ text: string; writable: boolean }>;
   status(): DocumentStatus;
+  /**
+   * Whether the server takes this connection's edits, from the latest answer:
+   * `true` until the first one, updated by the answer after every reconnect.
+   * A file document does not save while this is `false`; its edits stay local.
+   */
+  writable(): boolean;
   /** the shared document under collab, once synced; null while the server re-seeds it */
   collab(): CollabBinding | null;
-  /** fires when `status()` or `collab()` may have changed */
+  /** fires when `status()`, `writable()` or `collab()` may have changed */
   subscribe(listener: () => void): () => void;
   /** the editor changed: schedules an autosave */
   changed(): void;
@@ -248,9 +254,17 @@ export function createSyncClient({
     const doc = {
       /** the first state arrived, or the client went offline or denied before it did */
       open: false,
+      writable: true,
       opened: new Promise<Opened>((resolve, reject) => (settle = { resolve, reject })),
       emit() {
         for (const listener of listeners) listener();
+      },
+      /** true when the value changed; listeners are told */
+      setWritable(next: boolean) {
+        if (next === doc.writable) return false;
+        doc.writable = next;
+        doc.emit();
+        return true;
       },
       settle(result: Opened | Error) {
         if (doc.open) return;
@@ -322,7 +336,7 @@ export function createSyncClient({
 
     const save = async (): Promise<void> => {
       clearTimers();
-      if (closed || conflict || saving || !dirty || status !== "online") return;
+      if (closed || conflict || saving || !dirty || !doc.writable || status !== "online") return;
       const text = editor.getMarkdown();
       if (text === base.text) {
         dirty = false;
@@ -349,7 +363,7 @@ export function createSyncClient({
       } finally {
         saving = false;
         doc.emit();
-        if (dirty && !conflict && status === "online") schedule();
+        if (dirty && !conflict && doc.writable && status === "online") schedule();
       }
     };
 
@@ -359,15 +373,20 @@ export function createSyncClient({
         subscribe: () => ({ type: "subscribe", resource: "file", path }),
         update(message) {
           if (closed || message.resource !== "file" || !("text" in message)) return;
-          if (doc.open) return void incoming(message);
+          // only answers carry `writable`; after a reconnect it may differ from the first
+          const flipped = message.writable !== undefined && doc.setWritable(message.writable);
+          if (doc.open) {
+            if (flipped && doc.writable && dirty && !conflict) schedule();
+            return void incoming(message);
+          }
           if (message.id === undefined) return;
           base = message;
-          doc.settle({ text: message.text, writable: message.writable ?? true });
+          doc.settle({ text: message.text, writable: doc.writable });
           doc.emit();
         },
       },
       () => {
-        if (status === "online" && dirty && !conflict) schedule();
+        if (status === "online" && dirty && !conflict && doc.writable) schedule();
       },
     );
 
@@ -378,6 +397,7 @@ export function createSyncClient({
         if (status === "offline" || status === "denied") return status;
         return saving ? "saving" : dirty ? "dirty" : "synced";
       },
+      writable: () => doc.writable,
       collab: () => null,
       subscribe: doc.subscribe,
       changed() {
@@ -440,8 +460,10 @@ export function createSyncClient({
         }),
         update(message) {
           if (message.resource !== "doc") return;
-          if (message.id !== undefined)
+          if (message.id !== undefined) {
+            doc.setWritable(message.writable);
             doc.settle({ text: message.text, writable: message.writable });
+          }
           queue = queue
             .then(async () => {
               if (closed) return;
@@ -469,6 +491,7 @@ export function createSyncClient({
     return {
       opened: doc.opened,
       status: () => (status === "offline" || status === "denied" ? status : "synced"),
+      writable: () => doc.writable,
       collab: () => yjs?.binding ?? null,
       subscribe: doc.subscribe,
       changed() {},

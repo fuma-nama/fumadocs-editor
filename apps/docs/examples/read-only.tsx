@@ -8,6 +8,7 @@ export function ScopedEditor({ path }: { path: string }) {
       sync={{
         path,
         onOpen: (result) => setWritable(result.writable),
+        onWritable: setWritable,
       }}
       editable={writable}
     />

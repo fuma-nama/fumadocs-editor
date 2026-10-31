@@ -80,6 +80,11 @@ open (again when `path` changes), then on every change. Inside
 | `offline`  | disconnected; edits are kept and saved later  |
 | `denied`   | the server rejected your [credentials](/auth) |
 
+When the server's [scope](/auth) stops granting `write` (it is asked again on
+every reconnect), the status dot reads **Read only**, or **Read only, not
+saved** while edits made since are waiting. `useSyncStatus()` reports it as
+`writable: false`; see [read-only](/read-only) to lock the editor too.
+
 ## Sync client
 
 By default, every editor on the page shares one connection to the dev server.
