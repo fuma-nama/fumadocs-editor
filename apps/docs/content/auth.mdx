@@ -5,14 +5,17 @@ description: Decide who may read and write which documents
 ---
 
 By default, anyone who can reach the sync server can edit, like Vite's own
-dev server. Pass an `authenticate` hook to the server to put the websocket,
-uploads and assets behind your own policy.
+dev server. Pass an `authenticate` hook to the [server](/server#options) to
+put the websocket, uploads and assets behind your own policy.
 
 ## Add an `authenticate` hook
 
 `authenticate` receives the request and returns a [scope](#scopes), or
-`null` to reject. It runs on every connection and reconnect, so refreshed
-credentials apply.
+`null` to reject.
+
+- It runs on every connection and every reconnect, so refreshed
+  credentials apply.
+- It also runs on every upload and asset request.
 
 <Tabs items={["Cookie session", "Bearer token"]}>
 <Tab>
@@ -47,6 +50,7 @@ server root:
 
 - Paths are normalized first, so `team-a/../secret.mdx` does not match a
   `team-a/` rule.
+- [Hidden paths](/server#paths) are refused before any scope is asked.
 - The functions must be synchronous. Fetch what they need inside
   `authenticate`, as the token example does.
 
@@ -66,13 +70,35 @@ A scope `user` also overrides the name a collab client shows at its caret.
 
 ## Media uploads
 
-Upload requests do not share the websocket, so send the same payload in the
-`AUTH_HEADER` header. Cookie setups can skip this.
+Upload requests do not share the websocket. Send the same payload in the
+`AUTH_HEADER` header:
 
 <include meta='title="media.ts"'>../examples/auth-upload.ts</include>
 
+Cookie setups can skip this.
+
+## When access changes
+
+A connection keeps its scope until it reconnects. When a session ends or a
+permission is taken away, close the connections it affects:
+
+<include meta='title="vite.config.ts"'>../examples/auth-connections.ts</include>
+
+Each closed client reconnects at once, and `authenticate` decides again:
+
+| `authenticate` returns | The client                                                           |
+| ---------------------- | -------------------------------------------------------------------- |
+| a new scope            | comes back with it; editors get their new [write access](/read-only) |
+| a scope without `read` | stops receiving updates for that document, which turns read-only     |
+| `null`                 | shows the `denied` [status](/sync#status) and stops reconnecting     |
+
+`setup` and `connections()` are described on the
+[server page](/server#reach-the-server-with-setup). To record who changed
+what, use [`onChange`](/server#changes).
+
 ## In the editor
 
-The server enforces the scope; the editor never restricts itself. When a user
-cannot write, see [Read-only](/read-only) to show the editor as read-only.
-Rejected credentials show the `denied` [status](/sync#saving).
+The server enforces the scope; the editor never restricts itself.
+
+- To show the editor as read-only, see [Read-only](/read-only).
+- Rejected credentials show the `denied` [status](/sync#status).

@@ -42,9 +42,12 @@ if (args.version) {
 const cwd = process.cwd();
 const options = await resolveStudioOptions({ cwd, args }).catch(fail);
 const server = await startStudio(options).catch(fail);
-server.config.logger.info(
-  `\n  fumadocs studio  editing ${path.relative(cwd, options.contentRoot) || "."}\n`,
-);
+// a storage of the config's own takes the place of the content directory
+const { storage } = options.server;
+const editing = storage
+  ? (storage.name ?? "storage")
+  : path.relative(cwd, options.contentRoot) || ".";
+server.config.logger.info(`\n  fumadocs studio  editing ${editing}\n`);
 server.printUrls();
 server.bindCLIShortcuts({ print: true });
 

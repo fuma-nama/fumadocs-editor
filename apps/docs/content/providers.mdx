@@ -4,8 +4,8 @@ icon: ImagePlus
 description: Where uploads go and which files documents can reference
 ---
 
-The editor runs in the browser, so it cannot know where to store a pasted
-image or which pages exist. Your app tells it through two props:
+The editor runs in the browser. It cannot know where to store a pasted
+image or which pages exist, so your app tells it through two props:
 
 | Prop    | Enables                                     | Without it              |
 | ------- | ------------------------------------------- | ----------------------- |
@@ -22,12 +22,12 @@ image or which pages exist. Your app tells it through two props:
   can show it.
 
 <Callout title="With sync">
-The sync server has an upload endpoint, storing files in `<root>/assets`:
+The [sync server](/server) has an upload endpoint. It stores files under `assets/` in its storage (`<root>/assets` by default):
 
 <include meta='title="dev-media.tsx"'>../examples/providers-dev.tsx</include>
 
-It accepts `image/*` up to 10 MiB by default; change it with the server's
-`upload` option. With [auth](/auth#media-uploads), uploads need `write`.
+- It accepts `image/*` up to 10 MiB. Change it with the server's `upload` option.
+- With [auth](/auth#media-uploads), uploads need `write`.
 
 </Callout>
 
@@ -35,8 +35,8 @@ It accepts `image/*` up to 10 MiB by default; change it with the server's
 
 <include meta='title="providers.tsx"'>../examples/providers.tsx#files</include>
 
-Return paths exactly as they should be written into the document, relative
-to the open one (for example `./shared/props.mdx`).
+Return paths exactly as they should be written into the document: relative
+to the open one, like `./shared/props.mdx`.
 
 With [sync](/sync), build the list from the pages of
 [`useWorkspace().tree`](/file-tree).

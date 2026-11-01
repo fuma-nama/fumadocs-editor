@@ -52,13 +52,13 @@ async function authoritySave(text: string) {
     },
   } as unknown as Files;
   let synced = false;
-  const conn: Connection = {
+  const conn = {
     scope: ALLOW,
     send(data) {
       const message = decodeMessage(data);
       if (!synced && message.id !== undefined) Y.applyUpdate(client, message.yjs as Uint8Array);
     },
-  };
+  } as Connection;
   const authority = createDocAuthority({ files });
   const vector = () => Y.encodeStateVector(client);
 

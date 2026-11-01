@@ -1,0 +1,146 @@
+---
+title: Sync Server
+icon: Server
+description: Run the sync server, reach it from your code and choose where files live
+---
+
+The sync server holds the files, checks [permissions](/auth) and answers the
+editors. You run it in one of three ways, and they all take the same options.
+
+## Run it
+
+<Tabs items={["Vite", "Studio", "Node HTTP"]}>
+<Tab>
+
+The Vite plugin runs the server inside `vite dev`. `root` resolves against
+the Vite project root.
+
+<include meta='title="vite.config.ts"'>../examples/sync-vite.ts</include>
+
+On every dev server restart, the plugin closes the server and creates a new
+one.
+
+</Tab>
+<Tab>
+
+[Studio](/studio#server-options) runs the Vite plugin for you. Its `server`
+config forwards every option below except `root`, which comes from the
+`--root` flag or the config's own `root`.
+
+</Tab>
+<Tab>
+
+`createSyncServer` gives you handlers for any Node HTTP server:
+
+<include meta='title="server.ts"'>../examples/sync-server.ts</include>
+
+| Handler         | Mount it at                           |
+| --------------- | ------------------------------------- |
+| `handleUpgrade` | the websocket your client connects to |
+| `handleUpload`  | the upload endpoint                   |
+| `handleAsset`   | a prefix; it reads the path after it  |
+
+Point the client at the websocket with a
+[custom transport](/sync#sync-client).
+
+</Tab>
+</Tabs>
+
+## Options
+
+<auto-type-table path="../../../packages/core/src/sync/node/server.ts" name="SyncServerOptions" />
+
+## Reach the server with `setup`
+
+`setup` is called with the server once it is created, in every integration.
+Use it to listen to changes and to keep the server for later.
+
+<include meta='title="vite.config.ts"'>../examples/sync-setup.ts</include>
+
+- What `setup` returns runs last in `close()`, after the final saves.
+- Under Vite, `setup` runs again for each new server after a restart, so
+  keep per-server state inside it.
+
+### Open connections
+
+`sync.connections()` lists the authenticated connections open now:
+
+<auto-type-table path="../../../packages/core/src/sync/node/connection.ts" name="SyncConnection" />
+
+`close()` ends a connection at once. The client reconnects, and
+`authenticate` decides again. See [when access changes](/auth#when-access-changes).
+
+### Changes
+
+`sync.onChange` reports each file a connection changed, once it is written.
+It returns the unsubscribe.
+
+| Change              | Reported                                                           |
+| ------------------- | ------------------------------------------------------------------ |
+| a save              | after the write                                                    |
+| a file tree command | for each file it writes or deletes                                 |
+| a collab edit       | at the debounced write, once per connection whose edits it carries |
+
+Changes made around the server, like an IDE save, have no connection and
+are not reported.
+
+## Storage
+
+By default the files live in the `root` directory. Pass `storage` instead to
+keep them in a database, a bucket or anywhere else.
+
+- `root: dir` is shorthand for `storage: fsStorage(dir)`.
+- Everything goes through the storage: documents, the file tree, uploads and
+  assets.
+- A plain key-value store is enough. Versions, locks and the tree stay in
+  the server.
+
+<Tabs items={["Key-value store", "Streamed reads"]}>
+<Tab>
+
+<include meta='title="storage.ts"'>../examples/sync-storage.ts</include>
+
+</Tab>
+<Tab>
+
+`read` may return a stream of chunks instead of bytes. Assets stream to the
+browser and page titles are read from the first few KB, so large files never
+sit in memory whole.
+
+<include meta='title="storage.ts"'>../examples/sync-storage-stream.ts</include>
+
+</Tab>
+</Tabs>
+
+<auto-type-table path="../../../packages/core/src/sync/node/storage.ts" name="SyncStorage" />
+
+### Paths
+
+The server normalizes every path before the storage sees it:
+
+- relative to the root, with `/` separators (`guide/intro.mdx`)
+- never outside the root
+- never hidden: a path with a dot segment (`.env`, `.git/config`) or a
+  `node_modules` segment is refused everywhere, in documents, the tree and
+  assets
+
+Hidden files your `list` returns are skipped.
+
+### Watching
+
+`watch` reports files changed around the server, like an IDE save or a
+`git pull`, so open editors merge them in.
+
+Without `watch`, the server only sees its own writes. Saves still never
+overwrite a change made elsewhere, since each save reads the file first.
+
+### Wrap `fsStorage`
+
+To do more with files on disk, spread `fsStorage` and override what you
+need:
+
+<include meta='title="storage.ts"'>../examples/sync-storage-backup.ts</include>
+
+<Callout title="Other backends">
+  To replace the Node server itself, speak the [sync protocol](/protocol).
+</Callout>

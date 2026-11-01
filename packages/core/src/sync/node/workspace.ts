@@ -1,6 +1,3 @@
-import type { Dirent } from "node:fs";
-import { mkdir, open, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
 import {
   MARKDOWN,
   buildTree,
@@ -15,50 +12,39 @@ import {
 } from "../tree";
 import { answer, encode, str, type Connection, type Incoming, type Resource } from "./connection";
 import type { Files } from "./files";
+import { HIDDEN } from "./storage";
+
+/** the clients a change is made for: each file it writes is reported with them */
+type By = ReadonlySet<Connection>;
 
 export interface Workspace {
   /** the tree of the files `canRead` allows */
   tree(canRead: (path: string) => boolean): TreeNode[];
   /**
-   * Apply a watcher event (chokidar's `add` / `change` / `unlink` /
-   * `addDir` / `unlinkDir`) for the root-relative `relative`: re-reads what
-   * it names and reports whether the tree changed.
+   * Something at `relative` changed around the server, a file or a folder,
+   * added, edited or removed: re-reads it and reports whether the tree
+   * changed.
    */
-  update(event: string, relative: string): Promise<boolean>;
+  update(relative: string): Promise<boolean>;
   /**
    * Writes a page holding only a frontmatter `title`. A folder listing its
    * pages explicitly (no `...`) gets the key appended, so the page shows
    * up in the Fumadocs sidebar too.
    */
-  create(path: string, title: string): Promise<void>;
+  create(path: string, title: string, by?: By): Promise<void>;
   /** writes `dir/meta.json` with the title and `dir/index.mdx`; listed in the parent like a page */
-  mkdir(dir: string, title: string): Promise<void>;
-  /**
-   * Deletes a page through `unlink` and drops its `pages` entry unless a
-   * folder still answers to the key.
-   */
-  remove(path: string, unlink: () => Promise<void>): Promise<void>;
+  mkdir(dir: string, title: string, by?: By): Promise<void>;
+  /** deletes a page and drops its `pages` entry unless a folder still answers to the key */
+  remove(path: string, by?: By): Promise<void>;
   /** rewrites the folder's `pages` so the tree shows `order`, see {@link orderPages} */
-  order(dir: string, order: string[]): Promise<void>;
+  order(dir: string, order: string[], by?: By): Promise<void>;
 }
 
-/** a dot segment or `node_modules` anywhere in the relative path */
-const HIDDEN = /(?:^|\/)(?:\.[^/]*|node_modules)(?:\/|$)/;
 /** a YAML plain scalar that reads back as written */
 const PLAIN = /^[\p{L}\p{N}][^:#"'\\]*$/u;
+/** frontmatter sits at the start of a page */
 const HEAD_BYTES = 4096;
 const READ_CONCURRENCY = 32;
-
-async function readHead(file: string): Promise<string> {
-  const handle = await open(file);
-  try {
-    const buffer = Buffer.allocUnsafe(HEAD_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0);
-    return buffer.toString("utf8", 0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
 
 /** runs `fn` over `items`, at most `limit` at a time; resolves true if any call did */
 async function someLimit<T>(
@@ -77,31 +63,16 @@ async function someLimit<T>(
   return any;
 }
 
-const errorCode = (error: unknown) => (error as NodeJS.ErrnoException).code;
-
-/** the path's segments, refused when one would leave the root or hide the file */
-function segmentsOf(relative: string): string[] {
-  const segments = relative.split("/");
-  if (
-    HIDDEN.test(relative) ||
-    segments.some((s) => !s || s === "." || s === ".." || s.includes("\\"))
-  ) {
-    throw new Error(`not a workspace path: ${relative}`);
-  }
-  return segments;
-}
-
 const frontmatter = (title: string) =>
   `---\ntitle: ${PLAIN.test(title) && title.trim() === title ? title : JSON.stringify(title)}\n---\n`;
 
 /**
- * Scans `root` once, then stays current through {@link Workspace.update}.
- * Markdown files carry their frontmatter title (from a head read), each
- * `meta.json` its parsed content (invalid JSON counts as none); dot
- * segments and `node_modules` are skipped.
+ * Indexes the files once, then stays current through
+ * {@link Workspace.update}. Markdown files carry their frontmatter title,
+ * each `meta.json` its parsed content (invalid JSON counts as none). Every
+ * write goes through `files`, under the lock of the file it writes.
  */
-export async function openWorkspace(root: string): Promise<Workspace> {
-  root = path.resolve(root);
+export async function openWorkspace(files: Files): Promise<Workspace> {
   const index: WorkspaceIndex = { files: new Map(), metas: new Map() };
 
   /** re-read one file; a missing one is dropped */
@@ -111,7 +82,7 @@ export async function openWorkspace(root: string): Promise<Workspace> {
       const dir = relative.slice(0, -"/meta.json".length);
       let meta: unknown;
       try {
-        meta = JSON.parse(await readFile(path.join(root, relative), "utf8"));
+        meta = JSON.parse((await files.read(relative))?.text ?? "");
       } catch {}
       const previous = index.metas.get(dir);
       if (meta && typeof meta === "object") index.metas.set(dir, meta as MetaJson);
@@ -119,73 +90,69 @@ export async function openWorkspace(root: string): Promise<Workspace> {
       return JSON.stringify(previous) !== JSON.stringify(index.metas.get(dir));
     }
     if (!MARKDOWN.test(name)) return false;
-    let title: string | undefined;
-    try {
-      title = frontmatterTitle(await readHead(path.join(root, relative)));
-    } catch {
-      return index.files.delete(relative);
-    }
+    const head = await files.head(relative, HEAD_BYTES).catch(() => undefined);
+    if (head === undefined) return index.files.delete(relative);
+    const title = frontmatterTitle(head);
     if (index.files.has(relative) && index.files.get(relative) === title) return false;
     index.files.set(relative, title);
     return true;
   };
 
+  /**
+   * Re-reads what is under `dir` now and what the index holds there: an
+   * entry goes only once its file is gone, so a command never finds a folder
+   * half indexed.
+   */
   const scan = async (dir: string): Promise<boolean> => {
-    let entries: Dirent[];
-    try {
-      entries = await readdir(path.join(root, dir), { recursive: true, withFileTypes: true });
-    } catch {
-      return false;
+    const listed = await files.list(dir).catch(() => undefined);
+    if (!listed) return false;
+    const prefix = dir ? `${dir}/` : "";
+    const known = new Set<string>();
+    for (const file of index.files.keys()) if (file.startsWith(prefix)) known.add(file);
+    for (const key of index.metas.keys()) {
+      if (key === dir || key.startsWith(prefix)) known.add(key ? `${key}/meta.json` : "meta.json");
     }
-    const files: string[] = [];
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      const relative = path
-        .relative(root, path.join(entry.parentPath, entry.name))
-        .split(path.sep)
-        .join("/");
-      if (!HIDDEN.test(relative)) files.push(relative);
-    }
-    return someLimit(files, READ_CONCURRENCY, refresh);
+    for (const file of listed) known.delete(file);
+    return someLimit([...listed, ...known], READ_CONCURRENCY, refresh);
   };
 
-  const drop = (prefix: string): boolean => {
-    let any = false;
-    for (const file of index.files.keys()) {
-      if (file.startsWith(prefix)) any = index.files.delete(file);
-    }
-    for (const dir of index.metas.keys()) {
-      if (dir.startsWith(prefix)) any = index.metas.delete(dir);
-    }
-    return any;
-  };
+  /** writes a new file; one already there is left alone */
+  const add = (relative: string, text: string, by?: By) =>
+    files.lock(relative, async () => {
+      if (await files.read(relative)) throw new Error(`${relative} already exists`);
+      await files.write(relative, text, by);
+    });
 
   /** the folder's `meta.json` with `pages` replaced; other fields and their order survive */
-  const writeMeta = async (dir: string, pages: string[]) => {
+  const writeMeta = (dir: string, pages: string[], by?: By) => {
     const relative = dir ? `${dir}/meta.json` : "meta.json";
-    let meta: unknown = {};
-    try {
-      meta = JSON.parse(await readFile(path.join(root, relative), "utf8"));
-    } catch (error) {
-      if (errorCode(error) !== "ENOENT") meta = undefined;
-    }
-    if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
-      throw new Error(`${relative} is not a JSON object`);
-    }
-    (meta as MetaJson).pages = pages;
-    await writeFile(path.join(root, relative), `${JSON.stringify(meta, null, 2)}\n`);
-    await refresh(relative);
+    // a save of the same file waits for the read and the write
+    return files.lock(relative, async () => {
+      const current = await files.read(relative);
+      let meta: unknown = {};
+      try {
+        if (current) meta = JSON.parse(current.text);
+      } catch {
+        meta = undefined;
+      }
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+        throw new Error(`${relative} is not a JSON object`);
+      }
+      (meta as MetaJson).pages = pages;
+      await files.write(relative, `${JSON.stringify(meta, null, 2)}\n`, by);
+      await refresh(relative);
+    });
   };
 
   /** a folder listing its pages explicitly (no `...`) gets `key` appended */
-  const list = async (dir: string, key: string) => {
+  const list = async (dir: string, key: string, by?: By) => {
     const pages = index.metas.get(dir)?.pages;
     if (
       Array.isArray(pages) &&
       !pages.some((item) => parseEntry(item).type === "rest") &&
       !listsKey(pages, key)
     ) {
-      await writeMeta(dir, pages.concat(key));
+      await writeMeta(dir, pages.concat(key), by);
     }
   };
 
@@ -202,50 +169,36 @@ export async function openWorkspace(root: string): Promise<Workspace> {
   return {
     tree: (canRead) => buildTree(index, canRead),
 
-    update(event, relative) {
-      if (HIDDEN.test(relative)) return Promise.resolve(false);
-      if (event === "unlinkDir") return Promise.resolve(drop(`${relative}/`));
-      // a moved-in directory: its files may arrive without events of their own
-      if (event === "addDir") return scan(relative);
-      return refresh(relative);
+    async update(relative) {
+      if (HIDDEN.test(relative)) return false;
+      const name = relative.slice(relative.lastIndexOf("/") + 1);
+      if (name === "meta.json" || MARKDOWN.test(name)) return refresh(relative);
+      // a folder, added or removed
+      return scan(relative);
     },
 
-    async create(relative, title) {
+    async create(relative, title, by) {
       if (!MARKDOWN.test(relative)) throw new Error(`not a page path: ${relative}`);
-      const absolute = path.join(root, ...segmentsOf(relative));
-      await mkdir(path.dirname(absolute), { recursive: true });
-      try {
-        await writeFile(absolute, frontmatter(title), { flag: "wx" });
-      } catch (error) {
-        if (errorCode(error) === "EEXIST") throw new Error(`${relative} already exists`);
-        throw error;
-      }
+      await add(relative, frontmatter(title), by);
       const { dir, key } = split(relative);
-      await list(dir, key);
+      await list(dir, key, by);
       await refresh(relative);
     },
 
-    async mkdir(dir, title) {
-      const absolute = path.join(root, ...segmentsOf(dir));
-      if (
-        await stat(absolute).then(
-          () => true,
-          () => false,
-        )
-      ) {
-        throw new Error(`${dir} already exists`);
+    async mkdir(dir, title, by) {
+      if (!dir || (await files.list(dir)).length > 0) {
+        throw new Error(`${dir || "the root"} already exists`);
       }
-      await mkdir(absolute, { recursive: true });
-      await writeFile(path.join(absolute, "meta.json"), `${JSON.stringify({ title }, null, 2)}\n`);
-      await writeFile(path.join(absolute, "index.mdx"), frontmatter(title));
+      await add(`${dir}/meta.json`, `${JSON.stringify({ title }, null, 2)}\n`, by);
+      await add(`${dir}/index.mdx`, frontmatter(title), by);
       const { dir: parent, key } = split(dir);
-      await list(parent, key);
+      await list(parent, key, by);
       await scan(dir);
     },
 
-    async remove(relative, unlink) {
+    async remove(relative, by) {
       if (!index.files.has(relative)) throw new Error(`no page at ${relative}`);
-      await unlink();
+      await files.lock(relative, () => files.delete(relative, by));
       index.files.delete(relative);
       const { dir, key } = split(relative);
       const pages = index.metas.get(dir)?.pages;
@@ -255,11 +208,11 @@ export async function openWorkspace(root: string): Promise<Workspace> {
           const entry = parseEntry(item);
           if (entry.type !== "key" || entry.key !== key) kept.push(item);
         }
-        await writeMeta(dir, kept);
+        await writeMeta(dir, kept, by);
       }
     },
 
-    async order(dir, order) {
+    async order(dir, order, by) {
       const keys = folderKeys(index, dir);
       if (!keys) throw new Error(`no pages under ${dir || "the root"}`);
       const known = new Set(keys);
@@ -272,8 +225,8 @@ export async function openWorkspace(root: string): Promise<Workspace> {
       }
       const pages = index.metas.get(dir)?.pages;
       const next = orderPages(pages, order, keys);
-      if (JSON.stringify(next) === JSON.stringify(Array.isArray(pages) ? pages : ["..."])) return;
-      await writeMeta(dir, next);
+      const same = JSON.stringify(next) === JSON.stringify(Array.isArray(pages) ? pages : ["..."]);
+      if (!same) await writeMeta(dir, next, by);
     },
   };
 }
@@ -285,7 +238,11 @@ const TREE_SETTLE_MS = 100;
  * The `tree` resource: the workspace indexed on first use, every subscriber
  * sent the tree its scope may read, commands run one at a time.
  */
-export function createTreeResource(files: Files, remove: (relative: string) => Promise<void>) {
+export function createTreeResource(
+  files: Files,
+  /** forgets the collab doc of a file: a save of it would bring the file back */
+  drop: (relative: string) => Promise<void>,
+) {
   const subscribers = new Set<Connection>();
   let workspace: Promise<Workspace> | undefined;
   let timer: NodeJS.Timeout | undefined;
@@ -293,18 +250,26 @@ export function createTreeResource(files: Files, remove: (relative: string) => P
 
   const open = () => {
     files.watch();
-    return (workspace ??= openWorkspace(files.root));
+    return (workspace ??= openWorkspace(files));
   };
   const treeFor = (conn: Connection, ws: Workspace) => ({
-    root: path.basename(files.root),
+    root: files.name,
     nodes: ws.tree(conn.scope.read),
   });
   const push = async (except?: Connection) => {
     clearTimeout(timer);
     timer = undefined;
     const ws = await workspace!;
+    // subscribers sharing a `read` rule (the default one, say) share its tree and encoding
+    const sent = new Map<Connection["scope"]["read"], ReturnType<typeof encode>>();
     for (const conn of subscribers) {
-      if (conn !== except) conn.send(encode({ resource: "tree", tree: treeFor(conn, ws) }));
+      if (conn === except) continue;
+      let data = sent.get(conn.scope.read);
+      if (!data) {
+        data = encode({ resource: "tree", tree: treeFor(conn, ws) });
+        sent.set(conn.scope.read, data);
+      }
+      conn.send(data);
     }
   };
 
@@ -316,22 +281,28 @@ export function createTreeResource(files: Files, remove: (relative: string) => P
       if (!conn.scope.write(relative)) throw new Error(`write denied: ${relative}`);
       return relative;
     };
+    const by = new Set([conn]);
     switch (body.type) {
       case "create": {
         const relative = writable(files.rel(str(body.path)));
         const title = str(body.title);
-        return (ws) => ws.create(relative, title);
+        return (ws) => ws.create(relative, title, by);
       }
       case "mkdir": {
         const dir = files.rel(str(body.dir));
         writable(dir ? `${dir}/meta.json` : "meta.json");
         writable(dir ? `${dir}/index.mdx` : "index.mdx");
         const title = str(body.title);
-        return (ws) => ws.mkdir(dir, title);
+        return (ws) => ws.mkdir(dir, title, by);
       }
       case "delete": {
         const relative = writable(files.rel(str(body.path)));
-        return (ws) => ws.remove(relative, () => remove(relative));
+        return async (ws) => {
+          await drop(relative);
+          await ws.remove(relative, by);
+          // a doc opened while the file was going would save it back
+          await drop(relative);
+        };
       }
       case "order": {
         const dir = files.rel(str(body.dir));
@@ -339,7 +310,7 @@ export function createTreeResource(files: Files, remove: (relative: string) => P
         if (!Array.isArray(body.order)) throw new Error("malformed message");
         const entries: string[] = [];
         for (const item of body.order) entries.push(str(item));
-        return (ws) => ws.order(dir, entries);
+        return (ws) => ws.order(dir, entries, by);
       }
       default:
         throw new Error(`unknown command: ${String(body.type)}`);
@@ -347,11 +318,11 @@ export function createTreeResource(files: Files, remove: (relative: string) => P
   };
 
   return {
-    /** a watcher event under the root; the tree follows once the workspace is open */
-    event(event: string, relative: string) {
+    /** a change around the server; the tree follows once the workspace is open */
+    event(relative: string) {
       if (!workspace) return;
       void workspace.then(async (ws) => {
-        if (await ws.update(event, relative)) timer ??= setTimeout(push, TREE_SETTLE_MS);
+        if (await ws.update(relative)) timer ??= setTimeout(push, TREE_SETTLE_MS);
       });
     },
 

@@ -46,21 +46,34 @@ Create a `fumadocs-studio.config.ts` where you run Studio. Flags override it.
 
 <auto-type-table path="../../../packages/studio/src/config.ts" name="StudioConfig" />
 
-`components`, `syntax`, `theme` and `media` work like the
-[`MdxEditor` props](/editor). Your own components follow the
-[authoring guide](/components), and their styles load through `styles`.
+- `components`, `syntax`, `theme` and `media` work like the
+  [`MdxEditor` props](/editor).
+- Your own components follow the [authoring guide](/components). Load their
+  styles with `styles`.
 
 ### Server options
 
-The config also runs in the browser, so anything Node-only (a JWT library,
-a Vite plugin) goes in a separate file referenced by `server`:
+The config also runs in the browser. Put anything Node-only (a JWT library,
+a Vite plugin) in a separate file, and reference it with `server`:
 
 <include meta='title="studio.server.ts"'>../examples/studio-server.ts</include>
+
+`server` takes every [sync server option](/server#options) except `root`,
+plus `vite`:
+
+- `authenticate` guards Studio ([Auth](/auth)).
+- `setup` reaches the server, for `connections()` and `onChange`
+  ([Sync Server](/server#reach-the-server-with-setup)).
+- `storage` replaces the folder on disk ([Storage](/server#storage)); `root`
+  and `--root` are then ignored.
 
 <auto-type-table path="../../../packages/studio/src/config.ts" name="StudioServerConfig" />
 
 ## Auth
 
-Without `authenticate`, anyone who can reach the port can edit. With it,
-the credential comes from `?token=` in the URL by default; override it with
-`auth`. See [Auth](/auth) for writing the hook.
+Without `authenticate`, anyone who can reach the port can edit. With it:
+
+- the credential comes from `?token=` in the URL by default
+- override where it comes from with `auth`
+
+See [Auth](/auth) for writing the hook.

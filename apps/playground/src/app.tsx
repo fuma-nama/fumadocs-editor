@@ -125,10 +125,8 @@ function Playground() {
         client,
         path: active,
         onStatus: setStatus,
-        onOpen: (result) => {
-          setMarkdown(result.text);
-          setWritable(result.writable);
-        },
+        onOpen: (result) => setMarkdown(result.text),
+        onWritable: setWritable,
       }
     : undefined;
 
