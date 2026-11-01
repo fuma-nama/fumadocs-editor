@@ -1,3 +1,65 @@
+## @fumadocs-editor/core@0.5.0
+
+### Edited loose lists stay loose
+
+A list that was not touched kept its source, but once anything inside it
+changed, the whole list was written tight: the blank lines between its items
+(and between the blocks of an item) were dropped. The list and item nodes
+now keep mdast's `spread` as an attribute, so an edited list is written back
+the way it was parsed. Lists made in the editor are still tight, and a new
+item in a loose list is loose like its neighbours.
+
+### A document opened while the client is offline settles `opened`
+
+`opened` settled when the client went offline or was denied after the
+document was opened, but not when it was already offline: the status
+listener only hears changes, and a failed reconnect keeps the status at
+`offline`. Such a document stayed loading until the client came back online,
+which may be never. `opened` now rejects at once when the client is already
+offline or denied, so the editor falls back to its own content, and a later
+answer still merges in after a reconnect.
+
+### Manage sync connections, and hear what they change
+
+- `SyncServer.connections()` lists the open connections, with the `request`,
+  `payload` and `user` that `authenticate` saw. `close()` ends one: the client
+  reconnects and `authenticate` decides again.
+- `SyncServer.onChange` reports every file a connection changes, once stored:
+  saves, file tree commands, and collab edits at their debounced write.
+- The `setup` option is called with the server once it exists, in
+  `createSyncServer`, the Vite plugin and Studio alike. What it returns runs,
+  and is awaited, when the server closes. Studio's `server` config now takes
+  every sync server option.
+
+### Keep the synced files anywhere with `storage`
+
+Every file the sync server reads or writes now goes through one `SyncStorage`:
+list, read, write, delete and an optional `watch`. `root` is shorthand for
+`storage: fsStorage(root)`. Pass your own to use a database or a bucket, or
+wrap `fsStorage`. `read` may stream, so a large file never sits in memory:
+assets stream, titles come from the first 4 KB, and a file changed outside the
+server is read only while an editor has it open.
+
+### Storage fixes
+
+- An outside change back to the text the server last wrote was ignored.
+- Reads could see a file the server was halfway through writing.
+- A collab save that failed was never retried.
+- `meta.json` was rewritten outside the per-file lock, so a save could be lost.
+- Deleting a page while someone opened it could bring it back.
+- Two uploads of one name in the same millisecond replaced one another.
+- `.env` and other dot or `node_modules` paths could be read and written
+  through the file resource and the asset endpoint. They are now refused.
+- Errors no longer show the server's paths.
+
+### Write access is reported again after a reconnect
+
+Only the first answer's `writable` reached the host, so a writer who came back
+as a reader kept an editable editor whose saves were refused and retried.
+`SyncDocument.writable()` now follows every answer, a file document holds its
+saves while it is `false`, and `sync.onWritable` in `@fumadocs-editor/ui`
+reports it once the document is open, then on every change.
+
 ## @fumadocs-editor/core@0.4.2
 
 ### `mkdir` checks write access to the folder's `meta.json`
