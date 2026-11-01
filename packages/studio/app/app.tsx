@@ -219,7 +219,7 @@ export function Studio() {
           client,
           path: active,
           onStatus: setStatus,
-          onOpen: (result) => setWritable(result.writable),
+          onWritable: setWritable,
         };
 
   // identity matters: the editor lists paths again for a new provider

@@ -5,12 +5,13 @@ import type {
   SyncClient,
   SyncDocument,
 } from "@fumadocs-editor/core/sync";
-import type { Editor, JSONContent } from "@tiptap/core";
+import type { AnyExtension, Editor, JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { loadSync, sharedClient } from "./client";
 import type { FileProvider, MediaProvider } from "./components/media";
 import { specsByType, type UiComponentSpec } from "./components/spec";
 import { parseDocCached } from "./doc-cache";
+import type { BubbleItem } from "./bubble-items";
 
 export interface MdxEditorRef {
   /** serialize; unedited blocks are byte-identical */
@@ -45,16 +46,32 @@ export interface MdxEditorSync {
    * host. Pass your own for auth, another server, or collab.
    */
   client?: SyncClient;
-  /** also shown by `MdxEditor.Status`; use this to mirror it elsewhere */
+  /**
+   * Also shown by `MdxEditor.Status`; use this to mirror it elsewhere.
+   * Called with the current status once the document for `path` is open
+   * (again after `path` changes), then on every change.
+   */
   onStatus?: (status: DocumentStatus) => void;
   /**
    * File was read: text plus scope data. Does not change editor behavior;
-   * wire `writable` into `editable` yourself.
+   * for `writable` across reconnects, use `onWritable`.
    */
   onOpen?: (result: { text: string; writable: boolean }) => void;
+  /**
+   * Whether the server takes your edits. Called once the document for `path`
+   * is open, then whenever it changes: the server's scope is asked again on
+   * every reconnect. Does not change editor behavior; wire it into `editable`.
+   */
+  onWritable?: (writable: boolean) => void;
 }
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
+
+/** what the host adds to the live editor; fixed for the life of the root */
+export interface HostAdditions {
+  extensions?: AnyExtension[];
+  bubbleItems?: BubbleItem[];
+}
 
 /** the root's props the store reads when it acts */
 export interface DocumentOptions {
@@ -107,6 +124,8 @@ export class DocumentStore {
   readonly components: UiComponentSpec[];
   readonly specs: Map<string, UiComponentSpec>;
   readonly syntax: SyntaxOptions | undefined;
+  readonly extensions: AnyExtension[];
+  readonly bubbleItems: BubbleItem[];
   /** the root's latest props */
   options: DocumentOptions;
   media: MediaProvider | undefined;
@@ -130,10 +149,13 @@ export class DocumentStore {
     components: UiComponentSpec[],
     syntax: SyntaxOptions | undefined,
     options: DocumentOptions,
+    { extensions = [], bubbleItems = [] }: HostAdditions = {},
   ) {
     this.components = components;
     this.specs = specsByType(components);
     this.syntax = syntax;
+    this.extensions = extensions;
+    this.bubbleItems = bubbleItems;
     this.options = options;
     this.state = initialState(options, 0);
     this.markdown = this.state.text;
@@ -200,12 +222,20 @@ export class DocumentStore {
         components: this.components,
         syntax: this.syntax,
       });
-      let reported = this.state.status;
+      // null: report the opening status too, even if it equals the previous document's
+      let reported: DocumentStatus | null = null;
+      // undefined until `opened` settles, which reports the opening value
+      let writable: boolean | undefined;
+      const reportWritable = () => {
+        writable = doc.writable();
+        this.options.sync?.onWritable?.(writable);
+      };
       const update = () => {
         if (token !== this.token) return;
         const status = doc.status();
         // a re-seeded collab doc passes through null, which remounts the editor
         this.set({ status, collab: doc.collab() });
+        if (writable !== undefined && writable !== doc.writable()) reportWritable();
         if (status === reported) return;
         reported = status;
         this.options.sync?.onStatus?.(status);
@@ -228,10 +258,13 @@ export class DocumentStore {
         (result) => {
           if (token !== this.token) return;
           this.options.sync?.onOpen?.(result);
+          reportWritable();
           this.load(result.text, token);
         },
         () => {
-          if (token === this.token) this.load(this.options.defaultValue, token);
+          if (token !== this.token) return;
+          reportWritable();
+          this.load(this.options.defaultValue, token);
         },
       );
     });

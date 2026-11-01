@@ -135,21 +135,17 @@ function studioPlugin({ configFile, styles }: StudioOptions): Plugin {
 /** starts the studio's Vite dev server; resolves once it listens */
 export async function startStudio(options: StudioOptions): Promise<ViteDevServer> {
   const { projectRoot, contentRoot, port, host, open, server } = options;
-  const { authenticate, upload, evictAfterMs, helloTimeoutMs } = server;
+  const { vite: viteConfig = {}, ...sync } = server;
   const config: InlineConfig = mergeConfig(baseConfig(projectRoot), {
     publicDir: false,
     clearScreen: false,
     // the project's, never this package's: it may be an npx cache
     cacheDir: path.join(projectRoot, "node_modules/.fumadocs-studio"),
-    plugins: [
-      studioPlugin(options),
-      editorSync({ root: contentRoot, authenticate, upload, evictAfterMs, helloTimeoutMs }),
-      packageAccess(),
-    ],
+    plugins: [studioPlugin(options), editorSync({ ...sync, root: contentRoot }), packageAccess()],
     server: { port, host, open },
     optimizeDeps: { include: optimizeInclude() },
   } satisfies InlineConfig);
-  const vite = await createServer(mergeConfig(config, server.vite ?? {}));
+  const vite = await createServer(mergeConfig(config, viteConfig));
   await vite.listen();
   return vite;
 }

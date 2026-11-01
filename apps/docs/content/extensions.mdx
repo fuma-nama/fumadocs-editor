@@ -1,0 +1,144 @@
+---
+title: Extensions
+icon: Blocks
+description: Add behaviour to the visual editor with TipTap extensions
+---
+
+Extensions add behaviour to the visual editor: decorations over text,
+keyboard shortcuts, plugin state, commands. They are plain
+[TipTap extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions),
+passed to `extensions`:
+
+```tsx
+<MdxEditor extensions={[todoHighlight, askAiShortcut(ask)]} />
+```
+
+| Add a…                   | When you want                                         |
+| ------------------------ | ----------------------------------------------------- |
+| [component](/components) | new content, with its own markup in the MDX           |
+| extension                | new behaviour on the content the document already has |
+
+An extension never changes the MDX, only how the editor shows it and reacts
+to input. Buttons, counters and panels stay in your own UI: in `header`, or
+in the format bubble with [`bubbleItems`](#buttons-in-the-format-bubble).
+
+<ExtensionsDemo />
+
+Switch **Extensions** off to compare with the default editor. The demo's
+model is made up in the page; nothing is sent.
+
+## Examples
+
+### Highlight text
+
+A decoration marks every `TODO` in the document. It is drawn over the text
+and never saved.
+
+<include meta='title="todo.ts"'>../examples/extensions.tsx#todo</include>
+
+### Ask AI about the selection
+
+A keyboard shortcut opens your own panel on the selected text:
+
+- the extension only opens the panel
+- the panel, your UI, asks your model
+- the answer goes below the selected block, or replaces the selection
+
+<include meta='title="ask-ai.ts"'>../examples/extensions.tsx#ask-ai</include>
+
+<include meta='title="ask-ai-panel.tsx"'>../examples/extensions.tsx#panel</include>
+
+### Read the editor from your UI
+
+An extension's `onCreate`, `onUpdate` and `onDestroy` run with the live
+editor. Use them to hand the editor, or anything computed from it, to React.
+Here:
+
+- one extension reports the editor, for the header's Ask AI button
+- another counts words, which the header turns into a reading time
+
+<include meta='title="word-count.ts"'>../examples/extensions.tsx#word-count</include>
+
+<include meta='title="editor.tsx"'>../examples/extensions.tsx#usage</include>
+
+## Buttons in the format bubble
+
+`bubbleItems` adds buttons after the built-in ones (bold, italic, link…)
+while text is selected. They use the bubble's look and keep the editor's
+focus and selection, on touch screens too.
+
+<include meta='title="ask-ai-item.tsx"'>../examples/extensions.tsx#bubble</include>
+
+| Field       | Does                                                  |
+| ----------- | ----------------------------------------------------- |
+| `label`     | the button's accessible name and tooltip              |
+| `icon`      | what the button shows                                 |
+| `shortcut`  | shown in the tooltip; bind it in an extension         |
+| `isActive`  | drawn pressed, like Bold over bold text               |
+| `isEnabled` | `false` disables the button for the current selection |
+| `run`       | called with the live editor                           |
+
+- Like `extensions`, the list is fixed for the life of the root.
+- Items only show in an editable editor, for a text selection.
+
+## How extensions run
+
+### Lifecycle
+
+Extensions are applied each time the root builds a live editor:
+
+- on the first interaction with the document
+- on every return from the MDX tab
+- in read-only editors too
+
+They do not run on the static first paint or on the MDX tab, so decorations
+appear once the live editor has mounted.
+
+<Callout type="warn" title="Read once">
+  The `extensions` array is read once, when the root mounts, as with `components`. Define it at
+  module level or with `useState`. Arrays or callbacks passed on later renders are ignored.
+</Callout>
+
+### Precedence
+
+Host extensions run alongside the [built-in extensions](#built-in-extensions),
+including TipTap's core keymap (Enter, Backspace, paste).
+
+- When both handle the same key or event at the same `priority` (default
+  `100`), the built-in runs first.
+- To take precedence, set a higher `priority` than the extension you
+  compete with.
+
+### Restrictions
+
+An extension is left out, with a console error giving the reason, when it:
+
+- adds a node or a mark: those are content, which the MDX serializer cannot
+  write, so use a [component](/components) instead
+- uses a name another extension already registered
+- adds a command that already exists
+
+Give each ProseMirror plugin a unique `PluginKey`.
+
+### Collaboration
+
+Under [collab](/collab), `appendTransaction` also receives the
+transactions that apply remote edits. Ignore the ones carrying the
+`y-sync$` meta, or every collaborator applies the change again.
+
+## Built-in extensions
+
+Your extensions run next to the ones the editor is built from. Check their
+source for the names, commands and keys already taken:
+
+- TipTap's [core extensions](https://github.com/ueberdosis/tiptap/tree/main/packages/core/src/extensions):
+  Enter, Backspace, paste, drop
+- StarterKit, lists, tables, images and the MDX nodes, from
+  [`editorExtensions`](https://github.com/fuma-nama/fumadocs-editor/blob/dev/packages/core/src/extensions/kit.ts)
+- one node per [component spec](/components)
+- the editor's own, from the list
+  [`LiveEditor`](https://github.com/fuma-nama/fumadocs-editor/blob/dev/packages/ui/src/live-editor.tsx)
+  builds, with their keys in
+  [`keymap.ts`](https://github.com/fuma-nama/fumadocs-editor/blob/dev/packages/ui/src/components/keymap.ts)
+
+In a running editor, `editor.extensionManager.extensions` lists them all.

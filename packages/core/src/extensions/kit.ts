@@ -5,7 +5,7 @@ import { CodeBlock } from "@tiptap/extension-code-block";
 import { Heading } from "@tiptap/extension-heading";
 import { Link } from "@tiptap/extension-link";
 import { Image } from "@tiptap/extension-image";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { BulletList, ListItem, OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { mdxNodes } from "./mdx-nodes";
 import { MdxBlockRegion, MdxInlineRegion, componentNodeTypes } from "../components/nodes";
@@ -56,6 +56,50 @@ export const LinkMdx = Link.extend({
       ...this.parent?.(),
       title: { default: null },
     };
+  },
+});
+
+/**
+ * mdast's `spread`: a loose list has blank lines between its items, a loose
+ * item between its own blocks. Kept on the node so an edited list is written
+ * back as it was parsed; lists made in the editor stay tight.
+ */
+const spreadAttribute = {
+  spread: {
+    default: false,
+    parseHTML: (element: HTMLElement) => element.hasAttribute("data-spread"),
+    renderHTML: (attributes: Record<string, unknown>) =>
+      attributes.spread ? { "data-spread": "" } : {},
+  },
+};
+
+const BulletListMdx = BulletList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttribute };
+  },
+});
+
+const OrderedListMdx = OrderedList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttribute };
+  },
+});
+
+const ListItemMdx = ListItem.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttribute };
+  },
+});
+
+const TaskListMdx = TaskList.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttribute };
+  },
+});
+
+const TaskItemMdx = TaskItem.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...spreadAttribute };
   },
 });
 
@@ -115,6 +159,9 @@ export function editorExtensions({
       codeBlock: false,
       heading: false,
       link: false,
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
       // the UI layer draws its own drop indicator from the real drop target;
       // the stock cursor previews dropPoint, which disagrees with it
       dropcursor: false,
@@ -131,8 +178,11 @@ export function editorExtensions({
     ...(codeBlock ? [CodeBlockMdx] : []),
     LinkMdx.configure({ openOnClick: false }),
     ...(image ? [Image.configure({ inline: true })] : []),
-    TaskList,
-    TaskItem.configure({ nested: true }),
+    BulletListMdx,
+    OrderedListMdx,
+    ListItemMdx,
+    TaskListMdx,
+    TaskItemMdx.configure({ nested: true }),
     // prosemirror-tables would otherwise turn a node-selected table into a
     // CellSelection: the table then rings and moves like any other block
     TableMdx.configure({ allowTableNodeSelection: true }),

@@ -48,6 +48,7 @@ import { Picker } from "./components/picker";
 import { useEditorContext } from "./components/context";
 import { BUBBLE_MENU_KEY } from "./components/caret-policy";
 import { chrome } from "./styles/shared";
+import { BubbleItems, bubbleItemStates, type BubbleItem } from "./bubble-items";
 
 type Chain = ReturnType<Editor["chain"]>;
 
@@ -570,11 +571,13 @@ function ImagePanel({ editor }: { editor: Editor }) {
 export function EditorBubble({
   editor,
   specs,
+  items,
   touch,
   frame,
 }: {
   editor: Editor;
   specs: Map<string, UiComponentSpec>;
+  items: BubbleItem[];
   touch: boolean;
   /**
    * The bubble and its popovers live here. The menu hides on editor blur
@@ -612,6 +615,7 @@ export function EditorBubble({
         headingAttrs: bubble.format ? current.getAttributes("heading") : null,
         canUndo: touch && current.can().undo(),
         canRedo: touch && current.can().redo(),
+        items: bubble.format ? bubbleItemStates(items, current) : [],
       };
     },
   });
@@ -730,6 +734,7 @@ export function EditorBubble({
           </MarkButton>
           <LinkControl editor={editor} href={state.link} container={frame} />
           {state.table && <TableControl editor={editor} container={frame} />}
+          <BubbleItems editor={editor} items={items} states={state.items} />
         </>
       )}
       {visible && state.atom?.kind === "image" && <ImagePanel editor={editor} />}

@@ -169,7 +169,7 @@ export function inlineToPhrasing(nodes: JSONContent[] = []): PhrasingContent[] {
 function listItemsToMdast(node: JSONContent, task: boolean, syntax: Syntax): ListItem[] {
   return (node.content ?? []).map((item) => ({
     type: "listItem",
-    spread: false,
+    spread: item.attrs?.spread === true,
     checked: task ? item.attrs?.checked === true : null,
     children: (item.content ?? []).map(
       (child) => nodeToMdastBlock(child, syntax) as BlockContent | DefinitionContent,
@@ -222,7 +222,7 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
       return {
         type: "list",
         ordered: false,
-        spread: false,
+        spread: node.attrs?.spread === true,
         children: listItemsToMdast(node, false, syntax),
       };
     case "orderedList":
@@ -230,14 +230,14 @@ export function nodeToMdastBlock(node: JSONContent, syntax: Syntax = EMPTY_SYNTA
         type: "list",
         ordered: true,
         start: Number(node.attrs?.start ?? 1),
-        spread: false,
+        spread: node.attrs?.spread === true,
         children: listItemsToMdast(node, false, syntax),
       };
     case "taskList":
       return {
         type: "list",
         ordered: false,
-        spread: false,
+        spread: node.attrs?.spread === true,
         children: listItemsToMdast(node, true, syntax),
       };
     case "codeBlock":

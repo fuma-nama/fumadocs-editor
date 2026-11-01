@@ -4,7 +4,7 @@ icon: Eye
 description: Show a document without letting it change
 ---
 
-`editable={false}` makes the editor read-only:
+Pass `editable={false}` to make the editor read-only:
 
 - no typing, no slash menu, no block menus
 - selection and copy still work
@@ -14,10 +14,17 @@ You can flip it at any time without remounting the editor.
 
 ## With auth
 
-When the server's [scope](/auth) denies `write`, `sync.onOpen` reports
-`writable: false`. Pass it to `editable`:
+When the server's [scope](/auth#scopes) denies `write`, `sync.onWritable`
+reports `false`. Pass it to `editable`:
 
 <include meta='title="scoped-editor.tsx"'>../examples/read-only.tsx</include>
+
+- It is called once the document is open, then whenever write access
+  changes.
+- The server answers again after every reconnect, for example when it
+  [closes a connection](/auth#when-access-changes) whose access changed.
+- Edits made without write access stay in the editor, and are saved once it
+  comes back.
 
 <Callout type="info" title="Not a security boundary">
   `editable` only changes the UI. The server refuses writes from a read-only user even if they

@@ -20,6 +20,7 @@ import { caret } from "./collab";
 import type { SerializeFn } from "./store";
 import { contentClass } from "./styles/content";
 import { contentStyles } from "./components/content-styles";
+import { hostExtensions } from "./host-extensions";
 import { settled as settledMarker } from "./styles/markers.stylex";
 
 const styles = stylex.create({ frame: { position: "relative" } });
@@ -62,26 +63,28 @@ export const LiveEditor = memo(function LiveEditor({
   const { store } = useEditorContext();
   const [{ extensions, serialize }] = useState(() => {
     const { components, specs, syntax } = store;
+    const builtIn = [
+      ...editorExtensions({
+        componentNodes: false,
+        codeBlock: false,
+        image: false,
+        mathNodes: false,
+        history: !collab,
+      }),
+      contentStyles,
+      codeBlockExtension(),
+      imageExtension(store),
+      ...componentExtensions(specs),
+      ...mathExtensions(syntax?.math === true),
+      activeSource,
+      slashMenu(specs, store, syntax?.math),
+      fileSuggest(specs, store),
+      linkSuggest(store),
+      ...(collab ? collab.extensions(caret) : []),
+    ];
     return {
-      extensions: [
-        ...editorExtensions({
-          componentNodes: false,
-          codeBlock: false,
-          image: false,
-          mathNodes: false,
-          history: !collab,
-        }),
-        contentStyles,
-        codeBlockExtension(),
-        imageExtension(store),
-        ...componentExtensions(specs),
-        ...mathExtensions(syntax?.math === true),
-        activeSource,
-        slashMenu(specs, store, syntax?.math),
-        fileSuggest(specs, store),
-        linkSuggest(store),
-        ...(collab ? collab.extensions(caret) : []),
-      ],
+      // half a step below their priority, so the built-ins win a tie
+      extensions: [...builtIn, ...hostExtensions(store.extensions, builtIn)],
       serialize: createIncrementalSerializer(createSyntax(components, syntax)),
     };
   });
@@ -129,7 +132,13 @@ export const LiveEditor = memo(function LiveEditor({
       {editor && editable && frame && (
         <>
           <BlockGutter editor={editor} touch={touch} />
-          <EditorBubble editor={editor} specs={store.specs} touch={touch} frame={frame} />
+          <EditorBubble
+            editor={editor}
+            specs={store.specs}
+            items={store.bubbleItems}
+            touch={touch}
+            frame={frame}
+          />
         </>
       )}
     </div>

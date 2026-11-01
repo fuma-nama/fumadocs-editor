@@ -95,7 +95,7 @@ test("commands need write access and a well-formed body", async () => {
       resource: "tree",
       command: { type: "create", path: "../out.mdx", title: "Out" },
     }),
-  ).toMatchObject({ type: "error", message: expect.stringMatching(/escapes/) });
+  ).toMatchObject({ type: "error", message: expect.stringMatching(/not a sync path/) });
   editor.close();
 });
 

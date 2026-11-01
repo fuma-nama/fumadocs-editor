@@ -49,6 +49,8 @@ interface DocState {
   normalized: WeakMap<object, string>;
   /** connected clients and the awareness clientIDs each one announced */
   conns: Map<Connection, Set<number>>;
+  /** the clients whose edits wait for the next save */
+  authors: Set<Connection>;
   /** changes waiting for the end of the tick, grouped by the connection they came from */
   outbox: Map<unknown, { yjs: Uint8Array[]; awareness: Set<number> }>;
   /** disk IO runs strictly in sequence per document */
@@ -57,6 +59,8 @@ interface DocState {
   maxWait?: ReturnType<typeof setTimeout>;
   /** pending eviction, armed while the doc has no clients */
   evict?: ReturnType<typeof setTimeout>;
+  /** forgotten (its file deleted): it never saves again */
+  dropped?: boolean;
 }
 
 /**
@@ -120,7 +124,14 @@ export function createDocAuthority({
     clearTimeout(doc.trailing);
     clearTimeout(doc.maxWait);
     doc.trailing = doc.maxWait = undefined;
-    enqueue(doc, () => files.lock(doc.path, () => saveTask(doc)));
+    enqueue(doc, () =>
+      files
+        .lock(doc.path, () => saveTask(doc))
+        .catch(() => {
+          // the edits are still in the Y.Doc: try again while it is open
+          if (live.get(doc.path) === doc) scheduleSave(doc);
+        }),
+    );
   };
 
   const scheduleSave = (doc: DocState) => {
@@ -150,13 +161,23 @@ export function createDocAuthority({
   };
 
   const saveTask = async (doc: DocState) => {
-    // fold in a disk change chokidar hasn't delivered yet before overwriting
-    const current = await files.read(doc.path).catch(() => undefined);
+    if (doc.dropped) return;
+    // fold in a change the watcher hasn't delivered yet before overwriting
+    const current = await files.read(doc.path);
     if (current) applyDisk(doc, current);
+    // taken with the layout: edits arriving during the write go with the next save
+    const authors = doc.authors;
+    doc.authors = new Set();
     const snapshot = layout(doc);
     const text = snapshotText(snapshot);
     if (current && text === current.text) return;
-    doc.diskVersion = await files.write(doc.path, text);
+    try {
+      doc.diskVersion = await files.write(doc.path, text, authors);
+    } catch (error) {
+      // not stored: the save that does store these edits reports them
+      for (const conn of authors) doc.authors.add(conn);
+      throw error;
+    }
     doc.diskText = text;
     doc.snapshot = snapshot;
   };
@@ -193,7 +214,9 @@ export function createDocAuthority({
     components: ComponentSpec[],
     options?: SyntaxOptions,
   ): Promise<DocState> => {
-    const state = await files.read(path);
+    // under the lock: an evicted doc's last save lands first
+    const state = await files.lock(path, () => files.read(path));
+    if (!state) throw new Error(`no such file: ${path}`);
     // the first opener's syntax wins; every client of one app sends the same
     const syntax = createSyntax(components, options);
     const schema = getSchema(editorExtensions({ components }));
@@ -224,6 +247,7 @@ export function createDocAuthority({
       diskVersion: state.version,
       normalized: new WeakMap(),
       conns: new Map(),
+      authors: new Set(),
       outbox: new Map(),
       queue: Promise.resolve(),
     };
@@ -233,6 +257,8 @@ export function createDocAuthority({
     });
 
     ydoc.on("update", (update: Uint8Array, origin: unknown) => {
+      // a client's update that changed something; disk merges carry `DISK`
+      if (doc.conns.has(origin as Connection)) doc.authors.add(origin as Connection);
       relay(doc, origin, update);
       scheduleSave(doc);
     });
@@ -350,6 +376,9 @@ export function createDocAuthority({
       for (const doc of live.values()) leaveDoc(doc, conn);
     },
 
+    /** a doc is open on the file, or opening */
+    isOpen: (path: string) => docs.has(path),
+
     /** the file changed on disk or through a client write; merged into the Y.Doc block-wise */
     diskChanged(path: string, state: FileState) {
       void docs.get(path)?.then((doc) => {
@@ -370,6 +399,7 @@ export function createDocAuthority({
       const doc = await entry.catch(() => undefined);
       if (!doc || live.get(path) !== doc) return;
       live.delete(path);
+      doc.dropped = true;
       // a save in flight may merge disk state, which re-arms the debounce
       // and can enqueue once more: drain until the queue stands still
       let queue: Promise<void>;

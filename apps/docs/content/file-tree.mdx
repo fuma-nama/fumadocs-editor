@@ -4,9 +4,9 @@ icon: FolderTree
 description: The sidebar as an editor for pages, folders and meta.json
 ---
 
-`FileTree` shows the synced directory like a Fumadocs sidebar, and lets you
-create, delete and reorder pages. Every change is written to disk, so the
-site's navigation follows.
+`FileTree` shows the synced folder like a Fumadocs sidebar. Use it to
+create, delete and reorder pages. Every change is written to the files, so
+the site's navigation follows.
 
 <include meta='title="workspace.tsx"'>../examples/file-tree.tsx</include>
 
@@ -15,7 +15,7 @@ site's navigation follows.
 
 ## What it edits
 
-| Action     | On disk                                   |
+| Action     | Written                                   |
 | ---------- | ----------------------------------------- |
 | New page   | `<slug>.mdx` with a frontmatter `title`   |
 | New folder | `<slug>/meta.json` and `<slug>/index.mdx` |
@@ -44,4 +44,5 @@ On touch screens, drag rows by their grip.
 
 <Callout title="Permissions">
   The tree only lists the pages a user may [read](/auth), and refuses changes they may not write.
+  [Hidden paths](/server#paths) never show.
 </Callout>

@@ -60,9 +60,15 @@ export interface SyncDocument {
   /** the file as first received; rejects when the server refuses it or the client is offline first */
   opened: Promise<{ text: string; writable: boolean }>;
   status(): DocumentStatus;
+  /**
+   * Whether the server takes your edits, as it last answered: it answers
+   * again after every reconnect. `true` before the first answer. A file
+   * document holds its saves back while `false`.
+   */
+  writable(): boolean;
   /** the shared document under collab, once synced; null while the server re-seeds it */
   collab(): CollabBinding | null;
-  /** fires when `status()` or `collab()` may have changed */
+  /** fires when `status()`, `writable()` or `collab()` may have changed */
   subscribe(listener: () => void): () => void;
   /** the editor changed: schedules an autosave */
   changed(): void;
@@ -234,23 +240,33 @@ export function createSyncClient({
   };
 
   /**
-   * What both kinds of document share: `opened`, listeners, the registration.
-   * `opened` also settles when the client is offline or denied first: the
-   * editor falls back to its own content, and a later answer merges in.
+   * What both kinds of document share: `opened`, `writable`, listeners, the
+   * registration. `opened` also settles when the client is offline or denied
+   * first: the editor falls back to its own content, and a later answer
+   * merges in.
    */
   const createDocument = (
     target: Resource,
     entry: Omit<Entry, "target" | "error">,
-    statusChanged?: () => void,
+    /** the connection status or `writable` changed */
+    changed?: () => void,
   ) => {
     const listeners = new Set<() => void>();
     let settle!: { resolve(opened: Opened): void; reject(error: Error): void };
     const doc = {
       /** the first state arrived, or the client went offline or denied before it did */
       open: false,
+      writable: true,
       opened: new Promise<Opened>((resolve, reject) => (settle = { resolve, reject })),
       emit() {
         for (const listener of listeners) listener();
+      },
+      /** every subscribe answer carries it, also the ones after a reconnect */
+      answered(writable: boolean) {
+        if (writable === doc.writable) return;
+        doc.writable = writable;
+        doc.emit();
+        changed?.();
       },
       settle(result: Opened | Error) {
         if (doc.open) return;
@@ -270,12 +286,19 @@ export function createSyncClient({
     };
     // callers that never await `opened` must not see an unhandled rejection
     doc.opened.catch(() => {});
-    const unregister = register({ target, ...entry, error: (e) => doc.settle(new Error(e)) });
+    const unregister = register({
+      target,
+      ...entry,
+      // refused after a reconnect (read access taken away): its edits would be refused too
+      error: (e) => (doc.open ? doc.answered(false) : doc.settle(new Error(e))),
+    });
     const stopStatus = onStatus((next) => {
       if (next === "offline" || next === "denied") doc.settle(new Error(`sync ${next}`));
       doc.emit();
-      statusChanged?.();
+      changed?.();
     });
+    // `onStatus` only reports changes: a client that is offline or denied already never reports one
+    if (status === "offline" || status === "denied") doc.settle(new Error(`sync ${status}`));
     return doc;
   };
 
@@ -300,6 +323,7 @@ export function createSyncClient({
       trailing = maxWait = undefined;
     };
     const schedule = () => {
+      if (!doc.writable) return;
       clearTimeout(trailing);
       trailing = setTimeout(save, TRAILING_MS);
       maxWait ??= setTimeout(save, MAX_WAIT_MS);
@@ -320,7 +344,8 @@ export function createSyncClient({
 
     const save = async (): Promise<void> => {
       clearTimers();
-      if (closed || conflict || saving || !dirty || status !== "online") return;
+      // without write access a save is refused: it waits for the access to come back
+      if (closed || conflict || saving || !dirty || !doc.writable || status !== "online") return;
       const text = editor.getMarkdown();
       if (text === base.text) {
         dirty = false;
@@ -357,10 +382,11 @@ export function createSyncClient({
         subscribe: () => ({ type: "subscribe", resource: "file", path }),
         update(message) {
           if (closed || message.resource !== "file" || !("text" in message)) return;
+          if (message.writable !== undefined) doc.answered(message.writable);
           if (doc.open) return void incoming(message);
           if (message.id === undefined) return;
           base = message;
-          doc.settle({ text: message.text, writable: message.writable ?? true });
+          doc.settle({ text: message.text, writable: doc.writable });
           doc.emit();
         },
       },
@@ -376,6 +402,7 @@ export function createSyncClient({
         if (status === "offline" || status === "denied") return status;
         return saving ? "saving" : dirty ? "dirty" : "synced";
       },
+      writable: () => doc.writable,
       collab: () => null,
       subscribe: doc.subscribe,
       changed() {
@@ -438,8 +465,10 @@ export function createSyncClient({
         }),
         update(message) {
           if (message.resource !== "doc") return;
-          if (message.id !== undefined)
+          if (message.id !== undefined) {
+            doc.answered(message.writable);
             doc.settle({ text: message.text, writable: message.writable });
+          }
           queue = queue
             .then(async () => {
               if (closed) return;
@@ -467,6 +496,7 @@ export function createSyncClient({
     return {
       opened: doc.opened,
       status: () => (status === "offline" || status === "denied" ? status : "synced"),
+      writable: () => doc.writable,
       collab: () => yjs?.binding ?? null,
       subscribe: doc.subscribe,
       changed() {},

@@ -10,7 +10,14 @@ import {
   type TreeNode,
   type WorkspaceIndex,
 } from "../../src/sync/tree";
+import { createFiles } from "../../src/sync/node/files";
+import { fsStorage } from "../../src/sync/node/storage";
 import { openWorkspace } from "../../src/sync/node/workspace";
+
+const open = (root: string) =>
+  openWorkspace(
+    createFiles(fsStorage(root), { changed() {}, event() {}, isOpen: () => false, wrote() {} }),
+  );
 
 const outline = (nodes: TreeNode[]): unknown[] =>
   nodes.map((node) =>
@@ -158,7 +165,7 @@ describe("openWorkspace", () => {
   afterAll(() => rm(root, { recursive: true, force: true }));
 
   test("lists readable markdown only, invalid meta ignored", async () => {
-    const workspace = await openWorkspace(root);
+    const workspace = await open(root);
     expect(outline(workspace.tree(() => true))).toEqual([
       { guides: ["a"] },
       "Home",
@@ -171,35 +178,35 @@ describe("openWorkspace", () => {
   });
 
   test("update follows the filesystem", async () => {
-    const workspace = await openWorkspace(root);
+    const workspace = await open(root);
     const all = () => outline(workspace.tree(() => true));
     const at = (relative: string) => path.join(root, relative);
 
     await writeFile(at("new.mdx"), "---\ntitle: New\n---\n");
-    expect(await workspace.update("add", "new.mdx")).toBe(true);
+    expect(await workspace.update("new.mdx")).toBe(true);
     expect(all()).toContain("New");
     // same title: nothing to announce
-    expect(await workspace.update("change", "new.mdx")).toBe(false);
+    expect(await workspace.update("new.mdx")).toBe(false);
     await writeFile(at("new.mdx"), "---\ntitle: Renamed\n---\n");
-    expect(await workspace.update("change", "new.mdx")).toBe(true);
+    expect(await workspace.update("new.mdx")).toBe(true);
     expect(all()).toContain("Renamed");
     await unlink(at("new.mdx"));
-    expect(await workspace.update("unlink", "new.mdx")).toBe(true);
+    expect(await workspace.update("new.mdx")).toBe(true);
     expect(all()).not.toContain("Renamed");
 
     await writeFile(at("meta.json"), JSON.stringify({ pages: ["private", "..."] }));
-    expect(await workspace.update("change", "meta.json")).toBe(true);
+    expect(await workspace.update("meta.json")).toBe(true);
     expect(all()[0]).toEqual({ private: ["Secret"] });
 
-    // a directory moved in arrives as one addDir; moved out as one unlinkDir
+    // a folder moved in or out arrives as a change of the folder itself
     await rename(at("private"), at("public"));
-    expect(await workspace.update("unlinkDir", "private")).toBe(true);
-    expect(await workspace.update("addDir", "public")).toBe(true);
+    expect(await workspace.update("private")).toBe(true);
+    expect(await workspace.update("public")).toBe(true);
     expect(all()).toEqual(["Home", { guides: ["a"] }, { public: ["Secret"] }]);
 
-    expect(await workspace.update("add", "notes.txt")).toBe(false);
-    expect(await workspace.update("add", "guides/.hidden/x.mdx")).toBe(false);
-    expect(await workspace.update("add", "../outside.mdx")).toBe(false);
+    expect(await workspace.update("notes.txt")).toBe(false);
+    expect(await workspace.update("guides/.hidden/x.mdx")).toBe(false);
+    expect(await workspace.update("../outside.mdx")).toBe(false);
   });
 });
 
@@ -276,7 +283,7 @@ describe("commands", () => {
   afterAll(() => rm(root, { recursive: true, force: true }));
 
   test("create: frontmatter title, appended to an explicit list, refused twice", async () => {
-    const workspace = await openWorkspace(root);
+    const workspace = await open(root);
     await workspace.create("guides/new.mdx", "New: Draft");
     expect(await read("guides/new.mdx")).toBe('---\ntitle: "New: Draft"\n---\n');
     expect(await meta("guides/meta.json")).toEqual({ title: "Guides", pages: ["a", "new"] });
@@ -288,12 +295,12 @@ describe("commands", () => {
       { Guides: ["a", "New: Draft"] },
     ]);
     await expect(workspace.create("guides/new.mdx", "Again")).rejects.toThrow(/already exists/);
-    await expect(workspace.create("../out.mdx", "Out")).rejects.toThrow(/not a workspace path/);
+    await expect(workspace.create("../out.mdx", "Out")).rejects.toThrow(/escapes/);
     await expect(workspace.create("notes.txt", "Text")).rejects.toThrow(/not a page path/);
   });
 
   test("mkdir: meta title, index page, listed in an explicit parent, refused twice", async () => {
-    const workspace = await openWorkspace(root);
+    const workspace = await open(root);
     await workspace.mkdir("guides/advanced", "Advanced Topics");
     expect(await meta("guides/advanced/meta.json")).toEqual({ title: "Advanced Topics" });
     expect(await read("guides/advanced/index.mdx")).toBe("---\ntitle: Advanced Topics\n---\n");
@@ -306,11 +313,11 @@ describe("commands", () => {
     });
     await expect(workspace.mkdir("guides/advanced", "Again")).rejects.toThrow(/already exists/);
     await expect(workspace.mkdir("guides", "Guides")).rejects.toThrow(/already exists/);
-    await expect(workspace.mkdir("../out", "Out")).rejects.toThrow(/not a workspace path/);
+    await expect(workspace.mkdir("../out", "Out")).rejects.toThrow(/escapes/);
   });
 
   test("order: rewrites pages, keeps other fields, refuses unknown keys", async () => {
-    const workspace = await openWorkspace(root);
+    const workspace = await open(root);
     await workspace.order("guides", ["---Start---", "new", "a", "advanced"]);
     expect(await read("guides/meta.json")).toBe(
       '{\n  "title": "Guides",\n  "pages": [\n    "---Start---",\n    "new",\n    "a",\n    "advanced"\n  ]\n}\n',
@@ -324,14 +331,10 @@ describe("commands", () => {
     await expect(workspace.order("nope", [])).rejects.toThrow(/no pages under/);
   });
 
-  test("remove: unlinks through the callback and drops the entry", async () => {
-    const workspace = await openWorkspace(root);
-    let unlinked = false;
-    await workspace.remove("guides/new.mdx", async () => {
-      await unlink(path.join(root, "guides/new.mdx"));
-      unlinked = true;
-    });
-    expect(unlinked).toBe(true);
+  test("remove: deletes the page and drops the entry", async () => {
+    const workspace = await open(root);
+    await workspace.remove("guides/new.mdx");
+    await expect(read("guides/new.mdx")).rejects.toThrow(/ENOENT/);
     expect(await meta("guides/meta.json")).toEqual({
       title: "Guides",
       pages: ["---Start---", "a", "advanced"],
@@ -339,6 +342,6 @@ describe("commands", () => {
     expect(outline(workspace.tree(() => true))[0]).toEqual({
       Guides: ["--- Start", "a", { "Advanced Topics": ["Advanced Topics"] }],
     });
-    await expect(workspace.remove("guides/new.mdx", async () => {})).rejects.toThrow(/no page at/);
+    await expect(workspace.remove("guides/new.mdx")).rejects.toThrow(/no page at/);
   });
 });

@@ -13,6 +13,8 @@
     "@fumadocs-editor/core": "workspace:*",
     "@fumadocs-editor/studio": "workspace:*",
     "@fumadocs-editor/ui": "workspace:*",
+    "@tiptap/core": "^3.31.0",
+    "@tiptap/pm": "^3.31.0",
     "fumadocs-core": "^16.15.4",
     "fumadocs-mdx": "^15.4.0",
     "fumadocs-typescript": "^5.3.0",

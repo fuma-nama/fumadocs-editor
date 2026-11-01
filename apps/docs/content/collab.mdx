@@ -4,8 +4,8 @@ icon: Users
 description: Real-time collaborative editing over the sync server
 ---
 
-Collaboration runs on the same [sync server](/sync). Turn it on for a
-[sync client](/sync#sync-client) and pass that client to your editors:
+Collaboration runs on the same [sync server](/server). Turn it on for a
+[sync client](/sync#sync-client), and pass that client to your editors:
 
 <include meta='title="collab-editor.tsx"'>../examples/collab.tsx</include>
 
@@ -15,8 +15,8 @@ Collaboration runs on the same [sync server](/sync). Turn it on for a
 
 ## Sync vs. collab
 
-With collab on, the server holds one shared document per file and is the
-only one writing it to disk.
+With collab on, the server holds one shared document per file. It is the
+only one writing that file.
 
 |                 | Sync                           | Collab                  |
 | --------------- | ------------------------------ | ----------------------- |
@@ -28,10 +28,13 @@ only one writing it to disk.
 Sync and collab editors can open the same file. A sync save reaches collab
 editors like any other change on disk.
 
+The server writes collab edits on a debounce. [`onChange`](/server#changes)
+reports each write once per connection whose edits it carries.
+
 ## Restarts
 
-The file is the only persistence. When the server restarts, the document is
-rebuilt from disk:
+The file is the only persistence. When the server restarts, it rebuilds the
+document from the file:
 
 - edits made while the server was down are discarded
 - edits made while only the network was down are kept and sent on reconnect

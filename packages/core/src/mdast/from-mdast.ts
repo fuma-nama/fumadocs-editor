@@ -256,6 +256,15 @@ function phrasingToInline(
   return out;
 }
 
+/**
+ * mdast's `spread` (blank lines between a list's items, or between an item's
+ * blocks), kept only when set: lists and items default to tight
+ */
+function withSpread(node: JSONContent, spread: boolean | null | undefined): JSONContent {
+  if (spread) node.attrs = { ...node.attrs, spread: true };
+  return node;
+}
+
 function listToNode(node: List, ctx: FromMdastContext): JSONContent {
   const isTask = node.children.some((item) => typeof item.checked === "boolean");
 
@@ -266,22 +275,28 @@ function listToNode(node: List, ctx: FromMdastContext): JSONContent {
       content.unshift({ type: "paragraph" });
     }
     if (isTask) {
-      return { type: "taskItem", attrs: { checked: item.checked === true }, content };
+      return withSpread(
+        { type: "taskItem", attrs: { checked: item.checked === true }, content },
+        item.spread,
+      );
     }
-    return { type: "listItem", content };
+    return withSpread({ type: "listItem", content }, item.spread);
   };
 
   if (isTask) {
-    return { type: "taskList", content: node.children.map(itemToNode) };
+    return withSpread({ type: "taskList", content: node.children.map(itemToNode) }, node.spread);
   }
   if (node.ordered) {
-    return {
-      type: "orderedList",
-      attrs: { start: node.start ?? 1 },
-      content: node.children.map(itemToNode),
-    };
+    return withSpread(
+      {
+        type: "orderedList",
+        attrs: { start: node.start ?? 1 },
+        content: node.children.map(itemToNode),
+      },
+      node.spread,
+    );
   }
-  return { type: "bulletList", content: node.children.map(itemToNode) };
+  return withSpread({ type: "bulletList", content: node.children.map(itemToNode) }, node.spread);
 }
 
 function tableToNode(node: Table, ctx: FromMdastContext): JSONContent {

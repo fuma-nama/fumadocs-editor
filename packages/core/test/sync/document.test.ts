@@ -234,3 +234,19 @@ test("opening while the server is unreachable rejects, and a later answer merges
   pending.close();
   late.close();
 });
+
+test("opening while the client is already offline rejects, and a later answer merges in", async () => {
+  mem.setOnline(false);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(session.status()).toBe("offline");
+
+  mem.external("other.mdx", "# Other\n");
+  const fallback = textEditor("fallback\n");
+  const pending = client.open("other.mdx", { editor: fallback.editor });
+  await expect(pending.opened).rejects.toThrow(/offline/);
+
+  mem.setOnline(true);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(fallback.text).toBe("# Other\n");
+  pending.close();
+});

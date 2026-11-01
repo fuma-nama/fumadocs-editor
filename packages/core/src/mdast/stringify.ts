@@ -92,12 +92,26 @@ const jsxSource: Handle = (node, _parent, state, info) => {
 };
 
 /**
- * Lists are written tight, but a block after a nested list inside a list item
- * needs a blank line before it, or it re-parses as a lazy continuation of the
- * nested list's last item.
+ * Even in a tight list item, a block after a nested list needs a blank line
+ * before it, or it re-parses as a lazy continuation of the nested list's last
+ * item.
  */
 const blankLineAfterNestedList: Join = (left, _right, parent) =>
   parent.type === "listItem" && left.type === "list" ? 1 : undefined;
+
+/**
+ * An item that starts with another block gets an empty leading paragraph in
+ * the document (its content is 'paragraph block*'). Even in a loose item, that
+ * paragraph hugs the next block: a blank line after the marker would end the
+ * item.
+ */
+const noBlankLineAfterEmptyLead: Join = (left, _right, parent) =>
+  parent.type === "listItem" &&
+  parent.children[0] === left &&
+  left.type === "paragraph" &&
+  left.children.length === 0
+    ? 0
+    : undefined;
 
 const stringifyOptions: Options = {
   extensions: [mdxToMarkdown(), gfmToMarkdown(), frontmatterToMarkdown(["yaml"])],
@@ -115,7 +129,7 @@ const stringifyOptions: Options = {
   emphasis: "*",
   strong: "*",
   fences: true,
-  join: [blankLineAfterNestedList],
+  join: [blankLineAfterNestedList, noBlankLineAfterEmptyLead],
 };
 
 /**

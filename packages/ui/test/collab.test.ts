@@ -256,3 +256,16 @@ test("the live editor's schema matches the server authority's", () => {
   expect(attrSpec(client, "nodes")).toEqual(attrSpec(server, "nodes"));
   expect(attrSpec(client, "marks")).toEqual(attrSpec(server, "marks"));
 });
+
+test("a loose list stays loose through Y and an edit", () => {
+  const src = "- a\n\n- b\n\n  more\n\n- c\n";
+  const { a, b, wire, parsed } = seedPair(src);
+  expect(serializeDocToMdx(b.getJSON(), parsed.snapshot, syntax)).toBe(src);
+  caret(a, "a");
+  a.commands.insertContent("!");
+  wire.flush();
+  identical(a, b);
+  expect(serializeDocToMdx(b.getJSON(), parsed.snapshot, syntax)).toBe(
+    "- a!\n\n- b\n\n  more\n\n- c\n",
+  );
+});
