@@ -1,9 +1,27 @@
+import type { IncomingMessage } from "node:http";
 import { encodeMessage } from "../codec";
-import type { ServerMessage } from "../protocol";
+import type { ServerMessage, SyncUser } from "../protocol";
 import type { Scope } from "./scope";
 
+/** an authenticated sync connection, as `authenticate` let it in */
+export interface SyncConnection {
+  /** the upgrade request `authenticate` saw: cookies, headers */
+  readonly request: IncomingMessage;
+  /** the client's `auth()` payload, verbatim */
+  readonly payload: unknown;
+  /** the user its scope names */
+  readonly user?: SyncUser;
+  /**
+   * Ends the connection at once: nothing more is relayed to it, and what it
+   * sends from then on is dropped. The client reconnects, so `authenticate`
+   * decides again. Close the connections whose access changed, and they come
+   * back with their new scope, or are refused.
+   */
+  close(): void;
+}
+
 /** an authenticated client as the resources see it */
-export interface Connection {
+export interface Connection extends SyncConnection {
   scope: Scope;
   /** one encoded server message */
   send(data: string | Uint8Array): void;

@@ -9,9 +9,13 @@ Two props decide what the editor understands:
 - `components`: the component [specs](/components)
 - `syntax`: switches for Markdown dialects
 
-JSX without a spec keeps its children editable, with its tags edited as
-text. Anything else is kept **verbatim**: it round-trips byte-for-byte and is
-edited as source. Turning a feature off never breaks a document.
+What neither covers still round-trips:
+
+- JSX without a spec keeps its children editable, with its tags edited as
+  text.
+- Anything else is kept **verbatim**: byte-for-byte, edited as source.
+
+Turning a feature off never breaks a document.
 
 <include meta='title="editor.tsx"'>../examples/syntax.tsx</include>
 
@@ -23,8 +27,10 @@ edited as source. Turning a feature off never breaks a document.
 | `math`            | `false`                      | `$…$` and `$$…$$` TeX math       |
 | `directives`      | `true` with `admonitionSpec` | `:::` admonitions                |
 
-Dialects are off by default because they change how existing text parses:
-with `math` on, `$5 and $10` becomes a formula.
+<Callout type="warn" title="Dialects change parsing">
+  `math` is off by default because it changes how existing text parses: with it on, `$5 and $10`
+  becomes a formula.
+</Callout>
 
 ## Dialects
 

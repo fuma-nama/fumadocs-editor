@@ -54,9 +54,15 @@ export interface MdxEditorSync {
   onStatus?: (status: DocumentStatus) => void;
   /**
    * File was read: text plus scope data. Does not change editor behavior;
-   * wire `writable` into `editable` yourself.
+   * for `writable` across reconnects, use `onWritable`.
    */
   onOpen?: (result: { text: string; writable: boolean }) => void;
+  /**
+   * Whether the server takes your edits. Called once the document for `path`
+   * is open, then whenever it changes: the server's scope is asked again on
+   * every reconnect. Does not change editor behavior; wire it into `editable`.
+   */
+  onWritable?: (writable: boolean) => void;
 }
 
 export type SerializeFn = (doc: PMNode, snapshot?: DocSnapshot) => string;
@@ -218,11 +224,18 @@ export class DocumentStore {
       });
       // null: report the opening status too, even if it equals the previous document's
       let reported: DocumentStatus | null = null;
+      // undefined until `opened` settles, which reports the opening value
+      let writable: boolean | undefined;
+      const reportWritable = () => {
+        writable = doc.writable();
+        this.options.sync?.onWritable?.(writable);
+      };
       const update = () => {
         if (token !== this.token) return;
         const status = doc.status();
         // a re-seeded collab doc passes through null, which remounts the editor
         this.set({ status, collab: doc.collab() });
+        if (writable !== undefined && writable !== doc.writable()) reportWritable();
         if (status === reported) return;
         reported = status;
         this.options.sync?.onStatus?.(status);
@@ -245,10 +258,13 @@ export class DocumentStore {
         (result) => {
           if (token !== this.token) return;
           this.options.sync?.onOpen?.(result);
+          reportWritable();
           this.load(result.text, token);
         },
         () => {
-          if (token === this.token) this.load(this.options.defaultValue, token);
+          if (token !== this.token) return;
+          reportWritable();
+          this.load(this.options.defaultValue, token);
         },
       );
     });

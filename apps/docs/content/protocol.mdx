@@ -5,8 +5,9 @@ description: The messages between the sync client and a backend
 ---
 
 <Callout>
-  You only need this page to write your own backend or transport. The built-in [sync server](/sync)
-  already speaks the protocol.
+  You only need this page to write your own backend or transport. The built-in [sync
+  server](/server) already speaks the protocol, and its [storage](/server#storage) option covers
+  most custom backends.
 </Callout>
 
 Sync has three layers:
@@ -43,7 +44,8 @@ Both directions are typed as `ClientMessage` and `ServerMessage` in
 
 ## Resources
 
-A message targets one resource. Paths are relative to the server root.
+A message targets one resource. Paths are relative to the server root, and
+the built-in server refuses [hidden ones](/server#paths) with an `error`.
 
 | Resource                     | Holds                            |
 | ---------------------------- | -------------------------------- |
@@ -57,6 +59,8 @@ A message targets one resource. Paths are relative to the server root.
 <include>../examples/protocol-messages.ts#file</include>
 
 - `version` is opaque; `""` means the file does not exist.
+- `writable` comes with every `subscribe` answer. The client repeats the
+  subscribe after a reconnect, so a changed scope reaches the editor.
 - A save sends `base`, the version it was edited from. The server only
   writes while `base` is current.
 

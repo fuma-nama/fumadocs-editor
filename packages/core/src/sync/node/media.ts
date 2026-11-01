@@ -1,7 +1,7 @@
-import { createReadStream } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import type { Files } from "./files";
 import { authorizeHttp, type Authorize, type Scope } from "./scope";
 
@@ -22,6 +22,14 @@ const MIME: Record<string, string> = {
 
 const refuse = (response: ServerResponse, scope: Scope | null) => {
   response.statusCode = scope ? 403 : 401;
+  response.end();
+};
+
+/** the storage's error stays on the server: it may name its paths */
+const fail = (response: ServerResponse) => () => {
+  // a stream that broke midway has sent its status: the cut is the error
+  if (response.headersSent) return void response.destroy();
+  response.statusCode = 500;
   response.end();
 };
 
@@ -70,17 +78,15 @@ export function createMediaHandlers(
       request.on("end", () => {
         if (response.writableEnded) return;
         void (async () => {
-          const name = `${Date.now().toString(36)}-${original || "upload"}`;
+          // the random part keeps two uploads of one name in one millisecond apart
+          const stamp = Date.now().toString(36) + randomBytes(2).toString("hex");
+          const name = `${stamp}-${original || "upload"}`;
           const scope = await authorizeHttp(authorize, request);
           if (!scope || !scope.write(`assets/${name}`)) return refuse(response, scope);
-          await mkdir(path.join(files.root, "assets"), { recursive: true });
-          await writeFile(path.join(files.root, "assets", name), Buffer.concat(chunks));
+          await files.storage.write(`assets/${name}`, Buffer.concat(chunks));
           response.setHeader("content-type", "application/json");
           response.end(JSON.stringify({ src: `./assets/${name}` }));
-        })().catch((error) => {
-          response.statusCode = 500;
-          response.end(String(error));
-        });
+        })().catch(fail(response));
       });
     },
 
@@ -94,19 +100,20 @@ export function createMediaHandlers(
         return response.end();
       }
       const target = relative;
-      void authorizeHttp(authorize, request).then((scope) => {
+      void (async () => {
+        const scope = await authorizeHttp(authorize, request);
         if (!scope || !scope.read(target)) return refuse(response, scope);
+        const data = await files.storage.read(target);
+        if (!data) {
+          response.statusCode = 404;
+          return response.end();
+        }
         response.setHeader(
           "content-type",
           MIME[path.extname(target).toLowerCase()] ?? "application/octet-stream",
         );
-        createReadStream(files.resolve(target))
-          .on("error", () => {
-            response.statusCode = 404;
-            response.end();
-          })
-          .pipe(response);
-      });
+        await pipeline(data instanceof Uint8Array ? [data] : data, response);
+      })().catch(fail(response));
     },
   };
 }

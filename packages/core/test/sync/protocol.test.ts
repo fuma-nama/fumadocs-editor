@@ -78,11 +78,15 @@ test("a stale write is answered with what the file holds now", async () => {
   client.close();
 });
 
-test("path escapes and unknown resources are errors", async () => {
+test("paths outside the root or hidden, and unknown resources, are errors", async () => {
+  await writeFile(path.join(root, ".env"), "SECRET=1\n");
   const client = await ready();
-  expect(
-    await client.request({ type: "subscribe", resource: "file", path: "../outside.md" }),
-  ).toMatchObject({ type: "error", message: expect.stringMatching(/escapes/) });
+  for (const file of ["../outside.md", "/etc/hosts", ".env", "docs/../.env", "node_modules/x.md"]) {
+    expect(await client.request({ type: "subscribe", resource: "file", path: file })).toMatchObject(
+      { type: "error", message: expect.stringMatching(/not a sync path/) },
+    );
+  }
+  expect((await fetch(`http://127.0.0.1:${server.port}/__fde_asset/.env`)).status).toBe(404);
   expect(await client.request({ type: "subscribe", resource: "nope" })).toMatchObject({
     type: "error",
   });
@@ -129,6 +133,32 @@ test("an external change reaches subscribers", async () => {
   const push = await until(() => client.pushes[0]);
   expect(push).toMatchObject({ path: "docs/guide.mdx", text: "# Guide, from disk\n" });
   client.close();
+});
+
+test("an external change back to the text the server last wrote still reaches subscribers", async () => {
+  await writeFile(path.join(root, "undo.mdx"), "before\n");
+  await sleep(150);
+  const writer = await ready();
+  const current = await writer.request({ type: "subscribe", resource: "file", path: "undo.mdx" });
+  if (current.type !== "update" || current.resource !== "file" || !("text" in current)) {
+    throw new Error("no file");
+  }
+  const pushed = (text: string) =>
+    until(() =>
+      writer.pushes.some((m) => m.type === "update" && "text" in m && m.text === text)
+        ? true
+        : undefined,
+    );
+
+  const file = { type: "update", resource: "file", path: "undo.mdx" } as const;
+  await writer.request({ ...file, text: "saved\n", base: current.version });
+  await sleep(300); // the watcher sees the echo of that write, which is swallowed
+  // an IDE changes the file, then undoes back to what the server wrote
+  await writeFile(path.join(root, "undo.mdx"), "from disk\n");
+  await pushed("from disk\n");
+  await writeFile(path.join(root, "undo.mdx"), "saved\n");
+  await pushed("saved\n");
+  writer.close();
 });
 
 test("empty frames are the heartbeat and are echoed", async () => {

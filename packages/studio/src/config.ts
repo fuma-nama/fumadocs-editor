@@ -52,10 +52,8 @@ export interface StudioConfig {
   server?: StudioServerConfig | string;
 }
 
-export interface StudioServerConfig extends Pick<
-  SyncServerOptions,
-  "authenticate" | "upload" | "evictAfterMs" | "helloTimeoutMs"
-> {
+/** the sync server's options, `root` aside: Studio passes `root` itself */
+export interface StudioServerConfig extends Omit<SyncServerOptions, "root"> {
   /** merged into the studio's Vite config: plugins (Tailwind), aliases, `server.watch` */
   vite?: UserConfig;
 }

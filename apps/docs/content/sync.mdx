@@ -4,7 +4,7 @@ icon: FolderSync
 description: Save to the file system with autosave and live merge
 ---
 
-Sync connects the editor to a directory of `.md` and `.mdx` files:
+Sync connects the editor to a folder of `.md` and `.mdx` files:
 
 - edits autosave to disk
 - changes on disk (a `git pull`, a save from your IDE) merge into the open
@@ -27,7 +27,8 @@ npm install @fumadocs-editor/core
 
 ### Add the Vite plugin
 
-It runs the sync server inside `vite dev`. `root` is the directory to edit.
+It runs the [sync server](/server) inside `vite dev`. `root` is the folder
+to edit.
 
 <include meta='title="vite.config.ts"'>../examples/sync-vite.ts</include>
 
@@ -51,25 +52,29 @@ Never import those files as modules either (`?raw` included).
 
 <include meta='title="editor.tsx"'>../examples/sync-editor.tsx</include>
 
-The editor now loads the file, autosaves and shows a status dot in its
-header.
+The editor loads the file, autosaves and shows a status dot in its header.
 
 </Step>
 </Steps>
 
+Not using Vite? See [running the server](/server#run-it) for Studio and
+plain Node.
+
 ## Saving
 
 - Autosave runs 800 ms after you stop typing, and at most 5 s after the
-  first unsaved change. `⌘S` and closing the page save immediately.
+  first unsaved change.
+- `⌘S`, leaving the window and closing the page save immediately.
 - A save never overwrites a file it has not seen. If the file changed on
-  disk in the meantime, that change is merged in first.
-- When the same block changed on both sides, your version is kept and saving
+  disk meanwhile, that change is merged in first.
+- When the same block changed on both sides, your version is kept. Saving
   pauses until you pick **keep mine** or **take disk**.
+- Without [write access](/read-only), edits stay in the editor. They are
+  saved once access comes back.
 
-The status dot shows where the document stands. Mirror it elsewhere with
-`sync.onStatus`: it is called with the current status once the document is
-open (again when `path` changes), then on every change. Inside
-`MdxEditor.Root`, `useSyncStatus()` returns the same status.
+## Status
+
+The status dot shows where the document stands:
 
 | Status     | Meaning                                       |
 | ---------- | --------------------------------------------- |
@@ -80,41 +85,43 @@ open (again when `path` changes), then on every change. Inside
 | `offline`  | disconnected; edits are kept and saved later  |
 | `denied`   | the server rejected your [credentials](/auth) |
 
+To show it elsewhere:
+
+- `sync.onStatus` is called with the current status once the document is
+  open (again when `path` changes), then on every change.
+- `useSyncStatus()` returns the same status inside `MdxEditor.Root`.
+
+`sync.onWritable` works the same way for write access. See
+[Read-only](/read-only#with-auth).
+
 ## Sync client
 
-By default, every editor on the page shares one connection to the dev server.
-Create your own client to connect elsewhere, send [credentials](/auth) or
-turn on [collaboration](/collab), then pass it to every editor:
+By default, every editor on the page shares one connection to the dev
+server. Create your own client to:
+
+- connect to another server
+- send [credentials](/auth)
+- turn on [collaboration](/collab)
+
+Then pass it to every editor:
 
 <include meta='title="editor.tsx"'>../examples/sync-client.tsx</include>
 
 <auto-type-table path="../../../packages/core/src/sync/client.ts" name="SyncClientOptions" />
 
-## Standalone server
-
-Without Vite, `createSyncServer` gives you handlers for any Node HTTP server:
-
-<include meta='title="server.ts"'>../examples/sync-server.ts</include>
-
-The Vite plugin accepts the same options:
-
-<auto-type-table path="../../../packages/core/src/sync/node/server.ts" name="SyncServerOptions" />
-
-<Callout title="Other backends">
-  A database, a CMS or a worker can replace the Node server by speaking the [sync
-  protocol](/protocol).
-</Callout>
-
 ## Without `MdxEditor`
 
-`sync` is built on `client.open`. Use it directly for a custom status UI or a
-non-React shell:
+The `sync` prop is built on `client.open`. Use it directly for a custom
+status UI or a non-React shell:
 
 <include meta='title="custom-document.tsx"'>../examples/sync-document.tsx</include>
 
 - `editor` is anything with `getMarkdown`, `applyExternalMarkdown`,
   `setMarkdown` and `markSaved`. The editor ref qualifies.
-- Load `opened`'s `text` into the editor, call `changed()` on every edit.
+- Load `opened`'s `text` into the editor, and call `changed()` on every
+  edit.
+- Read write access from `writable()`, not from `opened`: the server
+  answers again after every reconnect. `subscribe` fires when it changes.
 - A client holds one document per path.
 
 <auto-type-table path="../../../packages/core/src/sync/client.ts" name="SyncDocument" />

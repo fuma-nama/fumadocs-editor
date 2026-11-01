@@ -4,20 +4,23 @@ icon: Blocks
 description: Add behaviour to the visual editor with TipTap extensions
 ---
 
-[Components](/components) add content: a block with its own markup in the
-MDX. Extensions add behaviour on top of the content the document already
-has: decorations over text, keyboard shortcuts, plugin state, commands.
-They are plain [TipTap extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions),
+Extensions add behaviour to the visual editor: decorations over text,
+keyboard shortcuts, plugin state, commands. They are plain
+[TipTap extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions),
 passed to `extensions`:
 
 ```tsx
 <MdxEditor extensions={[todoHighlight, askAiShortcut(ask)]} />
 ```
 
-The MDX does not change: an extension only changes how the visual editor
-shows the document and reacts to input. Buttons, counters and panels stay
-in your own UI, for example in `header`, or go in the format bubble with
-[`bubbleItems`](#buttons-in-the-format-bubble).
+| Add a…                   | When you want                                         |
+| ------------------------ | ----------------------------------------------------- |
+| [component](/components) | new content, with its own markup in the MDX           |
+| extension                | new behaviour on the content the document already has |
+
+An extension never changes the MDX, only how the editor shows it and reacts
+to input. Buttons, counters and panels stay in your own UI: in `header`, or
+in the format bubble with [`bubbleItems`](#buttons-in-the-format-bubble).
 
 <ExtensionsDemo />
 
@@ -35,10 +38,11 @@ and never saved.
 
 ### Ask AI about the selection
 
-A keyboard shortcut opens your own panel on the selected text. The panel
-asks your model and puts the answer below the selected block or in place
-of the selection. The extension only opens the panel; everything after
-that is your UI.
+A keyboard shortcut opens your own panel on the selected text:
+
+- the extension only opens the panel
+- the panel, your UI, asks your model
+- the answer goes below the selected block, or replaces the selection
 
 <include meta='title="ask-ai.ts"'>../examples/extensions.tsx#ask-ai</include>
 
@@ -47,9 +51,11 @@ that is your UI.
 ### Read the editor from your UI
 
 An extension's `onCreate`, `onUpdate` and `onDestroy` run with the live
-editor, so they can hand it, or anything computed from it, to React. Here
-one reports the editor for the header's Ask AI button and another counts
-words, which the header also turns into a reading time.
+editor. Use them to hand the editor, or anything computed from it, to React.
+Here:
+
+- one extension reports the editor, for the header's Ask AI button
+- another counts words, which the header turns into a reading time
 
 <include meta='title="word-count.ts"'>../examples/extensions.tsx#word-count</include>
 
@@ -72,53 +78,58 @@ focus and selection, on touch screens too.
 | `isEnabled` | `false` disables the button for the current selection |
 | `run`       | called with the live editor                           |
 
-Like `extensions`, the list is fixed for the life of the root. Items only
-show in an editable editor, for a text selection.
+- Like `extensions`, the list is fixed for the life of the root.
+- Items only show in an editable editor, for a text selection.
 
-## Extension Behavior
+## How extensions run
 
 ### Lifecycle
 
-Extensions are applied each time the root builds a live editor: on the
-first interaction with the document, and on every return from the MDX
-tab. Read-only editors receive them as well. They do not run on the static
-first paint or on the MDX tab, so decorations appear once the live editor
-has mounted.
+Extensions are applied each time the root builds a live editor:
 
-The `extensions` array is read once, when the root mounts, as with
-`components`. Define it at module level or with `useState`. Arrays or
-callbacks passed on later renders are ignored.
+- on the first interaction with the document
+- on every return from the MDX tab
+- in read-only editors too
+
+They do not run on the static first paint or on the MDX tab, so decorations
+appear once the live editor has mounted.
+
+<Callout type="warn" title="Read once">
+  The `extensions` array is read once, when the root mounts, as with `components`. Define it at
+  module level or with `useState`. Arrays or callbacks passed on later renders are ignored.
+</Callout>
 
 ### Precedence
 
 Host extensions run alongside the [built-in extensions](#built-in-extensions),
-including TipTap's core keymap (Enter, Backspace, paste). When a host
-extension and a built-in handle the same key or event at the same
-`priority` (default `100`), the built-in runs first. To take precedence,
-set a `priority` higher than that of the extension it competes with.
+including TipTap's core keymap (Enter, Backspace, paste).
+
+- When both handle the same key or event at the same `priority` (default
+  `100`), the built-in runs first.
+- To take precedence, set a higher `priority` than the extension you
+  compete with.
 
 ### Restrictions
 
-An extension is left out, with a console error that gives the reason,
-when it:
+An extension is left out, with a console error giving the reason, when it:
 
-- adds a node or a mark. Nodes and marks are content, which the MDX
-  serializer cannot write; use a [component](/components) instead.
-- uses a name that another extension has already registered.
-- adds a command that already exists.
+- adds a node or a mark: those are content, which the MDX serializer cannot
+  write, so use a [component](/components) instead
+- uses a name another extension already registered
+- adds a command that already exists
 
 Give each ProseMirror plugin a unique `PluginKey`.
 
 ### Collaboration
 
 Under [collab](/collab), `appendTransaction` also receives the
-transactions that apply remote edits. Ignore transactions that carry the
-`y-sync$` meta; otherwise every collaborator applies the change again.
+transactions that apply remote edits. Ignore the ones carrying the
+`y-sync$` meta, or every collaborator applies the change again.
 
 ## Built-in extensions
 
-Your extensions run next to the ones the editor is built from. Their
-source is the place to check which names, commands and keys are taken:
+Your extensions run next to the ones the editor is built from. Check their
+source for the names, commands and keys already taken:
 
 - TipTap's [core extensions](https://github.com/ueberdosis/tiptap/tree/main/packages/core/src/extensions):
   Enter, Backspace, paste, drop
